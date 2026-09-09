@@ -1,0 +1,33 @@
+"""feat: add must_change_password to User for DB auth first-login reset
+
+Revision ID: a1b2c3d4e5f6
+Revises: 67ff7efffed4
+Create Date: 2026-09-09 04:00:00.000000
+
+"""
+
+import sqlalchemy as sa
+from alembic import op
+
+# revision identifiers, used by Alembic.
+revision = "a1b2c3d4e5f6"
+down_revision = "67ff7efffed4"
+branch_labels = None
+depends_on = None
+
+
+def upgrade() -> None:
+    with op.batch_alter_table("user", schema=None) as batch_op:
+        batch_op.add_column(
+            sa.Column(
+                "must_change_password",
+                sa.Boolean(),
+                nullable=False,
+                server_default=sa.false(),
+            )
+        )
+
+
+def downgrade() -> None:
+    with op.batch_alter_table("user", schema=None) as batch_op:
+        batch_op.drop_column("must_change_password")

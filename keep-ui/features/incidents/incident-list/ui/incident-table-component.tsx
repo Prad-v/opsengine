@@ -1,17 +1,19 @@
 import {
-  Icon,
   Table,
   TableBody,
   TableCell,
   TableHead,
-  TableHeaderCell,
   TableRow,
-} from "@tremor/react";
+  IconButton,
+  Box,
+} from "@mui/material";
 import clsx from "clsx";
 import { flexRender, Header, Table as ReactTable } from "@tanstack/react-table";
 import React, { ReactNode } from "react";
 import { IncidentDto } from "@/entities/incidents/model";
-import { FaArrowDown, FaArrowRight, FaArrowUp } from "react-icons/fa";
+import ArrowDownwardIcon from "@mui/icons-material/ArrowDownward";
+import ArrowUpwardIcon from "@mui/icons-material/ArrowUpward";
+import ArrowForwardIcon from "@mui/icons-material/ArrowForward";
 import { getCommonPinningStylesAndClassNames } from "@/shared/ui";
 
 interface Props {
@@ -33,52 +35,53 @@ const SortableHeaderCell = ({
   const { style, className: commonClassName } =
     getCommonPinningStylesAndClassNames(column);
 
+  const SortIcon = column.getIsSorted()
+    ? column.getIsSorted() === "asc"
+      ? ArrowDownwardIcon
+      : ArrowUpwardIcon
+    : ArrowForwardIcon;
+
   return (
-    <TableHeaderCell
-      className={clsx(
-        "relative bg-tremor-background group",
-        commonClassName,
-        className
-      )}
+    <TableCell
+      component="th"
+      className={clsx("relative group", commonClassName, className)}
       style={style}
+      sx={{ fontWeight: 600, backgroundColor: "background.paper" }}
     >
-      <div className="flex items-center">
-        {children} {/* Column name or text */}
+      <Box sx={{ display: "flex", alignItems: "center" }}>
+        {children}
         {column.getCanSort() && (
           <>
-            {/* Custom styled vertical line separator */}
-            <div className="w-px h-5 mx-2 bg-gray-400"></div>
-            <Icon
+            <Box
+              sx={{
+                width: "1px",
+                height: 20,
+                mx: 1,
+                bgcolor: "divider",
+              }}
+            />
+            <IconButton
               data-testid={"sort-direction-" + column.id}
-              className="cursor-pointer"
-              size="xs"
-              color="neutral"
+              size="small"
               onClick={(event) => {
                 event.stopPropagation();
                 const toggleSorting = header.column.getToggleSortingHandler();
                 if (toggleSorting) toggleSorting(event);
               }}
-              tooltip={
+              title={
                 column.getNextSortingOrder() === "asc"
                   ? "Sort ascending"
                   : column.getNextSortingOrder() === "desc"
                     ? "Sort descending"
                     : "Clear sort"
               }
-              icon={
-                column.getIsSorted()
-                  ? column.getIsSorted() === "asc"
-                    ? FaArrowDown
-                    : FaArrowUp
-                  : FaArrowRight
-              }
             >
-              {/* Icon logic */}
-            </Icon>
+              <SortIcon fontSize="inherit" />
+            </IconButton>
           </>
         )}
-      </div>
-    </TableHeaderCell>
+      </Box>
+    </TableCell>
   );
 };
 
@@ -86,13 +89,10 @@ export const IncidentTableComponent = (props: Props) => {
   const { table } = props;
 
   return (
-    <Table data-testid="incidents-table">
+    <Table data-testid="incidents-table" sx={{ minWidth: "100%" }}>
       <TableHead>
         {table.getHeaderGroups().map((headerGroup, index) => (
-          <TableRow
-            className="border-b border-tremor-border dark:border-dark-tremor-border"
-            key={`${headerGroup.id}-${index}`}
-          >
+          <TableRow key={`${headerGroup.id}-${index}`}>
             {headerGroup.headers.map((header, index) => {
               return (
                 <SortableHeaderCell
@@ -112,10 +112,7 @@ export const IncidentTableComponent = (props: Props) => {
       </TableHead>
       <TableBody>
         {table.getRowModel().rows.map((row) => (
-          <TableRow
-            key={row.id}
-            className="even:bg-tremor-background-muted even:dark:bg-dark-tremor-background-muted"
-          >
+          <TableRow key={row.id}>
             {row.getVisibleCells().map((cell) => {
               const { style, className } = getCommonPinningStylesAndClassNames(
                 cell.column
@@ -127,9 +124,12 @@ export const IncidentTableComponent = (props: Props) => {
                   className={clsx(
                     cell.column.columnDef.meta?.tdClassName,
                     className,
-                    "bg-white",
                     cell.column.id === "actions" ? "p-1" : ""
                   )}
+                  sx={{
+                    backgroundColor: "background.paper",
+                    ...(cell.column.id === "actions" ? { p: 0.5 } : {}),
+                  }}
                 >
                   {flexRender(cell.column.columnDef.cell, cell.getContext())}
                 </TableCell>

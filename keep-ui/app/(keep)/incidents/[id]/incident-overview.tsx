@@ -48,6 +48,8 @@ const PROVISIONED_ENRICHMENTS = [
   "repositories",
   "rca_points",
   "traces",
+  // Managed by TemporalWorkflowCatalog on the Workflows tab
+  "temporal_workflows",
 ];
 
 interface Props {

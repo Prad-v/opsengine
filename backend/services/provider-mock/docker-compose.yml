@@ -1,0 +1,46 @@
+# Mock Grafana / Mimir Alertmanager / VictoriaMetrics for Keep e2e webhook testing.
+# Usage:
+#   docker compose -f backend/services/provider-mock/docker-compose.yml up --build
+#   open http://localhost:8099
+#
+# Or: make mock-providers
+
+services:
+  provider-mock:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: keep-provider-mock
+    ports:
+      - "8099:8099"
+    environment:
+      PORT: "8099"
+      # Keep API on the host (hybrid `make start`) or on Docker network.
+      KEEP_API_URL: ${KEEP_API_URL:-http://host.docker.internal:8080}
+      KEEP_API_KEY: ${KEEP_API_KEY:-keepappkey}
+      # How Keep (host process via `make start`) reaches this mock during install.
+      PUBLIC_BASE_URL: ${PUBLIC_BASE_URL:-http://localhost:8099}
+      # Temporal docker-compose frontend as seen by host Keep.
+      TEMPORAL_ADDRESS: ${TEMPORAL_ADDRESS:-localhost:7233}
+      TEMPORAL_NAMESPACE: ${TEMPORAL_NAMESPACE:-default}
+      TEMPORAL_TLS: ${TEMPORAL_TLS:-false}
+      TEMPORAL_UI_URL: ${TEMPORAL_UI_URL:-http://localhost:8233}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8099/api/health')"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+
+  provider-mock-test:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    profiles: ["test"]
+    environment:
+      PYTHONPATH: /app
+    working_dir: /app
+    volumes:
+      - ../../../tests/test_provider_mock.py:/app/tests/test_provider_mock.py:ro
+    command: ["pytest", "-q", "/app/tests/test_provider_mock.py"]

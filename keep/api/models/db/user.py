@@ -21,6 +21,9 @@ class User(SQLModel, table=True):
     # Role
     role: str
 
+    # Force password change after first login / default credentials
+    must_change_password: bool = Field(default=False)
+
     # Timestamp for the last sign-in of the user
     last_sign_in: datetime = Field(default=None)
 

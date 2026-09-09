@@ -1,5 +1,10 @@
 import { useEffect, useMemo, useRef, useState, useCallback } from "react";
-import { Table, Card, Button } from "@tremor/react";
+import {
+  Button,
+  Paper,
+  Table,
+  TableContainer,
+} from "@mui/material";
 import { AlertsTableBody } from "@/widgets/alerts-table/ui/alerts-table-body";
 import {
   AlertDto,
@@ -47,7 +52,6 @@ import {
 import { useUser } from "@/entities/users/model/useUser";
 import { UserStatefulAvatar } from "@/entities/users/ui";
 import { getStatusIcon, getStatusColor } from "@/shared/lib/status-utils";
-import { Icon } from "@tremor/react";
 import {
   BellIcon,
   BellSlashIcon,
@@ -61,8 +65,6 @@ import { FacetsConfig } from "@/features/filter/models";
 import { TimeFormatOption } from "@/widgets/alerts-table/lib/alert-table-time-format";
 import { PushAlertToServerModal } from "@/features/alerts/simulate-alert";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { GrTest } from "react-icons/gr";
-import { PlusIcon } from "@heroicons/react/20/solid";
 import { DynamicImageProviderIcon } from "@/components/ui";
 import { useAlertRowStyle, useAlertTableTheme, useSeverityMapping } from "@/entities/alerts/model";
 import { useIsShiftKeyHeld } from "@/features/keyboard-shortcuts";
@@ -77,6 +79,15 @@ import { PaginationState } from "@/features/filter/pagination";
 import { useGroupExpansion } from "@/utils/hooks/useGroupExpansion";
 import { usePresetColumnState } from "@/entities/presets/model";
 import { STATIC_PRESET_IDS, STATIC_PRESETS_NAMES } from "@/entities/presets/model/constants";
+import AddIcon from "@mui/icons-material/Add";
+import ScienceOutlinedIcon from "@mui/icons-material/ScienceOutlined";
+
+const STATUS_COLOR_CLASS: Record<string, string> = {
+  red: "text-red-500",
+  green: "text-green-500",
+  gray: "text-gray-500",
+  purple: "text-purple-500",
+};
 
 const AssigneeLabel = ({ email }: { email: string }) => {
   const user = useUser(email);
@@ -361,14 +372,15 @@ export function AlertTableServerSide({
       },
       ["Status"]: {
         canHitEmptyState: true,
-        renderOptionIcon: (facetOption) => (
-          <Icon
-            icon={getStatusIcon(facetOption.display_name)}
-            size="sm"
-            color={getStatusColor(facetOption.display_name)}
-            className="!p-0"
-          />
-        ),
+        renderOptionIcon: (facetOption) => {
+          const StatusIcon = getStatusIcon(facetOption.display_name);
+          const color = getStatusColor(facetOption.display_name);
+          return (
+            <StatusIcon
+              className={`h-4 w-4 ${STATUS_COLOR_CLASS[color] ?? "text-gray-500"}`}
+            />
+          );
+        },
       },
       ["Source"]: {
         renderOptionIcon: (facetOption) => {
@@ -405,17 +417,13 @@ export function AlertTableServerSide({
           facetOption.display_name.toLocaleLowerCase() === "true"
             ? "Dismissed"
             : "Not dismissed",
-        renderOptionIcon: (facetOption) => (
-          <Icon
-            icon={
-              facetOption.display_name.toLocaleLowerCase() === "true"
-                ? BellSlashIcon
-                : BellIcon
-            }
-            size="sm"
-            className="text-gray-600 !p-0"
-          />
-        ),
+        renderOptionIcon: (facetOption) => {
+          const Icon =
+            facetOption.display_name.toLocaleLowerCase() === "true"
+              ? BellSlashIcon
+              : BellIcon;
+          return <Icon className="h-4 w-4 text-gray-600" />;
+        },
       },
     };
   }, []);
@@ -556,17 +564,17 @@ export function AlertTableServerSide({
               >
                 <div className="flex gap-2 justify-center">
                   <Button
-                    color="orange"
-                    icon={GrTest}
-                    variant="secondary"
+                    color="primary"
+                    startIcon={<ScienceOutlinedIcon />}
+                    variant="outlined"
                     onClick={handleModalOpen}
                   >
                     Simulate Alert
                   </Button>
                   <Button
-                    icon={PlusIcon}
-                    color="orange"
-                    variant="primary"
+                    startIcon={<AddIcon />}
+                    color="primary"
+                    variant="contained"
                     onClick={() => {
                       router.push("/providers?labels=alert");
                     }}
@@ -598,8 +606,8 @@ export function AlertTableServerSide({
                   icon={FunnelIcon}
                 >
                   <Button
-                    color="orange"
-                    variant="secondary"
+                    color="primary"
+                    variant="outlined"
                     onClick={() => setClearFiltersToken(uuidV4())}
                   >
                     Reset filter
@@ -630,7 +638,7 @@ export function AlertTableServerSide({
     }
     return (
       <Table
-        className="[&>table]:table-fixed [&>table]:w-full"
+        sx={{ tableLayout: "fixed", width: "100%" }}
         data-testid="alerts-table"
       >
         <AlertsTableHeaders
@@ -737,16 +745,25 @@ export function AlertTableServerSide({
 
           {/* Table section */}
           <div className="flex-1 flex flex-col min-w-0 gap-4">
-            <Card className="flex-1 flex flex-col p-0 overflow-x-auto">
+            <Paper
+              className="flex-1 flex flex-col p-0 overflow-x-auto"
+              sx={{
+                flex: 1,
+                display: "flex",
+                flexDirection: "column",
+                p: 0,
+                overflowX: "auto",
+              }}
+            >
               <div className="flex-1 flex flex-col">
                 <div ref={a11yContainerRef} className="sr-only" />
 
                 {/* Make table wrapper scrollable */}
-                <div data-testid="alerts-table" className="flex-1">
+                <TableContainer className="flex-1">
                   {renderTable()}
-                </div>
+                </TableContainer>
               </div>
-            </Card>
+            </Paper>
             {/* Pagination footer - fixed height */}
             <div className="h-16 flex-none">
               <Pagination

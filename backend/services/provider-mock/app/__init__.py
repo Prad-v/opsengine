@@ -1,0 +1,1 @@
+"""Provider mock service for local e2e alert ingestion testing."""

@@ -19,6 +19,8 @@ export default function Modal({
   className = "",
   beta = false,
   description,
+  hideCloseButton = false,
+  static: isStatic = false,
   "data-testid": dataTestId,
   ...props
 }: {
@@ -30,10 +32,12 @@ export default function Modal({
   className?: string;
   beta?: boolean;
   description?: string;
+  hideCloseButton?: boolean;
+  static?: boolean;
   "data-testid"?: string;
 } & Omit<DialogProps, "open" | "onClose" | "static" | "children">) {
   return (
-    <Dialog open={isOpen} onClose={onClose} {...props}>
+    <Dialog open={isOpen} onClose={onClose} static={isStatic} {...props}>
       <DialogPanel
         className={`flex flex-col border-2 border-orange-300 rounded-lg ring-0 ${className}`}
         data-testid={dataTestId}
@@ -48,17 +52,19 @@ export default function Modal({
                 {title}
                 {beta && <Badge color="orange">Beta</Badge>}
               </PageTitle>
-              <Button
-                variant="light"
-                color="gray"
-                size="xl"
-                className="aspect-square p-1 hover:bg-gray-100 hover:dark:bg-gray-400/10 rounded"
-                icon={XMarkIcon}
-                onClick={(e) => {
-                  e.preventDefault();
-                  onClose();
-                }}
-              />
+              {!hideCloseButton && (
+                <Button
+                  variant="light"
+                  color="gray"
+                  size="xl"
+                  className="aspect-square p-1 hover:bg-gray-100 hover:dark:bg-gray-400/10 rounded"
+                  icon={XMarkIcon}
+                  onClick={(e) => {
+                    e.preventDefault();
+                    onClose();
+                  }}
+                />
+              )}
             </div>
             {description && (
               <Text className="text-sm text-gray-500">{description}</Text>

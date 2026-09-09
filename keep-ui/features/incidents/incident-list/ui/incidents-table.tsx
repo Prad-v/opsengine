@@ -1,4 +1,3 @@
-import { Badge, Card, Subtitle, Title } from "@tremor/react";
 import {
   ExpandedState,
   createColumnHelper,
@@ -16,7 +15,7 @@ import type {
 import React, { Dispatch, SetStateAction, useCallback, useState } from "react";
 import IncidentTableComponent from "./incident-table-component";
 import { ManualRunWorkflowModal } from "@/features/workflows/manual-run-workflow";
-import { Button, Link } from "@/components/ui";
+import { Link } from "@/components/ui";
 import { MergeIncidentsModal } from "@/features/incidents/merge-incidents";
 import { IncidentDropdownMenu } from "./incident-dropdown-menu";
 import clsx from "clsx";
@@ -32,9 +31,17 @@ import {
 import { UserStatefulAvatar } from "@/entities/users/ui";
 import { DynamicImageProviderIcon } from "@/components/ui";
 import { GenerateReportModal } from "./incidents-report";
-import { DocumentChartBarIcon } from "@heroicons/react/24/outline";
 import { FormattedContent } from "@/shared/ui/FormattedContent/FormattedContent";
 import { Pagination, PaginationState } from "@/features/filter/pagination";
+import {
+  Box,
+  Button,
+  Chip,
+  Paper,
+  Stack,
+  Typography,
+} from "@mui/material";
+import AssessmentOutlinedIcon from "@mui/icons-material/AssessmentOutlined";
 
 function SelectedRowActions({
   selectedRowIds,
@@ -48,46 +55,49 @@ function SelectedRowActions({
   onGenerateReport: () => void;
 }) {
   return (
-    <div className="w-full flex justify-between">
-      <div>
-        <Button
-          color="orange"
-          variant="primary"
-          icon={DocumentChartBarIcon}
-          tooltip="Generate report for currently visible incidents"
-          size="md"
-          onClick={onGenerateReport}
-        >
-          Generate report
-        </Button>
-      </div>
+    <Stack
+      direction="row"
+      justifyContent="space-between"
+      alignItems="center"
+      sx={{ width: "100%" }}
+    >
+      <Button
+        color="primary"
+        variant="contained"
+        startIcon={<AssessmentOutlinedIcon />}
+        size="medium"
+        onClick={onGenerateReport}
+        title="Generate report for currently visible incidents"
+      >
+        Generate report
+      </Button>
 
-      <div className="flex gap-2 items-center">
+      <Stack direction="row" spacing={1} alignItems="center">
         {selectedRowIds.length ? (
-          <span className="accent-dark-tremor-content text-sm px-2">
+          <Typography variant="body2" color="text.secondary" sx={{ px: 1 }}>
             {selectedRowIds.length} selected
-          </span>
+          </Typography>
         ) : null}
         <Button
-          color="orange"
-          variant="primary"
-          size="md"
+          color="primary"
+          variant="contained"
+          size="medium"
           disabled={selectedRowIds.length < 2}
           onClick={onMergeInitiated}
         >
           Merge
         </Button>
         <Button
-          color="red"
-          variant="primary"
-          size="md"
+          color="error"
+          variant="contained"
+          size="medium"
           disabled={!selectedRowIds.length}
           onClick={onDelete}
         >
           Delete
         </Button>
-      </div>
-    </div>
+      </Stack>
+    </Stack>
   );
 }
 
@@ -241,19 +251,21 @@ export default function IncidentsTable({
           (service) => service !== "null"
         );
         return (
-          <div className="flex flex-wrap items-baseline gap-1">
+          <Box sx={{ display: "flex", flexWrap: "wrap", gap: 0.5, alignItems: "baseline" }}>
             {notNullServices
-              .map((service) => <Badge key={service}>{service}</Badge>)
+              .map((service) => (
+                <Chip key={service} label={service} size="small" />
+              ))
               .slice(0, maxServices)}
             {notNullServices.length > maxServices ? (
-              <span>
+              <Typography variant="body2" component="span">
                 and{" "}
                 <Link href={`/incidents/${row.original.id}/alerts`}>
                   {notNullServices.length - maxServices} more
                 </Link>
-              </span>
+              </Typography>
             ) : null}
-          </div>
+          </Box>
         );
       },
     }),
@@ -363,22 +375,25 @@ export default function IncidentsTable({
         onGenerateReport={generateReport}
       />
       {incidents.items.length > 0 ? (
-        <Card className="p-0 overflow-hidden">
+        <Paper sx={{ p: 0, overflow: "hidden" }}>
           <IncidentTableComponent table={table} />
-        </Card>
+        </Paper>
       ) : (
-        <Card className="flex-grow">
-          <div className="flex flex-col items-center justify-center gap-y-8 h-full">
-            <div className="text-center space-y-3">
-              <Title className="text-2xl">No Incidents Matching Filters</Title>
-              <Subtitle className="text-gray-400">
-                Try changing the filters
-              </Subtitle>
-            </div>
-          </div>
-        </Card>
+        <Paper sx={{ flexGrow: 1, p: 4 }}>
+          <Stack
+            alignItems="center"
+            justifyContent="center"
+            spacing={1.5}
+            sx={{ height: "100%", textAlign: "center" }}
+          >
+            <Typography variant="h5">No Incidents Matching Filters</Typography>
+            <Typography variant="body2" color="text.secondary">
+              Try changing the filters
+            </Typography>
+          </Stack>
+        </Paper>
       )}
-      <div className="mt-4 mb-8">
+      <Box sx={{ mt: 2, mb: 4 }}>
         <Pagination
           totalCount={incidents.count}
           isRefreshing={false}
@@ -386,7 +401,7 @@ export default function IncidentsTable({
           state={pagination}
           onStateChange={setPagination}
         />
-      </div>
+      </Box>
       <ManualRunWorkflowModal
         incident={runWorkflowModalIncident}
         onClose={() => setRunWorkflowModalIncident(null)}

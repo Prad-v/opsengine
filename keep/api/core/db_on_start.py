@@ -45,8 +45,8 @@ engine = create_db_engine()
 KEEP_FORCE_RESET_DEFAULT_PASSWORD = config(
     "KEEP_FORCE_RESET_DEFAULT_PASSWORD", default="false", cast=bool
 )
-DEFAULT_USERNAME = config("KEEP_DEFAULT_USERNAME", default="keep")
-DEFAULT_PASSWORD = config("KEEP_DEFAULT_PASSWORD", default="keep")
+DEFAULT_USERNAME = config("KEEP_DEFAULT_USERNAME", default="admin")
+DEFAULT_PASSWORD = config("KEEP_DEFAULT_PASSWORD", default="admin")
 
 
 def try_create_single_tenant(tenant_id: str, create_default_user=True) -> None:
@@ -80,6 +80,7 @@ def try_create_single_tenant(tenant_id: str, create_default_user=True) -> None:
                     username=DEFAULT_USERNAME,
                     password_hash=default_password,
                     role=AdminRole.get_name(),
+                    must_change_password=True,
                 )
                 session.add(default_user)
                 logger.info("Default user created")
@@ -89,6 +90,7 @@ def try_create_single_tenant(tenant_id: str, create_default_user=True) -> None:
                 logger.info("Forcing reset of default user password")
                 default_password = hashlib.sha256(DEFAULT_PASSWORD.encode()).hexdigest()
                 user.password_hash = default_password
+                user.must_change_password = True
                 if user.username != DEFAULT_USERNAME:
                     logger.info(
                         "Default user username updated",
@@ -115,19 +117,32 @@ def try_create_single_tenant(tenant_id: str, create_default_user=True) -> None:
                         logger.error(
                             "Invalid format for default api key. Expected format: name:role:secret"
                         )
-                    # Create the default api key for the default user
-                    api_key = session.exec(
-                        select(TenantApiKey).where(
-                            TenantApiKey.reference_id == api_key_name
-                        )
-                    ).first()
-                    if api_key:
-                        logger.info(f"Api key {api_key_name} already exists")
                         continue
-                    logger.info(f"Provisioning api key {api_key_name}")
+
                     hashed_api_key = hashlib.sha256(
                         api_key_secret.encode("utf-8")
                     ).hexdigest()
+
+                    # Skip if this reference id or secret hash already exists.
+                    # (e.g. KEEP_DEFAULT_API_KEYS uses "mock" while an older
+                    # install already provisioned the same secret as "mock-admin")
+                    existing_api_key = session.exec(
+                        select(TenantApiKey).where(
+                            (TenantApiKey.reference_id == api_key_name)
+                            | (TenantApiKey.key_hash == hashed_api_key)
+                        )
+                    ).first()
+                    if existing_api_key:
+                        logger.info(
+                            "Api key already exists, skipping provisioning",
+                            extra={
+                                "requested_reference_id": api_key_name,
+                                "existing_reference_id": existing_api_key.reference_id,
+                            },
+                        )
+                        continue
+
+                    logger.info(f"Provisioning api key {api_key_name}")
                     new_installation_api_key = TenantApiKey(
                         tenant_id=tenant_id,
                         reference_id=api_key_name,
@@ -160,12 +175,14 @@ def try_create_single_tenant(tenant_id: str, create_default_user=True) -> None:
             session.commit()
             logger.info("Single tenant created")
         except IntegrityError:
-            # Tenant already exists
-            logger.exception("Failed to provision single tenant")
-            raise
+            # Race / already-provisioned rows should not prevent API startup.
+            logger.exception(
+                "Failed to provision single tenant due to integrity error; continuing startup"
+            )
+            session.rollback()
         except Exception:
             logger.exception("Failed to create single tenant")
-            pass
+            session.rollback()
 
 
 def migrate_db():

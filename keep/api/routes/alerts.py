@@ -75,6 +75,7 @@ from keep.api.utils.enrichment_helpers import convert_db_alerts_to_dto_alerts
 from keep.api.utils.time_stamp_helpers import get_time_stamp_filter
 from keep.identitymanager.authenticatedentity import AuthenticatedEntity
 from keep.identitymanager.identitymanagerfactory import IdentityManagerFactory
+from keep.exceptions.provider_exception import ProviderException
 from keep.providers.providers_factory import ProvidersFactory
 from keep.searchengine.searchengine import SearchEngine
 from keep.workflowmanager.workflowmanager import WorkflowManager
@@ -744,6 +745,59 @@ async def receive_event(
             )
 
         provider_id = provider.id
+
+    # Optional provider-specific webhook auth (e.g. Chronosphere HMAC signatures).
+    # Use the exact raw request bytes — do not re-serialize the parsed JSON body.
+    provider_instance = None
+    if provider_id:
+        try:
+            provider_instance = ProvidersFactory.get_installed_provider(
+                tenant_id=authenticated_entity.tenant_id,
+                provider_id=provider_id,
+                provider_type=provider_type,
+            )
+        except Exception:
+            logger.warning(
+                "Could not load installed provider for webhook authentication",
+                extra={
+                    "tenant_id": authenticated_entity.tenant_id,
+                    "provider_id": provider_id,
+                    "provider_type": provider_type,
+                },
+            )
+
+    try:
+        raw_body = await request.body()
+        provider_class.verify_webhook_authentication(
+            request.headers,
+            raw_body,
+            tenant_id=authenticated_entity.tenant_id,
+            provider_id=provider_id,
+            provider_instance=provider_instance,
+        )
+    except ProviderException as exc:
+        logger.warning(
+            "Webhook authentication failed",
+            extra={
+                "tenant_id": authenticated_entity.tenant_id,
+                "provider_type": provider_type,
+                "provider_id": provider_id,
+                "error": str(exc),
+            },
+        )
+        raise HTTPException(status_code=401, detail=str(exc))
+    except HTTPException:
+        raise
+    except Exception:
+        logger.exception(
+            "Unexpected error during webhook authentication",
+            extra={
+                "tenant_id": authenticated_entity.tenant_id,
+                "provider_type": provider_type,
+                "provider_id": provider_id,
+            },
+        )
+        raise HTTPException(status_code=401, detail="Webhook authentication failed")
 
     if REDIS:
         redis: ArqRedis = await get_pool()

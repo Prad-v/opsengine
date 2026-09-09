@@ -3,18 +3,128 @@ title: "Getting started"
 sidebarTitle: "Getting started"
 ---
 
-### Docker-compose dev images
-You can use `docker-compose.dev.yaml` to start Keep in a development mode.
+### Hybrid local development (recommended for coding)
 
-First, clone the Keep repo:
+Run the **API and UI on your machine** (Poetry venv + Node), and run **Postgres, Redis, Soketi, and Temporal in Docker**.
+
+Clone the repo:
 ```
 git clone https://github.com/keephq/keep.git && cd keep
 ```
 
-Next, run
+Start everything with one command:
+
 ```
-docker compose -f docker-compose.dev.yml up
+make start
 ```
+
+That installs Poetry/npm deps if needed (creates a project `.venv` with Python 3.11 — it does **not** use a broken system `poetry` binary), starts Docker dependencies, then runs the API and UI together.
+
+Stop everything:
+
+```
+make stop
+```
+
+`make start` will:
+1. Install local deps if missing (`poetry` + `npm`)
+2. Start `docker-compose.deps.yml` + `docker-compose.temporal.yml` (Postgres `:5432`, Redis `:6379`, Soketi `:6001`, Temporal `:7233` / UI `:8233`)
+3. Run `poetry run keep api` on `:8080`
+4. Run `npm run dev` in `keep-ui` on `:3000`
+
+> **UI note:** Incidents (`/incidents`) and Alerts Feed (`/alerts/feed`) use Material UI. See [Material UI](/development/material-ui).
+
+| Process | Where it runs | URL / port |
+| --- | --- | --- |
+| UI | Host (npm) | http://localhost:3000 |
+| API | Host (poetry) | http://localhost:8080 |
+| Postgres | Docker | `localhost:5432` (`keepuser` / `keeppassword`, db `keepdb`) |
+| Redis | Docker | `localhost:6379` |
+| Soketi | Docker | `localhost:6001` |
+| Temporal | Docker | gRPC `localhost:7233`, UI http://localhost:8233 (`default` namespace) |
+
+Useful split terminals (optional; `make start` already covers this):
+
+```
+make deps        # Docker dependencies only
+make backend     # API in poetry venv
+make frontend    # Next.js UI
+make stop        # stop API, UI, and Docker deps
+```
+
+### Provider mock (Grafana / Mimir / VictoriaMetrics)
+
+With Keep running, start the mock alert-source UI to register providers and fire webhook events for e2e validation:
+
+```
+make mock-providers
+```
+
+Open [http://localhost:8099](http://localhost:8099). Full guide: [Provider mock](/development/provider-mock).
+
+> Do not run `make start` and `make up` at the same time — both claim port `8080`. The Providers page may then show a different Keep API than the one the mock registered into.
+
+Default API DB URL (override as needed):
+
+```
+DATABASE_CONNECTION_STRING=postgresql+psycopg2://keepuser:keeppassword@localhost:5432/keepdb
+```
+
+To enable Redis-backed workers while deps are up:
+
+```
+make backend REDIS=true
+```
+
+### Full stack in Docker Compose
+
+Keep also ships Makefile targets to run the whole app in Docker (no host Poetry/npm), building from this checkout instead of pulling pre-built `keep-api` / `keep-ui` images.
+
+#### Development mode (hot reload in containers)
+
+Builds `docker/Dockerfile.dev.*`, mounts your source into the containers, and reloads on change:
+
+```
+make up
+```
+
+Detached:
+
+```
+make up-d
+```
+
+Equivalent compose command:
+
+```
+docker compose -f docker-compose.dev.yml up --build
+```
+
+| Service | Host port | Notes |
+| --- | --- | --- |
+| UI (`keep-frontend-dev`) | http://localhost:3000 | `keep-ui` mounted at `/app` |
+| API (`keep-backend-dev`) | http://localhost:8080 | repo root mounted at `/app` |
+| Websocket (Soketi) | 6001 | pulled image (Soketi) |
+| Temporal | 7233 / UI 8233 | from `docker-compose.temporal.yml` (included by `make up`) |
+
+Useful targets:
+
+```
+make logs      # follow logs
+make down      # stop
+make rebuild   # rebuild images with --no-cache
+make help      # full list
+```
+
+#### Production images built from this checkout
+
+If you want production Dockerfiles (`docker/Dockerfile.api`, `docker/Dockerfile.ui`) built from your local code (still no registry pull for Keep images):
+
+```
+make local
+```
+
+See also [Docker deployment](/deployment/docker) for pulling published images with `make prod`.
 
 ### Install Keep CLI
 

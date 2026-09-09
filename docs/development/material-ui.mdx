@@ -1,0 +1,54 @@
+---
+title: "Material UI (Incidents & Feed)"
+sidebarTitle: "Material UI"
+---
+
+Keep UI is migrating selected surfaces from Tremor to **Material UI (MUI v5)**.
+
+## Scope (current)
+
+These pages now use MUI for primary layout primitives (buttons, paper/cards, tables, chips, typography):
+
+| Page | Route | Main modules |
+| --- | --- | --- |
+| Incidents | `/incidents` | `features/incidents/incident-list/ui/*` |
+| Alerts Feed | `/alerts/feed` | `widgets/alerts-table/ui/*` |
+
+Shared page title/subtitle components (`PageTitle`, `PageSubtitle`) also render with MUI `Typography`.
+
+## Theme
+
+- Provider: `keep-ui/shared/ui/mui/MuiProvider.tsx`
+- Theme factory: `keep-ui/shared/ui/mui/keepMuiTheme.ts`
+- Wired in `keep-ui/app/(keep)/layout.tsx` via `MuiProvider`
+- Keep orange primary: `#FA9E34`
+- Mode follows the existing Keep light/dark preference (`workaround-dark` / localStorage theme)
+
+`CssBaseline` is **not** enabled globally so Tailwind + remaining Tremor pages are not reset during the incremental migration.
+
+## Dependencies
+
+Installed in `keep-ui` (aligned with CopilotKit’s MUI v5 peer):
+
+- `@mui/material`
+- `@mui/icons-material`
+- `@mui/material-nextjs`
+- `@emotion/react`
+- `@emotion/styled`
+
+## Local verification
+
+```bash
+make start
+```
+
+Then open:
+
+- http://localhost:3000/incidents
+- http://localhost:3000/alerts/feed
+
+Confirm dark/light toggle still applies, table sorting/selection still works, and primary actions use the orange MUI buttons.
+
+## Next steps
+
+Migrate remaining Tremor surfaces (navbar, facets panel internals, modals, providers) page-by-page using the same theme provider.

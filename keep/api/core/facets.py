@@ -127,7 +127,7 @@ def get_facet_options(
                 facet_key = get_facet_key(
                     facet.property_path,
                     facet_options_query.cel,
-                    facet_options_query.facet_queries[facet.id],
+                    facet_options_query.facet_queries.get(facet.id, ""),
                 )
                 property_mapping = properties_metadata.get_property_metadata_for_str(
                     facet.property_path

@@ -13,6 +13,7 @@ import {
   Button,
   Icon,
   TextInput,
+  Textarea,
   Select,
   SelectItem,
   Card,
@@ -216,6 +217,17 @@ export function FormField({
           onChange={(value) => onChange(id, value)}
         />
       );
+    case "textarea":
+      return (
+        <TextAreaField
+          id={id}
+          config={config}
+          value={value}
+          error={error}
+          disabled={disabled}
+          onChange={(value) => onChange(id, value)}
+        />
+      );
     default:
       return (
         <TextField
@@ -282,6 +294,40 @@ export function TextField({
         }
         disabled={disabled}
         title={title ?? ""}
+      />
+    </>
+  );
+}
+
+export function TextAreaField({
+  id,
+  config,
+  value,
+  error,
+  disabled,
+  onChange,
+}: {
+  id: string;
+  config: ProviderAuthConfig;
+  value: ProviderFormValue;
+  error?: string;
+  disabled: boolean;
+  onChange: (value: string) => void;
+}) {
+  return (
+    <>
+      <FieldLabel id={id} config={config} />
+      <Textarea
+        id={id}
+        name={id}
+        value={value?.toString() ?? ""}
+        onChange={(e) => onChange(e.target.value)}
+        disabled={disabled}
+        rows={10}
+        placeholder={config.placeholder ?? config.hint ?? `Enter ${id}`}
+        error={Boolean(error)}
+        errorMessage={error}
+        className="font-mono text-xs"
       />
     </>
   );

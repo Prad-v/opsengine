@@ -161,6 +161,7 @@
             "providers/documentation/centreon-provider",
             "providers/documentation/checkmk-provider",
             "providers/documentation/checkly-provider",
+            "providers/documentation/chronosphere-provider",
             "providers/documentation/cilium-provider",
             "providers/documentation/clickhouse-provider",
             "providers/documentation/cloudwatch-provider",
@@ -253,6 +254,7 @@
             "providers/documentation/sumologic-provider",
             "providers/documentation/teams-provider",
             "providers/documentation/telegram-provider",
+            "providers/documentation/temporal-provider",
             "providers/documentation/template",
             "providers/documentation/thousandeyes-provider",
             "providers/documentation/trello-provider",
@@ -331,7 +333,12 @@
     },
     {
       "group": "Development",
-      "pages": ["development/getting-started", "development/external-url"]
+      "pages": [
+          "development/getting-started",
+          "development/material-ui",
+          "development/provider-mock",
+          "development/external-url"
+        ]
     },
     {
       "group": "Keep CLI",

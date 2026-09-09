@@ -162,6 +162,12 @@
         </a>
     </td>
     <td align="center" width="150">
+        <a href="https://docs.keephq.dev/providers/documentation/chronosphere-provider" target="_blank">
+            <img width="40" src="keep-ui/public/icons/chronosphere-icon.png" alt="Chronosphere"/><br/>
+            Chronosphere
+        </a>
+    </td>
+    <td align="center" width="150">
         <a href="https://docs.keephq.dev/providers/documentation/cloudwatch-provider" target="_blank">
             <img width="40" src="keep-ui/public/icons/cloudwatch-icon.png" alt="CloudWatch"/><br/>
             CloudWatch
@@ -792,6 +798,12 @@
             Airflow
         </a>
     </td>
+    <td align="center" width="150">
+        <a href="https://docs.keephq.dev/providers/documentation/temporal-provider" target="_blank">
+            <img width="40" src="keep-ui/public/icons/temporal-icon.png" alt="Temporal"/><br/>
+            Temporal
+        </a>
+    </td>
 </tr>
 </table>
 
@@ -894,9 +906,21 @@ workflow:
 
 > Need help? Can't find your environment listed? Reach out on Slack and we'll help you quickly.
 
-Keep can run in various environments and configurations. The easiest way to start is with Keep's Docker Compose.
+Keep can run in various environments and configurations. From this repo, the Makefile covers local hybrid and full Docker modes:
+
+```shell
+make start    # one command: install if needed + Docker deps + API + UI
+make stop     # stop API, UI, and Docker deps
+# make up     # full stack in Docker with mounted source
+# make local  # production Dockerfiles built from this checkout
+# make prod   # pull published images instead
+make mock-providers  # mock Grafana / Mimir / VictoriaMetrics UI for e2e webhooks
+make help     # list all targets
+```
 
 - Running Keep [locally](https://docs.keephq.dev/development/getting-started).
+- Provider mock for e2e alert ingestion: [Provider mock](docs/development/provider-mock.mdx).
+- Material UI migration (Incidents & Feed): [Material UI](docs/development/material-ui.mdx).
 - Running Keep on [Kubernetes](https://docs.keephq.dev/deployment/kubernetes/installation).
 - Running Keep with [Docker](https://docs.keephq.dev/deployment/docker).
 - Running Keep on [AWS ECS](https://docs.keephq.dev/deployment/ecs).

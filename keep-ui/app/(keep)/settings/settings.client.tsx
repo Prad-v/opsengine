@@ -44,7 +44,6 @@ export default function SettingsPage() {
   const pathname = usePathname();
   const { data: configData } = useConfig();
 
-  // TODO: refactor, we don't need to have so many states, we can just use the searchParams and derive the tabIndex and userSubTabIndex from it
   const [selectedTab, setSelectedTab] = useState<string>(
     searchParams?.get("selectedTab") || "users"
   );
@@ -57,50 +56,73 @@ export default function SettingsPage() {
   const authType = configData?.AUTH_TYPE as AuthType;
   const docsUrl = configData?.KEEP_DOCS_URL || "https://docs.keephq.dev";
 
-  // future: feature flags
+  // User/role management requires a real identity provider (not anonymous NOAUTH)
   const usersAllowed = authType !== AuthType.NOAUTH;
-  // azure and noauth do not allow user creation
   const userCreationAllowed =
     authType !== AuthType.NOAUTH && authType !== AuthType.AZUREAD;
   const rolesAllowed = authType !== AuthType.NOAUTH;
   const customRolesAllowed = authType === AuthType.KEYCLOAK;
-  const ssoAllowed = authType === AuthType.KEYCLOAK;
+  // SSO tab: configure Okta (and Keycloak wizard) from Settings while on DB/Okta/Keycloak/OneLogin
+  const ssoAllowed =
+    authType === AuthType.KEYCLOAK ||
+    authType === AuthType.OKTA ||
+    authType === AuthType.DB ||
+    authType === AuthType.ONELOGIN;
   const groupsAllowed = authType === AuthType.KEYCLOAK;
   const permissionsAllowed = authType === AuthType.KEYCLOAK;
-  const apiKeysAllowed = true; // Assuming API keys are always allowed
+  const apiKeysAllowed = true;
 
   useEffect(() => {
     const newSelectedTab = searchParams?.get("selectedTab") || "users";
     const newUserSubTab = searchParams?.get("userSubTab") || "users";
-    const tabIndex =
-      newSelectedTab === "users"
+    // Legacy Auth tab URLs → SSO (Okta) or Users
+    const legacyAuthSubTab = searchParams?.get("authSubTab");
+    const resolvedTab =
+      newSelectedTab === "auth"
+        ? "users"
+        : newSelectedTab;
+    const resolvedUserSubTab =
+      newSelectedTab === "auth"
+        ? legacyAuthSubTab === "okta"
+          ? "sso"
+          : "users"
+        : newUserSubTab;
+
+    const nextTabIndex =
+      resolvedTab === "users"
         ? 0
-        : newSelectedTab === "webhook"
-        ? 1
-        : newSelectedTab === "smtp"
-        ? 2
-        : newSelectedTab === "provider-images"
-        ? 3
-        : 0;
-    const userSubTabIndex =
-      newUserSubTab === "users"
+        : resolvedTab === "webhook"
+          ? 1
+          : resolvedTab === "smtp"
+            ? 2
+            : resolvedTab === "provider-images"
+              ? 3
+              : 0;
+    const nextUserSubTabIndex =
+      resolvedUserSubTab === "users"
         ? 0
-        : newUserSubTab === "groups"
-        ? 1
-        : newUserSubTab === "roles"
-        ? 2
-        : newUserSubTab === "permissions"
-        ? 3
-        : newUserSubTab === "api-keys"
-        ? 4
-        : newUserSubTab === "sso"
-        ? 5
-        : 0;
-    setTabIndex(tabIndex);
-    setUserSubTabIndex(userSubTabIndex);
-    setSelectedTab(newSelectedTab);
-    setSelectedUserSubTab(newUserSubTab);
-  }, [searchParams]);
+        : resolvedUserSubTab === "groups"
+          ? 1
+          : resolvedUserSubTab === "roles"
+            ? 2
+            : resolvedUserSubTab === "permissions"
+              ? 3
+              : resolvedUserSubTab === "api-keys"
+                ? 4
+                : resolvedUserSubTab === "sso"
+                  ? 5
+                  : 0;
+    setTabIndex(nextTabIndex);
+    setUserSubTabIndex(nextUserSubTabIndex);
+    setSelectedTab(resolvedTab);
+    setSelectedUserSubTab(resolvedUserSubTab);
+
+    if (newSelectedTab === "auth") {
+      router.replace(
+        `${pathname}?selectedTab=users&userSubTab=${resolvedUserSubTab}`
+      );
+    }
+  }, [searchParams, pathname, router]);
 
   const handleTabChange = (tab: string) => {
     router.replace(`${pathname}?selectedTab=${tab}`);
@@ -163,8 +185,8 @@ export default function SettingsPage() {
           ];
           return (
             <EmptyStateTable
-              message={`Users management is disabled. See documentation on how to enable it.`}
-              documentationURL={`${docsUrl}/deployment/authentication/overview#authentication-features-comparison`}
+              message={`Users management is disabled because AUTH_TYPE is NOAUTH. Set AUTH_TYPE=DB (default credentials admin/admin) to manage users.`}
+              documentationURL={`${docsUrl}/deployment/authentication/db-auth`}
               icon={UsersIcon}
             >
               <UsersTable
@@ -219,7 +241,7 @@ export default function SettingsPage() {
           return (
             <EmptyStateTable
               icon={UserGroupIcon}
-              message={`Groups management is disabled with. See documentation on how to enabled it.`}
+              message={`Groups management requires Keycloak authentication.`}
               documentationURL={`${docsUrl}/deployment/authentication/overview#authentication-features-comparison`}
             >
               <GroupsTable
@@ -254,8 +276,8 @@ export default function SettingsPage() {
           return (
             <EmptyStateTable
               icon={ShieldCheckIcon}
-              message={`Roles management is disabled with. See documentation on how to enabled it.`}
-              documentationURL={`${docsUrl}/deployment/authentication/overview#authentication-features-comparison`}
+              message={`Roles management is disabled because AUTH_TYPE is NOAUTH. Set AUTH_TYPE=DB to enable it.`}
+              documentationURL={`${docsUrl}/deployment/authentication/db-auth`}
             >
               <RolesTable
                 roles={mockRoles}
@@ -299,7 +321,7 @@ export default function SettingsPage() {
           return (
             <EmptyStateTable
               icon={MdOutlineSecurity}
-              message={`Permissions management is disabled with. See documentation on how to enabled it.`}
+              message={`Permissions management requires Keycloak authentication.`}
               documentationURL={`${docsUrl}/deployment/authentication/overview#authentication-features-comparison`}
             >
               <PermissionsTable
@@ -335,7 +357,7 @@ export default function SettingsPage() {
           return (
             <EmptyStateTable
               icon={KeyIcon}
-              message={`API Keys management is disabled with. See documentation on how to enabled it.`}
+              message={`API Keys management is disabled. See documentation on how to enable it.`}
               documentationURL={`${docsUrl}/deployment/authentication/overview#authentication-features-comparison`}
             >
               <APIKeysTable
@@ -349,12 +371,14 @@ export default function SettingsPage() {
         }
       case "sso":
         if (ssoAllowed) {
-          return <SSOTab />;
+          return (
+            <SSOTab selected={selectedTab === "users" && selectedUserSubTab === "sso"} />
+          );
         } else {
           return (
             <EmptyStateImage
-              message={`SSO management is disabled with. See documentation on how to enabled it.`}
-              documentationURL={`${docsUrl}/deployment/authentication/overview#authentication-features-comparison`}
+              message={`SSO is disabled for AUTH_TYPE=${authType || "NOAUTH"}. Set AUTH_TYPE=DB to configure Okta under SSO, or AUTH_TYPE=OKTA / KEYCLOAK for full SSO.`}
+              documentationURL={`${docsUrl}/deployment/authentication/okta-auth`}
               icon={LockClosedIcon}
               imageURL="/sso.png"
             />

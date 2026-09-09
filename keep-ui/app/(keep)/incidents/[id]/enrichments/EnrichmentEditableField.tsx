@@ -8,10 +8,34 @@ import { MdModeEdit } from "react-icons/md";
 
 interface EnrichmentEditableFieldProps {
   name?: string;
-  value: string | string[];
+  value: string | string[] | unknown;
   onUpdate: (fieldName: string, newValue: string | string[]) => void;
   onDelete?: (fieldName: string) => void;
   children?: React.ReactNode;
+}
+
+function formatEnrichmentItem(item: unknown): string {
+  if (item == null) {
+    return "";
+  }
+  if (typeof item === "string") {
+    return item;
+  }
+  if (typeof item === "number" || typeof item === "boolean") {
+    return String(item);
+  }
+  try {
+    return JSON.stringify(item);
+  } catch {
+    return String(item);
+  }
+}
+
+function toDisplayString(value: unknown): string {
+  if (Array.isArray(value)) {
+    return value.map(formatEnrichmentItem).join(", ");
+  }
+  return formatEnrichmentItem(value);
 }
 
 export const EnrichmentEditableField = ({
@@ -24,9 +48,7 @@ export const EnrichmentEditableField = ({
   const router = useRouter();
 
   const [editMode, setEditMode] = useState(false);
-  const [stringedValue, setStringedValue] = useState(
-    Array.isArray(value) ? value.join(", ") : value.toString()
-  );
+  const [stringedValue, setStringedValue] = useState(toDisplayString(value));
   const [fieldName, setFieldName] = useState<string>(name || "");
   const [fieldNameError, setFieldNameError] = useState<boolean>(false);
   const [valueError, setValueError] = useState<boolean>(false);
@@ -63,7 +85,7 @@ export const EnrichmentEditableField = ({
   };
 
   const resetForm = () => {
-    setStringedValue(Array.isArray(value) ? value.join(", ") : value);
+    setStringedValue(toDisplayString(value));
     setFieldName(name || "");
   };
 
@@ -127,20 +149,23 @@ export const EnrichmentEditableField = ({
         <div className="flex flex-wrap gap-1 group items-center">
           {children
             ? children
-            : value != null && value.length > 0
+            : value != null && toDisplayString(value).length > 0
               ? !Array.isArray(value)
-                ? value
-                : value.map((item: string) => (
-                    <Badge
-                      key={item}
-                      color="orange"
-                      size="sm"
-                      className="cursor-pointer"
-                      onClick={() => filterBy(fieldName, item)}
-                    >
-                      {item}
-                    </Badge>
-                  ))
+                ? formatEnrichmentItem(value)
+                : value.map((item: unknown, index: number) => {
+                    const label = formatEnrichmentItem(item);
+                    return (
+                      <Badge
+                        key={`${label}-${index}`}
+                        color="orange"
+                        size="sm"
+                        className="cursor-pointer"
+                        onClick={() => filterBy(fieldName, label)}
+                      >
+                        {label}
+                      </Badge>
+                    );
+                  })
               : `No data for ${name}`}
 
           <Button

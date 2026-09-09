@@ -10,11 +10,16 @@ import { showSuccessToast } from "@/shared/ui";
 interface ChangePasswordModalProps {
   isOpen: boolean;
   onClose: () => void;
+  /** When true, the dialog cannot be dismissed until the password is changed. */
+  forced?: boolean;
+  onSuccess?: () => void | Promise<void>;
 }
 
 export const ChangePasswordModal = ({
   isOpen,
   onClose,
+  forced = false,
+  onSuccess,
 }: ChangePasswordModalProps) => {
   const api = useApi();
   const [currentPassword, setCurrentPassword] = useState("");
@@ -32,6 +37,7 @@ export const ChangePasswordModal = ({
   };
 
   const handleClose = () => {
+    if (forced) return;
     resetForm();
     onClose();
   };
@@ -64,7 +70,11 @@ export const ChangePasswordModal = ({
         new_password: newPassword,
       });
       showSuccessToast("Password changed successfully");
-      handleClose();
+      resetForm();
+      if (onSuccess) {
+        await onSuccess();
+      }
+      onClose();
     } catch (err) {
       if (err instanceof KeepApiError) {
         setError(err.message || "Failed to change password");
@@ -80,10 +90,18 @@ export const ChangePasswordModal = ({
     <Modal
       isOpen={isOpen}
       onClose={handleClose}
-      title="Change Password"
+      title={forced ? "Update your password" : "Change Password"}
       className="w-[400px]"
+      static={forced}
+      hideCloseButton={forced}
     >
       <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+        {forced && (
+          <Callout title="Action required" color="amber">
+            You are using the default credentials. Please set a new password
+            before continuing.
+          </Callout>
+        )}
         <div>
           <Subtitle>Current Password</Subtitle>
           <TextInput
@@ -120,15 +138,17 @@ export const ChangePasswordModal = ({
           </Callout>
         )}
         <div className="flex justify-end gap-2 mt-2">
-          <Button
-            type="button"
-            variant="secondary"
-            color="orange"
-            className="border border-orange-500 text-orange-500"
-            onClick={handleClose}
-          >
-            Cancel
-          </Button>
+          {!forced && (
+            <Button
+              type="button"
+              variant="secondary"
+              color="orange"
+              className="border border-orange-500 text-orange-500"
+              onClick={handleClose}
+            >
+              Cancel
+            </Button>
+          )}
           <Button
             type="submit"
             color="orange"

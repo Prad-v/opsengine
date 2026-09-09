@@ -1,0 +1,130 @@
+---
+title: "Provider mock (e2e)"
+sidebarTitle: "Provider mock"
+---
+
+Use the **Provider Mock** service to validate Keep alert ingestion end-to-end without standing up real Grafana, Mimir, or VictoriaMetrics.
+
+It provides:
+
+- A small UI at [http://localhost:8099](http://localhost:8099)
+- Mock HTTP backends Keep can connect to during provider install
+- One-click **Register** into Keep (`POST /providers/install`)
+- One-click **Send event** webhooks (`POST /alerts/event/{provider_type}`)
+
+Supported mock sources:
+
+| UI tab / label | Keep provider type | Notes |
+| --- | --- | --- |
+| Alert sources → Grafana | `grafana` | Webhook `/alerts/event/grafana` |
+| Alert sources → Mimir Alertmanager | `prometheus` | Webhook `/alerts/event/prometheus` |
+| Alert sources → VictoriaMetrics | `victoriametrics` | Webhook `/alerts/event/victoriametrics` |
+| **Temporal** | `temporal` | Registers against Docker Compose Temporal (`localhost:7233`); no alert webhooks |
+
+> Mimir Alertmanager uses Keep’s **prometheus** provider — the same webhook format as Prometheus Alertmanager.
+>
+> Temporal is an **orchestration** provider. After registering, drive it from a Keep workflow action (see [Temporal provider](/providers/documentation/temporal-provider)).
+
+## Start with Docker Compose
+
+Keep must already be running (for example `make start`). Then:
+
+```bash
+make mock-providers
+```
+
+Open [http://localhost:8099](http://localhost:8099).
+
+Equivalent compose command:
+
+```bash
+docker compose -f backend/services/provider-mock/docker-compose.yml up --build
+```
+
+| Setting | Default | Purpose |
+| --- | --- | --- |
+| `KEEP_API_URL` | `http://host.docker.internal:8080` | Keep API as seen from the mock container |
+| `KEEP_API_KEY` | `keepappkey` | Admin API key (`write:providers` + `write:alert`). With `AUTH_TYPE=DB` (default `make start`), this is provisioned via `KEEP_DEFAULT_API_KEYS=mock:admin:keepappkey`. |
+| `PUBLIC_BASE_URL` | `http://localhost:8099` | Mock URL Keep uses during alert-source install (host Keep → published port) |
+| `TEMPORAL_ADDRESS` | `localhost:7233` | Temporal frontend address Keep will use after register |
+| `TEMPORAL_NAMESPACE` | `default` | Temporal namespace |
+| `TEMPORAL_UI_URL` | `http://localhost:8233` | Link shown on the Temporal tab |
+
+Hybrid tip: Keep API runs on the host, so `PUBLIC_BASE_URL` must be `http://localhost:8099` (not `host.docker.internal`). The mock container still reaches Keep via `KEEP_API_URL=http://host.docker.internal:8080`. Temporal address stays `localhost:7233` because Keep (on the host) dials Temporal’s published port.
+
+## UI workflow
+
+### Grafana correlation demo (2 payloads → 1 incident)
+
+On the **Alert sources** tab with Grafana selected:
+
+1. Use **Create rule + send both** (or fill Correlations UI manually — see below).
+2. Keep creates rule **Grafana mock payments incident** (`source == "grafana" && labels.cluster == "mock-prod"`, group by `labels.service`, **threshold 2**).
+3. Sends payload A `MockHighCPU` and payload B `MockHighMemory` (shared `service=payments-api`).
+4. Open **Incidents** — look for `INC` / Payments degradation.
+
+Manual Correlations UI (matches the screenshot):
+
+| Field | Value |
+| --- | --- |
+| Correlation name | Grafana mock payments incident |
+| Append delay | 24 Hours |
+| Group by | `labels.service` (or `service`) |
+| Alerts threshold | `2` |
+| Filter | `source` `=` **`grafana`** |
+
+Both mock payloads also set `labels.cluster=mock-prod` and `labels.host=srv-payments-1`.
+
+### Temporal tab
+
+1. Ensure Temporal is up (`make deps` or `docker compose -f docker-compose.temporal.yml up -d`).
+2. Open the **Temporal** tab.
+3. Confirm address `localhost:7233` and namespace `default` (for host Keep via `make start`).
+4. Click **Register Temporal**.
+5. Confirm **mock-temporal** under Installed Providers in Keep, then use a workflow such as `examples/workflows/incident-to-temporal.yml`.
+
+If Keep runs inside Docker Compose, set address to `temporal:7233` (or `host.docker.internal:7233`) before registering.
+
+## API (optional)
+
+```bash
+# Register Grafana mock into Keep
+curl -X POST http://localhost:8099/api/register \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "provider": "grafana",
+    "keep_api_url": "http://host.docker.internal:8080",
+    "keep_api_key": "keepappkey",
+    "public_base_url": "http://localhost:8099"
+  }'
+
+# Send a Mimir Alertmanager firing event
+curl -X POST http://localhost:8099/api/send-event \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "provider": "mimir",
+    "status": "firing",
+    "keep_api_url": "http://host.docker.internal:8080",
+    "keep_api_key": "keepappkey"
+  }'
+```
+
+## Tests
+
+```bash
+make mock-providers-test
+```
+
+Runs `tests/test_provider_mock.py` inside the mock Docker image (no host Python deps).
+
+## Troubleshooting
+
+| Symptom | Fix |
+| --- | --- |
+| Register returns HTTP 401 Invalid API Key | Keep is on `AUTH_TYPE=DB`. Use an **admin** API key (not the webhook key). Local default is `keepappkey` via `KEEP_DEFAULT_API_KEYS` / Settings → API keys. Restart API after changing the env, or create a key in the UI. |
+| Register fails Grafana scopes / connectivity | Set **Mock public URL** to `http://localhost:8099` (Keep on host cannot resolve `host.docker.internal`) |
+| Mock shows registered but Keep Providers page does not | Do not run `make start` and `make up` together — both bind `:8080`. `localhost` can hit the Docker API (IPv6) while the mock registered against the host API. Stop the Docker UI/API (`docker compose -f docker-compose.dev.yml stop`) and refresh Keep. You should see **Installed Providers**: `mock-grafana`, `mock-mimir-alertmanager`, `mock-victoriametrics`. |
+| Event sent but nothing in UI | Check API key permissions (`write:alert`) and Keep logs for `/alerts/event/...` |
+| Wrong provider type for Mimir | Expected — Keep stores Mimir Alertmanager webhooks as `prometheus` |
+
+Source: `backend/services/provider-mock/`.

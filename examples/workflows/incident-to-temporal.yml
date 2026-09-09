@@ -1,0 +1,22 @@
+workflow:
+  id: incident-to-temporal
+  name: Start Temporal remediation on incident
+  description: Starts a Temporal workflow whenever a Keep incident is created.
+  triggers:
+    - type: incident
+      events:
+        - created
+  actions:
+    - name: start-temporal-remediation
+      provider:
+        type: temporal
+        config: "{{ providers.my-temporal }}"
+        with:
+          operation: start_workflow
+          workflow_type: RemediateIncident
+          task_queue: keep-ops
+          workflow_id: "incident-{{ incident.id }}"
+          arg:
+            incident_id: "{{ incident.id }}"
+            name: "{{ incident.name }}"
+            severity: "{{ incident.severity }}"

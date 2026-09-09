@@ -1,0 +1,836 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Provider Mock · Keep e2e</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --bg: #0f1419;
+      --bg-elev: #171d25;
+      --bg-soft: #1e2630;
+      --line: #2c3642;
+      --text: #e8eef4;
+      --muted: #8b9aab;
+      --accent: #3db88a;
+      --accent-dim: #2a7a5c;
+      --warn: #e2a336;
+      --danger: #e25c5c;
+      --info: #5b9fd4;
+      --radius: 10px;
+      --font: "IBM Plex Sans", system-ui, sans-serif;
+      --mono: "IBM Plex Mono", ui-monospace, monospace;
+    }
+
+    * { box-sizing: border-box; }
+    html, body {
+      margin: 0;
+      min-height: 100%;
+      background:
+        radial-gradient(1200px 600px at 10% -10%, #1a2833 0%, transparent 55%),
+        radial-gradient(900px 500px at 100% 0%, #1a2420 0%, transparent 50%),
+        var(--bg);
+      color: var(--text);
+      font-family: var(--font);
+    }
+
+    .wrap {
+      max-width: 1180px;
+      margin: 0 auto;
+      padding: 28px 20px 64px;
+    }
+
+    header {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px 24px;
+      align-items: end;
+      justify-content: space-between;
+      margin-bottom: 20px;
+    }
+
+    header h1 {
+      margin: 0;
+      font-size: 1.65rem;
+      font-weight: 600;
+      letter-spacing: -0.02em;
+    }
+
+    header p {
+      margin: 6px 0 0;
+      color: var(--muted);
+      max-width: 56ch;
+      line-height: 1.45;
+      font-size: 0.95rem;
+    }
+
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 12px;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      background: var(--bg-elev);
+      color: var(--muted);
+      font-size: 0.8rem;
+      font-family: var(--mono);
+    }
+
+    .badge .dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--accent);
+      box-shadow: 0 0 0 3px rgba(61, 184, 138, 0.2);
+    }
+
+    .tabs {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 18px;
+    }
+
+    .tab {
+      border: 1px solid var(--line);
+      background: var(--bg-elev);
+      color: var(--muted);
+      border-radius: 999px;
+      padding: 9px 16px;
+      cursor: pointer;
+      font-size: 0.88rem;
+      font-weight: 500;
+    }
+
+    .tab.active {
+      color: #062016;
+      background: var(--accent);
+      border-color: var(--accent);
+    }
+
+    .panel {
+      background: color-mix(in srgb, var(--bg-elev) 92%, transparent);
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      padding: 18px;
+      margin-bottom: 18px;
+      backdrop-filter: blur(8px);
+    }
+
+    .panel h2 {
+      margin: 0 0 14px;
+      font-size: 0.85rem;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: var(--muted);
+      font-weight: 600;
+    }
+
+    .grid-config {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 12px;
+    }
+
+    .grid-config.two {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    @media (max-width: 860px) {
+      .grid-config, .grid-config.two { grid-template-columns: 1fr; }
+      .cards { grid-template-columns: 1fr !important; }
+    }
+
+    label {
+      display: block;
+      font-size: 0.78rem;
+      color: var(--muted);
+      margin-bottom: 6px;
+    }
+
+    input, select, textarea, button { font: inherit; }
+
+    input, select, textarea {
+      width: 100%;
+      background: var(--bg);
+      border: 1px solid var(--line);
+      color: var(--text);
+      border-radius: 8px;
+      padding: 10px 12px;
+      outline: none;
+    }
+
+    input:focus, select:focus, textarea:focus {
+      border-color: var(--accent-dim);
+      box-shadow: 0 0 0 3px rgba(61, 184, 138, 0.15);
+    }
+
+    textarea {
+      font-family: var(--mono);
+      font-size: 0.78rem;
+      min-height: 220px;
+      resize: vertical;
+      line-height: 1.4;
+    }
+
+    .cards {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 14px;
+      margin-bottom: 18px;
+    }
+
+    .card {
+      background: var(--bg-elev);
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      padding: 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      transition: border-color 160ms ease;
+    }
+
+    .card:hover {
+      border-color: color-mix(in srgb, var(--accent) 45%, var(--line));
+    }
+
+    .card.selected {
+      border-color: var(--accent);
+      box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 50%, transparent);
+    }
+
+    .card-top {
+      display: flex;
+      justify-content: space-between;
+      gap: 8px;
+      align-items: start;
+    }
+
+    .card h3 { margin: 0; font-size: 1.05rem; }
+    .card .desc {
+      margin: 4px 0 0;
+      color: var(--muted);
+      font-size: 0.82rem;
+      line-height: 1.4;
+    }
+
+    .pill {
+      font-size: 0.72rem;
+      font-family: var(--mono);
+      padding: 4px 8px;
+      border-radius: 999px;
+      border: 1px solid var(--line);
+      color: var(--muted);
+      white-space: nowrap;
+    }
+
+    .pill.on {
+      color: var(--accent);
+      border-color: color-mix(in srgb, var(--accent) 50%, var(--line));
+      background: color-mix(in srgb, var(--accent) 12%, transparent);
+    }
+
+    .meta {
+      font-family: var(--mono);
+      font-size: 0.72rem;
+      color: var(--muted);
+      word-break: break-all;
+    }
+
+    .actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: auto;
+    }
+
+    button {
+      border: 1px solid var(--line);
+      background: var(--bg-soft);
+      color: var(--text);
+      border-radius: 8px;
+      padding: 9px 12px;
+      cursor: pointer;
+      font-size: 0.85rem;
+      font-weight: 500;
+    }
+
+    button:hover { border-color: #445164; background: #253040; }
+    button:disabled { opacity: 0.45; cursor: not-allowed; }
+
+    button.primary {
+      background: var(--accent);
+      border-color: var(--accent);
+      color: #062016;
+    }
+    button.primary:hover { background: #49c897; }
+    button.danger {
+      border-color: color-mix(in srgb, var(--danger) 40%, var(--line));
+      color: var(--danger);
+    }
+
+    .split {
+      display: grid;
+      grid-template-columns: 1.1fr 0.9fr;
+      gap: 14px;
+    }
+
+    @media (max-width: 960px) {
+      .split { grid-template-columns: 1fr; }
+    }
+
+    .row {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr auto;
+      gap: 10px;
+      align-items: end;
+      margin-bottom: 12px;
+    }
+
+    @media (max-width: 860px) {
+      .row { grid-template-columns: 1fr; }
+    }
+
+    .log {
+      max-height: 360px;
+      overflow: auto;
+      font-family: var(--mono);
+      font-size: 0.75rem;
+      line-height: 1.45;
+    }
+
+    .log-item {
+      padding: 10px 0;
+      border-bottom: 1px solid var(--line);
+    }
+
+    .log-item:first-child { padding-top: 0; }
+    .ok { color: var(--accent); }
+    .fail { color: var(--danger); }
+    .hint {
+      color: var(--muted);
+      font-size: 0.88rem;
+      line-height: 1.45;
+      margin: 0 0 14px;
+    }
+    .hint a { color: var(--info); }
+    .view { display: none; }
+    .view.active { display: block; }
+
+    .toast {
+      position: fixed;
+      right: 18px;
+      bottom: 18px;
+      max-width: min(420px, calc(100vw - 36px));
+      padding: 12px 14px;
+      border-radius: 10px;
+      border: 1px solid var(--line);
+      background: var(--bg-elev);
+      box-shadow: 0 12px 40px rgba(0,0,0,0.35);
+      opacity: 0;
+      transform: translateY(8px);
+      pointer-events: none;
+      transition: opacity 180ms ease, transform 180ms ease;
+      z-index: 20;
+      font-size: 0.88rem;
+    }
+    .toast.show { opacity: 1; transform: translateY(0); }
+
+    .check {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 0.85rem;
+      color: var(--muted);
+    }
+    .check input { width: auto; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <div>
+        <h1>Provider Mock</h1>
+        <p>
+          Register alert-source mocks or the Temporal orchestration provider into Keep
+          for local end-to-end validation.
+        </p>
+      </div>
+      <div class="badge"><span class="dot"></span><span id="healthLabel">checking…</span></div>
+    </header>
+
+    <nav class="tabs" role="tablist">
+      <button type="button" class="tab active" data-tab="alerts">Alert sources</button>
+      <button type="button" class="tab" data-tab="temporal">Temporal</button>
+    </nav>
+
+    <section class="panel">
+      <h2>Keep connection</h2>
+      <div class="grid-config">
+        <div>
+          <label for="keepApiUrl">Keep API URL</label>
+          <input id="keepApiUrl" placeholder="http://host.docker.internal:8080" />
+        </div>
+        <div>
+          <label for="keepApiKey">API key (admin role for Register)</label>
+          <input id="keepApiKey" type="password" placeholder="keepappkey" />
+        </div>
+        <div id="publicBaseField">
+          <label for="publicBaseUrl">Mock public URL (seen by Keep)</label>
+          <input id="publicBaseUrl" placeholder="http://localhost:8099" />
+        </div>
+      </div>
+    </section>
+
+    <div id="view-alerts" class="view active">
+      <section class="cards" id="cards"></section>
+
+      <section class="panel" id="grafanaScenarioPanel" style="display:none">
+        <h2>Grafana correlation demo</h2>
+        <p class="hint">
+          Two payloads share <code>labels.service=payments-api</code> and
+          <code>labels.cluster=mock-prod</code>. Create the Keep correlation rule
+          (threshold=2, group by <code>labels.service</code>), then send both alerts
+          to open one incident. In the Correlations UI, set filter
+          <code>source = grafana</code>.
+        </p>
+        <div class="row" style="grid-template-columns: 1fr 1fr auto auto; margin-bottom:12px">
+          <div>
+            <label for="grafanaScenario">Payload</label>
+            <select id="grafanaScenario">
+              <option value="cpu">A — MockHighCPU (warning)</option>
+              <option value="memory">B — MockHighMemory (critical)</option>
+            </select>
+          </div>
+          <div style="display:flex;align-items:end;gap:8px;flex-wrap:wrap">
+            <button type="button" id="loadGrafanaScenario">Load payload</button>
+            <button type="button" class="primary" id="sendBothGrafana">Create rule + send both</button>
+          </div>
+        </div>
+        <div class="meta" id="grafanaScenarioMeta"></div>
+      </section>
+
+      <section class="split">
+        <div class="panel">
+          <h2>Send event</h2>
+          <div class="row">
+            <div>
+              <label for="status">Status</label>
+              <select id="status">
+                <option value="firing">firing</option>
+                <option value="resolved">resolved</option>
+              </select>
+            </div>
+            <div>
+              <label for="alertname">Alert name</label>
+              <input id="alertname" placeholder="optional override" />
+            </div>
+            <div>
+              <label for="severity">Severity</label>
+              <select id="severity">
+                <option value="">default</option>
+                <option value="critical">critical</option>
+                <option value="warning">warning</option>
+                <option value="info">info</option>
+              </select>
+            </div>
+            <div>
+              <label>&nbsp;</label>
+              <button class="primary" id="sendBtn" type="button">Send event</button>
+            </div>
+          </div>
+          <label for="payload">Payload preview (editable)</label>
+          <textarea id="payload" spellcheck="false"></textarea>
+          <div class="actions" style="margin-top:10px">
+            <button type="button" id="refreshPayload">Regenerate payload</button>
+            <button type="button" id="sendLinked">Send as linked (no provider_id)</button>
+          </div>
+        </div>
+
+        <div class="panel">
+          <h2>Activity</h2>
+          <div class="log" id="logAlerts"><div class="meta">No events yet.</div></div>
+        </div>
+      </section>
+    </div>
+
+    <div id="view-temporal" class="view">
+      <section class="panel">
+        <h2>Temporal provider</h2>
+        <p class="hint">
+          Installs Keep’s <strong>temporal</strong> provider against the Docker Compose Temporal
+          server (<code>docker-compose.temporal.yml</code> / <code>make deps</code>).
+          Frontend <code>localhost:7233</code>, UI
+          <a id="temporalUiLink" href="http://localhost:8233" target="_blank" rel="noreferrer">http://localhost:8233</a>.
+          Temporal does not ingest alert webhooks — use a Keep workflow action after registering.
+        </p>
+        <div class="grid-config two" style="margin-bottom:14px">
+          <div>
+            <label for="temporalAddress">Temporal address (as Keep will connect)</label>
+            <input id="temporalAddress" placeholder="localhost:7233" />
+          </div>
+          <div>
+            <label for="temporalNamespace">Namespace</label>
+            <input id="temporalNamespace" placeholder="default" />
+          </div>
+        </div>
+        <div class="grid-config two" style="margin-bottom:14px">
+          <div>
+            <label for="temporalProviderName">Provider name in Keep</label>
+            <input id="temporalProviderName" value="mock-temporal" />
+          </div>
+          <div style="display:flex;align-items:end;padding-bottom:4px">
+            <label class="check">
+              <input id="temporalTls" type="checkbox" />
+              Enable TLS
+            </label>
+          </div>
+        </div>
+        <div id="temporalStatus" class="meta" style="margin-bottom:14px">Not registered in this mock session.</div>
+        <div class="actions">
+          <button type="button" class="primary" id="temporalRegister">Register Temporal</button>
+          <button type="button" class="danger" id="temporalUnregister" disabled>Unregister</button>
+        </div>
+      </section>
+
+      <section class="panel">
+        <h2>Activity</h2>
+        <div class="log" id="logTemporal"><div class="meta">No events yet.</div></div>
+      </section>
+    </div>
+  </div>
+
+  <div class="toast" id="toast"></div>
+
+  <script>
+    const state = {
+      providers: [],
+      selected: "grafana",
+      defaults: {},
+      tab: "alerts",
+      grafanaScenario: "cpu",
+    };
+
+    const $ = (id) => document.getElementById(id);
+
+    function toast(msg, ok = true) {
+      const el = $("toast");
+      el.textContent = msg;
+      el.style.borderColor = ok ? "var(--accent-dim)" : "var(--danger)";
+      el.classList.add("show");
+      clearTimeout(toast._t);
+      toast._t = setTimeout(() => el.classList.remove("show"), 3200);
+    }
+
+    function connection() {
+      return {
+        keep_api_url: $("keepApiUrl").value.trim(),
+        keep_api_key: $("keepApiKey").value.trim(),
+      };
+    }
+
+    async function api(path, options = {}) {
+      const resp = await fetch(path, {
+        headers: { "Content-Type": "application/json", ...(options.headers || {}) },
+        ...options,
+      });
+      let data = null;
+      try { data = await resp.json(); } catch (_) { data = null; }
+      if (!resp.ok) {
+        const detail = data?.detail ?? data ?? resp.statusText;
+        throw new Error(typeof detail === "string" ? detail : JSON.stringify(detail));
+      }
+      return data;
+    }
+
+    function setTab(tab) {
+      state.tab = tab;
+      document.querySelectorAll(".tab").forEach((el) => {
+        el.classList.toggle("active", el.dataset.tab === tab);
+      });
+      $("view-alerts").classList.toggle("active", tab === "alerts");
+      $("view-temporal").classList.toggle("active", tab === "temporal");
+      $("publicBaseField").style.display = tab === "alerts" ? "block" : "none";
+      renderLog();
+    }
+
+    function alertProviders() {
+      return state.providers.filter((p) => p.supports_events !== false && p.key !== "temporal");
+    }
+
+    function temporalProvider() {
+      return state.providers.find((p) => p.key === "temporal");
+    }
+
+    function renderCards() {
+      const root = $("cards");
+      root.innerHTML = "";
+      for (const p of alertProviders()) {
+        const reg = p.registration;
+        const card = document.createElement("article");
+        card.className = "card" + (state.selected === p.key ? " selected" : "");
+        card.innerHTML = `
+          <div class="card-top">
+            <div>
+              <h3>${p.label}</h3>
+              <p class="desc">${p.description}</p>
+            </div>
+            <span class="pill ${p.registered ? "on" : ""}">${p.registered ? "registered" : "not registered"}</span>
+          </div>
+          <div class="meta">keep type: ${p.keep_type}${reg?.keep_provider_id ? `<br/>id: ${reg.keep_provider_id}` : ""}</div>
+          <div class="actions">
+            <button type="button" data-select="${p.key}">Select</button>
+            <button type="button" class="primary" data-register="${p.key}" ${p.registered ? "disabled" : ""}>Register</button>
+            <button type="button" class="danger" data-unregister="${p.key}" ${p.registered ? "" : "disabled"}>Unregister</button>
+          </div>
+        `;
+        root.appendChild(card);
+      }
+
+      root.querySelectorAll("[data-select]").forEach((btn) => {
+        btn.addEventListener("click", async () => {
+          state.selected = btn.dataset.select;
+          renderCards();
+          updateGrafanaPanel();
+          await refreshPayload();
+        });
+      });
+      root.querySelectorAll("[data-register]").forEach((btn) => {
+        btn.addEventListener("click", () => register(btn.dataset.register));
+      });
+      root.querySelectorAll("[data-unregister]").forEach((btn) => {
+        btn.addEventListener("click", () => unregister(btn.dataset.unregister));
+      });
+    }
+
+    function renderTemporal() {
+      const p = temporalProvider();
+      const reg = p?.registration;
+      const status = $("temporalStatus");
+      const unregisterBtn = $("temporalUnregister");
+      if (reg?.keep_provider_id) {
+        status.innerHTML = `Registered · keep type: temporal · id: ${reg.keep_provider_id}<br/>address: ${reg.auth?.address || ""} · namespace: ${reg.auth?.namespace || ""}`;
+        unregisterBtn.disabled = false;
+      } else {
+        status.textContent = "Not registered in this mock session.";
+        unregisterBtn.disabled = true;
+      }
+    }
+
+    function renderLog() {
+      const events = state.events || [];
+      const filtered = state.tab === "temporal"
+        ? events.filter((e) => e.provider === "temporal")
+        : events.filter((e) => e.provider !== "temporal");
+      const root = state.tab === "temporal" ? $("logTemporal") : $("logAlerts");
+      if (!filtered.length) {
+        root.innerHTML = `<div class="meta">No events yet.</div>`;
+        return;
+      }
+      root.innerHTML = filtered.map((e) => {
+        const cls = e.ok ? "ok" : "fail";
+        const when = e.ts ? new Date(e.ts * 1000).toLocaleTimeString() : "";
+        const bits = [
+          `<span class="${cls}">${e.action}</span>`,
+          e.provider || "",
+          e.status_code != null ? `HTTP ${e.status_code}` : "",
+          e.provider_id || e.keep_provider_id
+            ? `id=${e.provider_id || e.keep_provider_id}`
+            : "",
+          e.payload_alertname || "",
+          e.error || "",
+        ].filter(Boolean).join(" · ");
+        return `<div class="log-item"><div>${when} — ${bits}</div></div>`;
+      }).join("");
+    }
+
+    async function loadProviders() {
+      const data = await api("/api/providers");
+      state.providers = data.providers;
+      state.defaults = data.defaults || {};
+      if (!$("keepApiUrl").value) $("keepApiUrl").value = state.defaults.keep_api_url || "";
+      if (!$("keepApiKey").value) $("keepApiKey").value = state.defaults.keep_api_key || "";
+      if (!$("publicBaseUrl").value) $("publicBaseUrl").value = state.defaults.public_base_url || "";
+      if (!$("temporalAddress").value) $("temporalAddress").value = state.defaults.temporal_address || "localhost:7233";
+      if (!$("temporalNamespace").value) $("temporalNamespace").value = state.defaults.temporal_namespace || "default";
+      $("temporalTls").checked = !!state.defaults.temporal_tls;
+      if (state.defaults.temporal_ui_url) {
+        $("temporalUiLink").href = state.defaults.temporal_ui_url;
+        $("temporalUiLink").textContent = state.defaults.temporal_ui_url;
+      }
+      renderCards();
+      renderTemporal();
+      updateGrafanaPanel();
+    }
+
+    async function loadEvents() {
+      const data = await api("/api/events");
+      state.events = data.events || [];
+      renderLog();
+    }
+
+    function updateGrafanaPanel() {
+      const panel = $("grafanaScenarioPanel");
+      if (!panel) return;
+      panel.style.display = state.selected === "grafana" ? "block" : "none";
+    }
+
+    async function refreshPayload() {
+      if (state.selected === "temporal") return;
+      const body = {
+        ...connection(),
+        provider: state.selected,
+        status: $("status").value,
+        alertname: $("alertname").value || null,
+        severity: $("severity").value || null,
+        scenario: state.selected === "grafana" ? (state.grafanaScenario || $("grafanaScenario").value) : null,
+      };
+      const data = await api("/api/preview-payload", {
+        method: "POST",
+        body: JSON.stringify(body),
+      });
+      $("payload").value = JSON.stringify(data.payload, null, 2);
+      if (state.selected === "grafana" && data.payload?.alerts?.[0]?.labels) {
+        const labels = data.payload.alerts[0].labels;
+        $("grafanaScenarioMeta").textContent =
+          `alertname=${labels.alertname} · service=${labels.service} · host=${labels.host} · cluster=${labels.cluster} · severity=${labels.severity}`;
+      }
+    }
+
+    async function sendBothGrafana() {
+      try {
+        const data = await api("/api/grafana/create-incident-demo", {
+          method: "POST",
+          body: JSON.stringify({
+            ...connection(),
+            status: $("status").value,
+            create_rule: true,
+          }),
+        });
+        const ruleAction = data.correlation_rule?.action || "skipped";
+        toast(`Rule ${ruleAction}; sent ${data.events.map((e) => e.alertname).join(" + ")}`);
+        await loadEvents();
+        await loadProviders();
+      } catch (err) {
+        toast(String(err.message || err), false);
+        await loadEvents();
+      }
+    }
+
+    async function register(provider, extra = {}) {
+      try {
+        await api("/api/register", {
+          method: "POST",
+          body: JSON.stringify({
+            ...connection(),
+            provider,
+            public_base_url: $("publicBaseUrl").value.trim(),
+            ...extra,
+          }),
+        });
+        toast(`Registered ${provider}`);
+        await loadProviders();
+        await loadEvents();
+      } catch (err) {
+        toast(String(err.message || err), false);
+        await loadEvents();
+      }
+    }
+
+    async function unregister(provider) {
+      const c = connection();
+      const qs = new URLSearchParams({
+        keep_api_url: c.keep_api_url,
+        keep_api_key: c.keep_api_key,
+      });
+      try {
+        await api(`/api/register/${provider}?${qs}`, { method: "DELETE" });
+        toast(`Unregistered ${provider}`);
+        await loadProviders();
+        await loadEvents();
+      } catch (err) {
+        toast(String(err.message || err), false);
+        await loadEvents();
+      }
+    }
+
+    async function sendEvent({ useLinked = false } = {}) {
+      let payload;
+      try {
+        payload = JSON.parse($("payload").value);
+      } catch (_) {
+        toast("Payload JSON is invalid", false);
+        return;
+      }
+      try {
+        const data = await api("/api/send-event", {
+          method: "POST",
+          body: JSON.stringify({
+            ...connection(),
+            provider: state.selected,
+            status: $("status").value,
+            payload,
+            use_linked: useLinked,
+            scenario: state.selected === "grafana" ? $("grafanaScenario").value : null,
+          }),
+        });
+        toast(`Sent ${state.selected} event (${data.status_code})`);
+        $("payload").value = JSON.stringify(data.payload, null, 2);
+        await loadEvents();
+        await loadProviders();
+      } catch (err) {
+        toast(String(err.message || err), false);
+        await loadEvents();
+      }
+    }
+
+    document.querySelectorAll(".tab").forEach((btn) => {
+      btn.addEventListener("click", () => setTab(btn.dataset.tab));
+    });
+    $("sendBtn").addEventListener("click", () => sendEvent());
+    $("sendLinked").addEventListener("click", () => sendEvent({ useLinked: true }));
+    $("refreshPayload").addEventListener("click", () => refreshPayload().catch((e) => toast(String(e.message || e), false)));
+    $("loadGrafanaScenario").addEventListener("click", async () => {
+      state.grafanaScenario = $("grafanaScenario").value;
+      $("alertname").value = "";
+      $("severity").value = "";
+      await refreshPayload();
+    });
+    $("grafanaScenario").addEventListener("change", async () => {
+      state.grafanaScenario = $("grafanaScenario").value;
+      await refreshPayload();
+    });
+    $("sendBothGrafana").addEventListener("click", () => sendBothGrafana());
+    ["status", "alertname", "severity"].forEach((id) => {
+      $(id).addEventListener("change", () => refreshPayload().catch(() => {}));
+    });
+    $("temporalRegister").addEventListener("click", () => register("temporal", {
+      provider_name: $("temporalProviderName").value.trim() || "mock-temporal",
+      temporal_address: $("temporalAddress").value.trim(),
+      temporal_namespace: $("temporalNamespace").value.trim() || "default",
+      temporal_tls: $("temporalTls").checked,
+    }));
+    $("temporalUnregister").addEventListener("click", () => unregister("temporal"));
+
+    (async () => {
+      try {
+        const health = await api("/api/health");
+        $("healthLabel").textContent = `mock ready · ${health.status}`;
+      } catch (_) {
+        $("healthLabel").textContent = "mock unreachable";
+      }
+      await loadProviders();
+      if (alertProviders().length) {
+        state.selected = alertProviders()[0].key;
+      }
+      await refreshPayload();
+      await loadEvents();
+      setInterval(loadEvents, 5000);
+    })().catch((err) => toast(String(err.message || err), false));
+  </script>
+</body>
+</html>

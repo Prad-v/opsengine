@@ -1,4 +1,4 @@
-import { TableRow, TableCell } from "@tremor/react";
+import { TableRow, TableCell } from "@mui/material";
 import { AlertDto } from "@/entities/alerts/model";
 import { Table, flexRender, Row } from "@tanstack/react-table";
 import { ChevronDownIcon } from "@heroicons/react/24/outline";

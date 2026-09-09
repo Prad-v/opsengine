@@ -1,0 +1,58 @@
+# Local development dependencies only (apps run on the host via poetry/npm).
+# Usage: make deps
+#   or:  docker compose -f docker-compose.deps.yml -f docker-compose.temporal.yml up -d
+#
+# Temporal (frontend :7233, UI :8233) is defined in docker-compose.temporal.yml and
+# started together with these services via the Makefile.
+services:
+  keep-database:
+    image: postgres:15-alpine
+    container_name: keep-database
+    environment:
+      POSTGRES_USER: keepuser
+      POSTGRES_PASSWORD: keeppassword
+      POSTGRES_DB: keepdb
+    ports:
+      - "5432:5432"
+    volumes:
+      - keep-postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U keepuser -d keepdb"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+
+  keep-redis:
+    image: redis:7-alpine
+    container_name: keep-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - keep-redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+
+  keep-websocket-server:
+    image: quay.io/soketi/soketi:1.4-16-debian
+    container_name: keep-websocket-server
+    ports:
+      - "6001:6001"
+      - "9601:9601"
+    environment:
+      - SOKETI_USER_AUTHENTICATION_TIMEOUT=3000
+      - SOKETI_DEBUG=1
+      - SOKETI_DEFAULT_APP_ID=1
+      - SOKETI_DEFAULT_APP_KEY=keepappkey
+      - SOKETI_DEFAULT_APP_SECRET=keepappsecret
+    healthcheck:
+      test: ["CMD-SHELL", "bash -c 'echo > /dev/tcp/127.0.0.1/6001'"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+
+volumes:
+  keep-postgres-data:
+  keep-redis-data:

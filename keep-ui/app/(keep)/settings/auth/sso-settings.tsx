@@ -1,19 +1,23 @@
+"use client";
+
 import React from "react";
 import useSWR from "swr";
 import {
   Card,
   Title,
-  Subtitle,
   Table,
   TableBody,
   TableCell,
   TableHead,
   TableHeaderCell,
   TableRow,
-  Button,
+  Callout,
 } from "@tremor/react";
 import Loading from "@/app/(keep)/loading";
 import { useApi } from "@/shared/lib/hooks/useApi";
+import { useConfig } from "utils/hooks/useConfig";
+import { AuthType } from "@/utils/authenticationType";
+import { OktaSettingsForm } from "./okta-settings";
 
 interface SSOProvider {
   id: string;
@@ -21,56 +25,82 @@ interface SSOProvider {
   connected: boolean;
 }
 
-const SSOSettings = () => {
+interface SSOSettingsProps {
+  selected?: boolean;
+}
+
+const SSOSettings = ({ selected = true }: SSOSettingsProps) => {
   const api = useApi();
+  const { data: config } = useConfig();
+  const authType = config?.AUTH_TYPE as AuthType | undefined;
+
   const { data, error } = useSWR<{
     sso: boolean;
-    providers: SSOProvider[];
+    providers: SSOProvider[] | string[];
     wizardUrl: string;
-  }>(`/settings/sso`, (url: string) => api.get(url));
+  }>(
+    api.isReady() && selected ? `/settings/sso` : null,
+    (url: string) => api.get(url),
+    { revalidateOnFocus: false }
+  );
 
-  if (!data) return <Loading />;
-  if (error) return <div>Error loading SSO settings: {error.message}</div>;
+  // Okta configuration is available for DB/Okta (and while configuring before switching)
+  const showOktaForm =
+    authType === AuthType.DB ||
+    authType === AuthType.OKTA ||
+    authType === AuthType.ONELOGIN ||
+    authType === AuthType.KEYCLOAK ||
+    authType === AuthType.NOAUTH;
 
-  const { sso: supportsSSO, providers, wizardUrl } = data;
+  if (selected && !data && !error && authType === AuthType.KEYCLOAK) {
+    return <Loading />;
+  }
+
+  const supportsSSO = data?.sso;
+  const wizardUrl = data?.wizardUrl;
+  const normalizedProviders = (data?.providers || []).map((provider) =>
+    typeof provider === "string"
+      ? { id: provider, name: provider, connected: true }
+      : provider
+  );
 
   return (
-    <div className="h-full flex flex-col">
-      <Title>SSO Settings</Title>
-      {supportsSSO && providers.length > 0 && (
-        <Card className="mt-4 p-4">
+    <div className="h-full flex flex-col gap-6 overflow-auto">
+      <div>
+        <Title>SSO</Title>
+        <p className="text-sm text-gray-600 mt-1">
+          Configure single sign-on providers. Okta credentials are stored
+          securely and used by the backend for token verification.
+        </p>
+      </div>
+
+      {authType === AuthType.DB && (
+        <Callout title="Database auth active" color="teal">
+          You are signed in with local DB users. Configure Okta below, then set{" "}
+          <code>AUTH_TYPE=OKTA</code> on frontend and backend (with matching{" "}
+          <code>OKTA_*</code> env vars on the frontend) to switch sign-in to
+          Okta.
+        </Callout>
+      )}
+
+      {showOktaForm && <OktaSettingsForm selected={selected} />}
+
+      {supportsSSO && normalizedProviders.length > 0 && (
+        <Card className="p-4">
+          <Title className="mb-2">Connected providers</Title>
           <Table>
             <TableHead>
               <TableRow>
                 <TableHeaderCell>Provider</TableHeaderCell>
                 <TableHeaderCell>Status</TableHeaderCell>
-                <TableHeaderCell>Actions</TableHeaderCell>
               </TableRow>
             </TableHead>
             <TableBody>
-              {providers.map((provider) => (
+              {normalizedProviders.map((provider) => (
                 <TableRow key={provider.id}>
-                  <TableCell>{provider.name}</TableCell>
+                  <TableCell className="capitalize">{provider.name}</TableCell>
                   <TableCell>
                     {provider.connected ? "Connected" : "Not connected"}
-                  </TableCell>
-                  <TableCell>
-                    <Button
-                      style={{ marginRight: "10px" }}
-                      onClick={() => {
-                        /* Connect logic here */
-                      }}
-                    >
-                      Connect
-                    </Button>
-                    <Button
-                      color="orange"
-                      onClick={() => {
-                        /* Disconnect logic here */
-                      }}
-                    >
-                      Disconnect
-                    </Button>
                   </TableCell>
                 </TableRow>
               ))}
@@ -78,10 +108,17 @@ const SSOSettings = () => {
           </Table>
         </Card>
       )}
+
       {wizardUrl && (
-        <Card className="mt-4 p-4 flex-grow flex flex-col">
+        <Card className="p-4 flex-grow flex flex-col min-h-[320px]">
           <iframe src={wizardUrl} className="w-full flex-grow border-none" />
         </Card>
+      )}
+
+      {error && authType === AuthType.KEYCLOAK && (
+        <Callout title="Error" color="rose">
+          Failed to load SSO status: {error.message}
+        </Callout>
       )}
     </div>
   );

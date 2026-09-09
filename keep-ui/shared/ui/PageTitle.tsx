@@ -1,5 +1,6 @@
-import { Title } from "@tremor/react";
+import { Typography } from "@mui/material";
 import clsx from "clsx";
+
 export const PageTitle = ({
   children,
   className,
@@ -8,8 +9,12 @@ export const PageTitle = ({
   className?: string;
 }) => {
   return (
-    <Title className={clsx("text-xl line-clamp-2 font-semibold", className)}>
+    <Typography
+      variant="h4"
+      component="h1"
+      className={clsx("line-clamp-2", className)}
+    >
       {children}
-    </Title>
+    </Typography>
   );
 };

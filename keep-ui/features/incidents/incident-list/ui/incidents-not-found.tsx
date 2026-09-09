@@ -1,6 +1,6 @@
 "use client";
 
-import { Button } from "@tremor/react";
+import { Button } from "@mui/material";
 import { EmptyStateCard } from "@/shared/ui/EmptyState/EmptyStateCard";
 import { MdFlashOn } from "react-icons/md";
 import { useRouter } from "next/navigation";
@@ -18,7 +18,9 @@ export const IncidentsNotFoundForFiltersPlaceholder = ({
       title="No Incidents Matching the Filter"
       description="Clear filters to see all incidents"
     >
-      <Button onClick={() => onClearFilters()}>Clear filters</Button>
+      <Button variant="outlined" color="primary" onClick={() => onClearFilters()}>
+        Clear filters
+      </Button>
     </EmptyStateCard>
   );
 };
@@ -33,9 +35,9 @@ export const IncidentsNotFoundPlaceholder = () => {
     >
       <div className="flex gap-2">
         <Button
-          color="orange"
-          variant="secondary"
-          size="md"
+          color="primary"
+          variant="outlined"
+          size="medium"
           onClick={() => {
             router.push(`/alerts/feed`);
           }}
@@ -43,9 +45,9 @@ export const IncidentsNotFoundPlaceholder = () => {
           Correlate Alerts Manually
         </Button>
         <Button
-          color="orange"
-          variant="primary"
-          size="md"
+          color="primary"
+          variant="contained"
+          size="medium"
           onClick={() => {
             router.push(`/alerts/feed?createIncidentsFromLastAlerts=50`);
           }}

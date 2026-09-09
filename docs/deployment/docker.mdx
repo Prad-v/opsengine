@@ -4,10 +4,28 @@ sidebarTitle: "Docker"
 ---
 
 ### Spin up Keep with docker-compose latest images
-The easiest way to start keep is is with docker-compose:
+The easiest way to start Keep with **published** images is docker-compose:
 ```shell
 curl https://raw.githubusercontent.com/keephq/keep/main/start.sh | sh
 ```
+
+If you already cloned the repo, you can also run:
+
+```shell
+make prod
+# or detached: make prod-d
+```
+
+### Run from local source (no Keep image pull)
+
+| Goal | Command | Notes |
+| --- | --- | --- |
+| Host apps + Docker deps (best for coding) | `make start` | One command: install if needed + Poetry/npm apps + Postgres/Redis/Soketi/Temporal |
+| Dev with hot reload (full Docker) | `make up` | `docker-compose.dev.yml` + Temporal |
+| Production Dockerfiles from this repo | `make local` | `docker-compose.local.yml` + Temporal |
+| Published registry images | `make prod` | `docker-compose.yml` |
+
+See [Development getting started](/development/getting-started) for ports, logs, and cleanup.
 
 ```bash start.sh
 #!/bin/bash

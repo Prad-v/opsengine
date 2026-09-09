@@ -14,6 +14,7 @@ from keep.api.core.config import config
 from keep.api.core.db import get_session
 from keep.api.core.tenant_configuration import TenantConfiguration
 from keep.api.models.alert import AlertDto
+from keep.api.models.okta import OktaSettings
 from keep.api.models.smtp import SMTPSettings
 from keep.api.models.webhook import WebhookSettings
 from keep.api.utils.tenant_utils import (
@@ -435,3 +436,110 @@ def get_tenant_configuration(
     tenant_configuration = TenantConfiguration()
     config_value = tenant_configuration.get_configuration(tenant_id=tenant_id)
     return JSONResponse(status_code=200, content=config_value)
+
+
+@router.get("/auth/okta", description="Get Okta authentication settings")
+async def get_okta_auth_settings(
+    authenticated_entity: AuthenticatedEntity = Depends(
+        IdentityManagerFactory.get_auth_verifier(["read:settings"])
+    ),
+):
+    from keep.api.utils.okta_config import mask_okta_settings, read_okta_settings
+
+    tenant_id = authenticated_entity.tenant_id
+    auth_type = config("AUTH_TYPE", default="")
+    settings = read_okta_settings(tenant_id)
+    return JSONResponse(
+        status_code=200, content=mask_okta_settings(settings, auth_type=auth_type)
+    )
+
+
+@router.post("/auth/okta", description="Install or update Okta authentication settings")
+async def update_okta_auth_settings(
+    okta_settings: OktaSettings = Body(...),
+    authenticated_entity: AuthenticatedEntity = Depends(
+        IdentityManagerFactory.get_auth_verifier(["write:settings"])
+    ),
+):
+    from keep.api.utils.okta_config import (
+        mask_okta_settings,
+        read_okta_settings,
+        write_okta_settings,
+    )
+
+    tenant_id = authenticated_entity.tenant_id
+    existing = read_okta_settings(tenant_id)
+    client_secret = (
+        okta_settings.client_secret.get_secret_value()
+        if okta_settings.client_secret
+        else None
+    )
+    # Keep previously stored secret when the form submits an empty secret
+    if not client_secret:
+        client_secret = existing.get("client_secret") or ""
+    if not client_secret:
+        raise HTTPException(
+            status_code=400, detail="Client secret is required when configuring Okta"
+        )
+
+    write_okta_settings(
+        tenant_id,
+        {
+            "domain": okta_settings.domain,
+            "issuer": okta_settings.issuer,
+            "client_id": okta_settings.client_id,
+            "client_secret": client_secret,
+            "audience": okta_settings.audience or "",
+            "jwks_url": okta_settings.jwks_url or "",
+        },
+    )
+    auth_type = config("AUTH_TYPE", default="")
+    refreshed = read_okta_settings(tenant_id)
+    return {
+        "status": "Okta settings updated successfully",
+        "settings": mask_okta_settings(refreshed, auth_type=auth_type),
+        "note": (
+            "Backend will use these settings immediately. "
+            "Set matching OKTA_* environment variables on the frontend and set "
+            "AUTH_TYPE=OKTA, then restart the frontend for sign-in with Okta."
+        ),
+    }
+
+
+@router.delete("/auth/okta", description="Delete Okta authentication settings")
+async def delete_okta_auth_settings(
+    authenticated_entity: AuthenticatedEntity = Depends(
+        IdentityManagerFactory.get_auth_verifier(["delete:settings"])
+    ),
+):
+    from keep.api.utils.okta_config import delete_okta_settings
+
+    tenant_id = authenticated_entity.tenant_id
+    try:
+        delete_okta_settings(tenant_id)
+    except Exception as e:
+        logger.warning(f"Failed to delete Okta settings: {e}")
+        raise HTTPException(status_code=404, detail="Okta settings not found")
+    return JSONResponse(
+        status_code=200, content={"status": "Okta settings deleted successfully"}
+    )
+
+
+@router.get("/auth/db", description="Get DB authentication settings summary")
+async def get_db_auth_settings(
+    authenticated_entity: AuthenticatedEntity = Depends(
+        IdentityManagerFactory.get_auth_verifier(["read:settings"])
+    ),
+):
+    auth_type = config("AUTH_TYPE", default="")
+    default_username = config("KEEP_DEFAULT_USERNAME", default="admin")
+    return {
+        "auth_type": auth_type,
+        "enabled": auth_type.lower() in ("db", "single_tenant"),
+        "default_username": default_username,
+        "password_change_supported": auth_type.lower() in ("db", "single_tenant"),
+        "note": (
+            "Default credentials are admin/admin on first install. "
+            "Users with must_change_password must update their password after first login."
+        ),
+    }

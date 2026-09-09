@@ -71,3 +71,22 @@ To configure role mapping, add a custom claim to your Okta authorization server:
 2. Select your authorization server (e.g., `default`)
 3. Go to the **Claims** tab
 4. Add a claim named `keep_role` or `groups` that maps to the user's Keep role
+
+## Settings UI (recommended for self-hosted)
+
+You can configure Okta from the product UI:
+
+1. Sign in with DB auth (or an existing admin session)
+2. Open **Settings → Users and Access → SSO**
+3. Enter **Domain**, **Issuer**, **Client ID**, and **Client Secret**
+4. Save
+
+Backend token verification uses the stored settings immediately (with environment variable fallback).
+
+For the frontend NextAuth Okta provider to activate:
+
+1. Set `AUTH_TYPE=OKTA` on **both** frontend and backend
+2. Set matching `OKTA_ISSUER`, `OKTA_CLIENT_ID`, and `OKTA_CLIENT_SECRET` on the frontend
+3. Restart the frontend
+
+Callback URL: `/api/auth/callback/okta`

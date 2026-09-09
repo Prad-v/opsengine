@@ -716,6 +716,34 @@ class BaseProvider(metaclass=abc.ABCMeta):
         """
         return raw_body
 
+    @classmethod
+    def verify_webhook_authentication(
+        cls,
+        headers: dict | None,
+        raw_body: bytes,
+        *,
+        tenant_id: str | None = None,
+        provider_id: str | None = None,
+        provider_instance: "BaseProvider | None" = None,
+    ) -> None:
+        """
+        Optionally verify webhook authenticity (HMAC signatures, custom headers, etc.).
+
+        Called from the /alerts/event/{provider_type} endpoint before the event is
+        accepted. Override in providers that support signed webhooks.
+
+        Args:
+            headers: Incoming HTTP headers (case-insensitive mapping).
+            raw_body: Exact request body bytes (must not be re-serialized).
+            tenant_id: Current tenant id.
+            provider_id: Installed provider id when present on the webhook URL.
+            provider_instance: Instantiated provider when it could be loaded.
+
+        Raises:
+            ProviderException: When authentication fails.
+        """
+        return
+
     def get_logs(self, limit: int = 5) -> list:
         """
         Get logs from the provider.

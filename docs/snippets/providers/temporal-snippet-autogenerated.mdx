@@ -1,0 +1,77 @@
+{/* This snippet is automatically generated using scripts/docs_render_provider_snippets.py
+Do not edit it manually, as it will be overwritten */}
+
+## Authentication
+This provider requires authentication.
+- **address**: Temporal frontend address (host:port) (required: True, sensitive: False)
+- **namespace**: Temporal namespace (required: False, sensitive: False)
+- **api_key**: Temporal Cloud API key (enables TLS automatically) (required: False, sensitive: True)
+- **tls**: Enable TLS (required for Temporal Cloud; auto-enabled when api_key is set) (required: False, sensitive: False)
+- **tls_client_cert**: mTLS client certificate PEM contents (required: False, sensitive: True)
+- **tls_client_key**: mTLS client private key PEM contents (required: False, sensitive: True)
+- **tls_server_root_ca_cert**: Optional server CA certificate PEM contents for mTLS (required: False, sensitive: True)
+- **workflow_catalog**: Keep-managed Temporal workflow catalog as JSON array. Each entry needs id, name, workflow_type, task_queue; optional description, workflow_id_template, input_mapping. (required: False, sensitive: False)
+
+Certain scopes may be required to perform specific actions or queries via the provider. Below is a summary of relevant scopes and their use cases:
+- **connect**: Connect to the Temporal frontend and access the namespace (mandatory) 
+
+
+
+## In workflows
+
+This provider can be used in workflows.
+
+
+As "step" to query data, example:
+```yaml
+steps:
+    - name: Query temporal
+      provider: temporal
+      config: "{{ provider.my_provider_name }}"
+      with:
+        operation: {value}  
+        workflow_id: {value}  
+        run_id: {value}  
+        query_name: {value}  
+        query_args: {value}  
+        query: {value}  
+        page_size: {value}  
+```
+
+
+As "action" to make changes or update data, example:
+```yaml
+actions:
+    - name: Query temporal
+      provider: temporal
+      config: "{{ provider.my_provider_name }}"
+      with:
+        workflow_type: {value}  
+        task_queue: {value}  
+        workflow_id: {value}  
+        args: {value}  
+        arg: {value}  
+        operation: {value}  
+        signal_name: {value}  
+        signal_args: {value}  
+        reason: {value}  
+        run_id: {value}  
+```
+
+
+
+
+Check the following workflow example:
+- [incident-to-temporal.yml](https://github.com/keephq/keep/blob/main/examples/workflows/incident-to-temporal.yml)
+
+
+## Provider Methods
+The provider exposes the following [Provider Methods](/providers/provider-methods#via-ai-assistant). They are available in the [AI Assistant](/overview/ai-incident-assistant).
+
+- **get_workflow_catalog** List Keep-managed Temporal workflows available to start (view, scopes: no additional scopes)
+
+- **start_workflow_from_catalog** Start a catalog Temporal workflow and link it to an incident (action, scopes: no additional scopes)
+
+    - `catalog_id`: Catalog entry id (not Temporal workflow id).
+    - `incident`: Incident payload (dict or JSON string) used for input_mapping
+and workflow_id_template rendering.

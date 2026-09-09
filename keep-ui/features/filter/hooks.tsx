@@ -106,6 +106,9 @@ export const useFacetOptions = (
     // cardinality, see #6577) is unnecessary.
     const newFacetOptions: FacetOptionsDict = { ...(mergedFacetOptions || {}) };
     Object.entries(fetchedData).forEach(([facetId, newOptions]) => {
+      if (!Array.isArray(newOptions)) {
+        return;
+      }
       const existingOptions = newFacetOptions[facetId];
       if (existingOptions) {
         // Preserve previously known option values with a 0 match count so they

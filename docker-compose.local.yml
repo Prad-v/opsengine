@@ -1,0 +1,40 @@
+# Build and run Keep from local source (production Dockerfiles).
+# Does not pull keep-api / keep-ui from the registry.
+services:
+  keep-frontend:
+    extends:
+      file: docker-compose.common.yml
+      service: keep-frontend-common
+    build:
+      context: ./keep-ui
+      dockerfile: ../docker/Dockerfile.ui
+    image: keep-frontend:local
+    pull_policy: build
+    environment:
+      - AUTH_TYPE=NO_AUTH
+      - API_URL=http://keep-backend:8080
+    volumes:
+      - ./state:/state
+    depends_on:
+      - keep-backend
+
+  keep-backend:
+    extends:
+      file: docker-compose.common.yml
+      service: keep-backend-common
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.api
+    image: keep-backend:local
+    pull_policy: build
+    environment:
+      - AUTH_TYPE=NO_AUTH
+      - PROMETHEUS_MULTIPROC_DIR=/tmp/prometheus
+      - KEEP_METRICS=true
+    volumes:
+      - ./state:/state
+
+  keep-websocket-server:
+    extends:
+      file: docker-compose.common.yml
+      service: keep-websocket-server-common

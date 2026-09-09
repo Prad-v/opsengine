@@ -1,6 +1,6 @@
 import { useMemo, useRef, useState } from "react";
 import clsx from "clsx";
-import { Card, Table } from "@tremor/react";
+import { Paper, Table } from "@mui/material";
 import {
   useAlertTableTheme,
   type AlertDto,
@@ -403,17 +403,14 @@ export function AlertTable({
           </div>
 
           <div className="flex-1 flex flex-col min-w-0">
-            <Card className="h-full flex flex-col p-0 overflow-x-auto">
+            <Paper className="h-full flex flex-col p-0 overflow-x-auto" sx={{ p: 0, overflowX: "auto", height: "100%", display: "flex", flexDirection: "column" }}>
               <div className="flex-grow flex flex-col">
                 <div ref={a11yContainerRef} className="sr-only" />
 
                 <div className="flex-grow">
                   <Table
-                    className={clsx(
-                      "[&>table]:table-fixed [&>table]:w-full",
-                      "overflow-x-auto",
-                      "w-full"
-                    )}
+                    className={clsx("overflow-x-auto", "w-full")}
+                    sx={{ tableLayout: "fixed", width: "100%" }}
                   >
                     <AlertsTableHeaders
                       columns={columns}
@@ -443,7 +440,7 @@ export function AlertTable({
                   </Table>
                 </div>
               </div>
-            </Card>
+            </Paper>
           </div>
         </div>
       </div>

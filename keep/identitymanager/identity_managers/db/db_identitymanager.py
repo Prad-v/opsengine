@@ -8,6 +8,7 @@ from keep.api.core.db import create_user as create_user_in_db
 from keep.api.core.db import delete_user as delete_user_from_db
 from keep.api.core.db import get_user
 from keep.api.core.db import get_users as get_users_from_db
+from keep.api.core.db import set_user_must_change_password
 from keep.api.core.db import update_user_password as update_user_password_in_db
 from keep.api.core.db import update_user_role as update_user_role_in_db
 from keep.api.core.dependencies import SINGLE_TENANT_UUID
@@ -56,6 +57,9 @@ class DbIdentityManager(BaseIdentityManager):
                     "email": user.username,
                     "tenant_id": SINGLE_TENANT_UUID,
                     "role": user.role,
+                    "must_change_password": bool(
+                        getattr(user, "must_change_password", False)
+                    ),
                 },
                 jwt_secret,
                 algorithm="HS256",
@@ -66,6 +70,9 @@ class DbIdentityManager(BaseIdentityManager):
                 "tenantId": SINGLE_TENANT_UUID,
                 "email": user.username,
                 "role": user.role,
+                "mustChangePassword": bool(
+                    getattr(user, "must_change_password", False)
+                ),
             }
 
         self.logger.info("Added signin endpoint")
@@ -118,11 +125,15 @@ class DbIdentityManager(BaseIdentityManager):
 
         updated_user = None
         if password:
+            # Admin-driven password resets should force the user to set a new password
             updated_user = update_user_password_in_db(
-                self.tenant_id, user_email, password
+                self.tenant_id, user_email, password, clear_must_change=False
             )
             if not updated_user:
                 raise HTTPException(status_code=404, detail="User not found")
+            updated_user = set_user_must_change_password(
+                self.tenant_id, user_email, True
+            )
 
         if role:
             updated_user = update_user_role_in_db(self.tenant_id, user_email, role)

@@ -1,6 +1,6 @@
 import { getIncidentName } from "@/entities/incidents/lib/utils";
 import { getIncidentWithErrorHandling } from "../getIncidentWithErrorHandling";
-import IncidentWorkflowTable from "./incident-workflow-table";
+import IncidentWorkflowsClient from "./incident-workflows-client";
 
 type PageProps = {
   params: Promise<{ id: string }>;
@@ -12,7 +12,7 @@ export default async function IncidentWorkflowsPage(props: PageProps) {
   const { id } = params;
 
   const incident = await getIncidentWithErrorHandling(id);
-  return <IncidentWorkflowTable incident={incident} />;
+  return <IncidentWorkflowsClient incident={incident} />;
 }
 
 export async function generateMetadata(props: PageProps) {

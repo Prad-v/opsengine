@@ -1,4 +1,4 @@
-import { Button } from "@tremor/react";
+import { Button, Tooltip } from "@mui/material";
 import { useState } from "react";
 import { AlertDto } from "@/entities/alerts/model";
 import { PlusIcon, RocketIcon } from "@radix-ui/react-icons";
@@ -74,7 +74,7 @@ export default function AlertActions({
       );
       const options = [{ value: formattedCel, label: "CEL" }];
       try {
-        const response = await api.post(`/preset`, {
+        await api.post(`/preset`, {
           name: newPresetName,
           options: options,
         });
@@ -119,18 +119,20 @@ export default function AlertActions({
   return (
     <div className="w-full flex gap-2.5 justify-end items-center">
       <Button
-        icon={XMarkIcon}
-        size="xs"
-        color="slate"
+        size="small"
+        color="inherit"
+        variant="outlined"
+        startIcon={<XMarkIcon className="h-4 w-4" />}
         title="Clear Selection"
         onClick={clearRowSelection}
       >
         Clear Selection
       </Button>
       <Button
-        icon={ChevronDoubleRightIcon}
-        size="xs"
-        color="blue"
+        size="small"
+        color="info"
+        variant="contained"
+        startIcon={<ChevronDoubleRightIcon className="h-4 w-4" />}
         title="Resolve"
         onClick={() => {
           setModalAlert(selectedAlerts);
@@ -149,9 +151,10 @@ export default function AlertActions({
         />
       )}
       <Button
-        icon={SilencedDoorbellNotification}
-        size="xs"
-        color="red"
+        size="small"
+        color="error"
+        variant="contained"
+        startIcon={<SilencedDoorbellNotification />}
         title="Delete"
         onClick={() => {
           setDismissModalAlert?.(selectedAlerts);
@@ -160,38 +163,52 @@ export default function AlertActions({
       >
         Dismiss {selectedAlertsFingerprints.length} alert(s)
       </Button>
-      <Button
-        icon={PlusIcon}
-        size="xs"
-        color="orange"
-        onClick={async () => await addOrUpdatePreset()}
-        tooltip="Save current filter as a view"
-      >
-        Create Preset
-      </Button>
-      <Button
-        icon={PlusIcon}
-        size="xs"
-        color="orange"
-        onClick={showIncidentSelector}
-        tooltip="Associate events with incident"
-      >
-        Associate with incident
-      </Button>
-      <Button
-        icon={RocketIcon}
-        size="xs"
-        color="orange"
-        onClick={showCreateIncidentWithAI}
-        tooltip={
+      <Tooltip title="Save current filter as a view">
+        <span>
+          <Button
+            size="small"
+            color="primary"
+            variant="contained"
+            startIcon={<PlusIcon className="h-4 w-4" />}
+            onClick={async () => await addOrUpdatePreset()}
+          >
+            Create Preset
+          </Button>
+        </span>
+      </Tooltip>
+      <Tooltip title="Associate events with incident">
+        <span>
+          <Button
+            size="small"
+            color="primary"
+            variant="contained"
+            startIcon={<PlusIcon className="h-4 w-4" />}
+            onClick={showIncidentSelector}
+          >
+            Associate with incident
+          </Button>
+        </span>
+      </Tooltip>
+      <Tooltip
+        title={
           config?.OPEN_AI_API_KEY_SET
             ? "Create incidents with AI"
             : "AI is not configured"
         }
-        disabled={!config?.OPEN_AI_API_KEY_SET}
       >
-        Create incidents with AI
-      </Button>
+        <span>
+          <Button
+            size="small"
+            color="primary"
+            variant="contained"
+            startIcon={<RocketIcon className="h-4 w-4" />}
+            onClick={showCreateIncidentWithAI}
+            disabled={!config?.OPEN_AI_API_KEY_SET}
+          >
+            Create incidents with AI
+          </Button>
+        </span>
+      </Tooltip>
       <AlertAssociateIncidentModal
         isOpen={isIncidentSelectorOpen}
         alerts={selectedAlerts}

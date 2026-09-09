@@ -1,5 +1,5 @@
 "use client";
-import { Card, Title, Subtitle, Button, Badge } from "@tremor/react";
+
 import React, { useMemo, useState } from "react";
 import type {
   IncidentDto,
@@ -14,7 +14,6 @@ import { SortingState } from "@tanstack/react-table";
 import { IncidentListError } from "@/features/incidents/incident-list/ui/incident-list-error";
 import { InitialFacetsData } from "@/features/filter/api";
 import { FacetsPanelServerSide } from "@/features/filter/facet-panel-server-side";
-import { Icon } from "@tremor/react";
 import {
   KeepLoader,
   PageSubtitle,
@@ -36,10 +35,6 @@ import {
 } from "./incidents-not-found";
 import { v4 as uuidV4 } from "uuid";
 import { FacetsConfig } from "@/features/filter/models";
-import EnhancedDateRangePicker, {
-  TimeFrame,
-} from "@/components/ui/DateRangePicker";
-import { PlusIcon } from "@heroicons/react/20/solid";
 import {
   DEFAULT_INCIDENTS_PAGE_SIZE,
   DEFAULT_INCIDENTS_SORTING,
@@ -52,6 +47,22 @@ import EnhancedDateRangePickerV2, {
 } from "@/components/ui/DateRangePickerV2";
 import { useTimeframeState } from "@/components/ui/useTimeframeState";
 import { PaginationState } from "@/features/filter/pagination";
+import {
+  Box,
+  Button as MuiButton,
+  Chip,
+  Paper,
+  Stack,
+  Typography,
+} from "@mui/material";
+import AddIcon from "@mui/icons-material/Add";
+
+const STATUS_COLOR_CLASS: Record<string, string> = {
+  red: "text-red-500",
+  green: "text-green-500",
+  gray: "text-gray-500",
+  purple: "text-purple-500",
+};
 
 const AssigneeLabel = ({ email }: { email: string }) => {
   const user = useUser(email);
@@ -152,14 +163,15 @@ export function IncidentList({
       },
       ["Status"]: {
         checkedByDefaultOptionValues: DEFAULT_INCIDENTS_CHECKED_OPTIONS,
-        renderOptionIcon: (facetOption) => (
-          <Icon
-            icon={getStatusIcon(facetOption.display_name)}
-            size="sm"
-            color={getStatusColor(facetOption.display_name)}
-            className="!p-0"
-          />
-        ),
+        renderOptionIcon: (facetOption) => {
+          const StatusIcon = getStatusIcon(facetOption.display_name);
+          const color = getStatusColor(facetOption.display_name);
+          return (
+            <StatusIcon
+              className={`h-4 w-4 ${STATUS_COLOR_CLASS[color] ?? "text-gray-500"}`}
+            />
+          );
+        },
       },
       ["Source"]: {
         renderOptionIcon: (facetOption) => {
@@ -193,15 +205,11 @@ export function IncidentList({
       ["Dismissed"]: {
         renderOptionLabel: (facetOption) =>
           facetOption.display_name === "true" ? "Dismissed" : "Not dismissed",
-        renderOptionIcon: (facetOption) => (
-          <Icon
-            icon={
-              facetOption.display_name === "true" ? BellSlashIcon : BellIcon
-            }
-            size="sm"
-            className="text-gray-600 !p-0"
-          />
-        ),
+        renderOptionIcon: (facetOption) => {
+          const Icon =
+            facetOption.display_name === "true" ? BellSlashIcon : BellIcon;
+          return <Icon className="h-4 w-4 text-gray-600" />;
+        },
       },
       ["Linked incident"]: {
         sortCallback: (facetOption) =>
@@ -263,15 +271,15 @@ export function IncidentList({
 
     // This is shown on the cold page load. FIXME
     return (
-      <Card className="flex-grow">
+      <Paper sx={{ flexGrow: 1, p: 2 }}>
         <IncidentListPlaceholder setIsFormOpen={setIsFormOpen} />
-      </Card>
+      </Paper>
     );
   }
 
   const renderDateTimePicker = () => {
     return (
-      <div className="flex justify-end">
+      <Box sx={{ display: "flex", justifyContent: "flex-end" }}>
         {dateRange && (
           <EnhancedDateRangePickerV2
             timeFrame={dateRange}
@@ -285,55 +293,61 @@ export function IncidentList({
             enableYearNavigation
           />
         )}
-      </div>
+      </Box>
     );
   };
 
   return (
-    <div className="flex h-full w-full">
-      <div className="flex-grow min-w-0">
+    <Box sx={{ display: "flex", height: "100%", width: "100%" }}>
+      <Box sx={{ flexGrow: 1, minWidth: 0 }}>
         {!isPredictedLoading &&
         predictedIncidents &&
         predictedIncidents.items.length > 0 ? (
-          <Card className="mt-10 mb-10 flex-grow">
-            <Title>Incident Predictions</Title>
-            <Subtitle>
-              Possible problems predicted by Keep AI & Correlation Rules{" "}
-              <Badge color="orange">Beta</Badge>
-            </Subtitle>
+          <Paper sx={{ mt: 5, mb: 5, flexGrow: 1, p: 2 }}>
+            <Typography variant="h6">Incident Predictions</Typography>
+            <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 2 }}>
+              <Typography variant="body2" color="text.secondary">
+                Possible problems predicted by Keep AI & Correlation Rules
+              </Typography>
+              <Chip label="Beta" color="warning" size="small" />
+            </Stack>
             <PredictedIncidentsTable
               incidents={predictedIncidents}
               editCallback={handleStartEdit}
             />
-          </Card>
+          </Paper>
         ) : null}
 
-        <div className="h-full flex flex-col gap-5">
-          <div className="flex justify-between items-center">
-            <div>
+        <Stack spacing={2.5} sx={{ height: "100%" }}>
+          <Stack
+            direction="row"
+            justifyContent="space-between"
+            alignItems="center"
+          >
+            <Box>
               <PageTitle>Incidents</PageTitle>
               <PageSubtitle>Group alerts into incidents</PageSubtitle>
-            </div>
+            </Box>
 
-            <div className="flex gap-2">
+            <Stack direction="row" spacing={1} alignItems="center">
               {renderDateTimePicker()}
-              <Button
-                color="orange"
-                size="md"
-                icon={PlusIcon}
-                variant="primary"
+              <MuiButton
+                color="primary"
+                variant="contained"
+                size="medium"
+                startIcon={<AddIcon />}
                 onClick={() => setIsFormOpen(true)}
               >
                 Create Incident
-              </Button>
-            </div>
-          </div>
-          <div>
+              </MuiButton>
+            </Stack>
+          </Stack>
+          <Box>
             {incidentsError ? (
               <IncidentListError incidentError={incidentsError} />
             ) : null}
             {incidentsError ? null : (
-              <div className="flex flex-row gap-5">
+              <Stack direction="row" spacing={2.5}>
                 <FacetsPanelServerSide
                   className="mt-14"
                   entityName={"incidents"}
@@ -345,14 +359,14 @@ export function IncidentList({
                   onCelChange={setFilterCel}
                   revalidationToken={filterRevalidationToken}
                 />
-                <div className="flex flex-col gap-5 flex-1 min-w-0">
+                <Stack spacing={2.5} sx={{ flex: 1, minWidth: 0 }}>
                   {renderIncidents()}
-                </div>
-              </div>
+                </Stack>
+              </Stack>
             )}
-          </div>
-        </div>
-      </div>
+          </Box>
+        </Stack>
+      </Box>
       <Modal
         isOpen={isFormOpen}
         onClose={handleCloseForm}
@@ -364,6 +378,6 @@ export function IncidentList({
           exitCallback={handleFinishEdit}
         />
       </Modal>
-    </div>
+    </Box>
   );
 }

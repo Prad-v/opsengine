@@ -1,5 +1,9 @@
-import { Subtitle } from "@tremor/react";
+import { Typography } from "@mui/material";
 
 export const PageSubtitle = ({ children }: { children: React.ReactNode }) => {
-  return <Subtitle className="text-gray-700">{children}</Subtitle>;
+  return (
+    <Typography variant="subtitle1" color="text.secondary">
+      {children}
+    </Typography>
+  );
 };

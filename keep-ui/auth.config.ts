@@ -140,8 +140,8 @@ const baseProviderConfigs = {
     Credentials({
       name: "Credentials",
       credentials: {
-        username: { label: "Username", type: "text", placeholder: "keep" },
-        password: { label: "Password", type: "password", placeholder: "keep" },
+        username: { label: "Username", type: "text", placeholder: "admin" },
+        password: { label: "Password", type: "password", placeholder: "admin" },
       },
       async authorize(credentials): Promise<User | null> {
         try {
@@ -167,6 +167,7 @@ const baseProviderConfigs = {
             accessToken: user.accessToken,
             tenantId: user.tenantId,
             role: user.role,
+            mustChangePassword: Boolean(user.mustChangePassword),
           };
         } catch (error) {
           if (error instanceof TypeError && error.message === "fetch failed") {
@@ -317,7 +318,14 @@ export const config = {
       }
       return true;
     },
-    jwt: async ({ token, user, account, profile }): Promise<JWT> => {
+    jwt: async ({ token, user, account, profile, trigger, session }): Promise<JWT> => {
+      if (trigger === "update" && session) {
+        if (typeof session.mustChangePassword === "boolean") {
+          token.mustChangePassword = session.mustChangePassword;
+        }
+        return token;
+      }
+
       if (account && user) {
         let accessToken: string | undefined;
         let tenantId: string | undefined = user.tenantId;
@@ -328,6 +336,7 @@ export const config = {
           token.accessToken = user.accessToken;
           token.tenantId = user.tenantId;
           token.role = user.role;
+          token.mustChangePassword = user.mustChangePassword;
           return token;
         }
 
@@ -382,6 +391,7 @@ export const config = {
         token.accessToken = accessToken;
         token.tenantId = tenantId;
         token.role = role;
+        token.mustChangePassword = Boolean(user.mustChangePassword);
 
         if (authType === AuthType.KEYCLOAK) {
           accessToken = account.access_token;
@@ -487,12 +497,14 @@ export const config = {
         accessToken: token.accessToken as string,
         tenantId: token.tenantId as string,
         userRole: token.role as string,
+        mustChangePassword: Boolean(token.mustChangePassword),
         user: {
           ...session.user,
           accessToken: token.accessToken as string,
           tenantId: token.tenantId as string,
           role: token.role as string,
           tenantIds: token.tenantIds || [],
+          mustChangePassword: Boolean(token.mustChangePassword),
         },
       };
     },

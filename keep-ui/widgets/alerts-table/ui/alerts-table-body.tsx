@@ -1,4 +1,4 @@
-import { TableBody, TableRow, TableCell } from "@tremor/react";
+import { TableBody, TableRow, TableCell } from "@mui/material";
 import { AlertDto } from "@/entities/alerts/model";
 import { Table, flexRender } from "@tanstack/react-table";
 import React from "react";

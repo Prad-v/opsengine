@@ -140,7 +140,7 @@ def change_my_password(
     if not updated_user:
         raise HTTPException(status_code=404, detail="User not found")
 
-    return {"status": "OK"}
+    return {"status": "OK", "mustChangePassword": False}
 
 
 @router.put("/{user_email}", description="Update a user")

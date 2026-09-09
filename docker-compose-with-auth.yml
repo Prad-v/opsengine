@@ -21,8 +21,8 @@ services:
     environment:
       - AUTH_TYPE=DB
       - KEEP_JWT_SECRET=verysecretkey
-      - KEEP_DEFAULT_USERNAME=keep
-      - KEEP_DEFAULT_PASSWORD=keep
+      - KEEP_DEFAULT_USERNAME=admin
+      - KEEP_DEFAULT_PASSWORD=admin
     volumes:
       - ./state:/state
 

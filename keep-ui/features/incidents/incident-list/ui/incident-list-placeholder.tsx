@@ -1,5 +1,5 @@
 import { Fragment } from "react";
-import { Button, Subtitle, Title } from "@tremor/react";
+import { Button, Typography, Stack } from "@mui/material";
 
 interface Props {
   setIsFormOpen: (value: boolean) => void;
@@ -12,21 +12,27 @@ export const IncidentListPlaceholder = ({ setIsFormOpen }: Props) => {
 
   return (
     <Fragment>
-      <div className="flex flex-col items-center justify-center gap-y-8 h-full">
-        <div className="text-center space-y-3">
-          <Title className="text-2xl">No Incidents Yet</Title>
-          <Subtitle className="text-gray-400">
+      <Stack
+        alignItems="center"
+        justifyContent="center"
+        spacing={4}
+        sx={{ height: "100%", textAlign: "center" }}
+      >
+        <Stack spacing={1.5}>
+          <Typography variant="h5">No Incidents Yet</Typography>
+          <Typography variant="body2" color="text.secondary">
             Create incidents manually to enable AI detection
-          </Subtitle>
-        </div>
+          </Typography>
+        </Stack>
         <Button
-          className="mb-10"
-          color="orange"
+          color="primary"
+          variant="contained"
+          sx={{ mb: 5 }}
           onClick={() => onCreateButtonClick()}
         >
           Create Incident
         </Button>
-      </div>
+      </Stack>
     </Fragment>
   );
 };

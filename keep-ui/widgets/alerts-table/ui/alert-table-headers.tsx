@@ -28,7 +28,7 @@ import {
   Header,
   Table,
 } from "@tanstack/react-table";
-import { TableHead, TableHeaderCell, TableRow } from "@tremor/react";
+import { TableHead, TableCell, TableRow } from "@mui/material";
 import { AlertDto } from "@/entities/alerts/model";
 import { useLocalStorage } from "@/utils/hooks/useLocalStorage";
 import { getColumnsIds } from "@/widgets/alerts-table/lib/alert-table-utils";
@@ -230,7 +230,8 @@ const DraggableHeaderCell = ({
   };
 
   return (
-    <TableHeaderCell
+    <TableCell
+      component="th"
       className={clsx(
         "relative group",
         column.columnDef.meta?.thClassName,
@@ -417,7 +418,7 @@ const DraggableHeaderCell = ({
           onTouchStart={getResizeHandler()}
         />
       )}
-    </TableHeaderCell>
+    </TableCell>
   );
 };
 

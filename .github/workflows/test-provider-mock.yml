@@ -1,0 +1,29 @@
+name: Provider Mock Tests
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "backend/services/provider-mock/**"
+      - "tests/test_provider_mock.py"
+      - ".github/workflows/test-provider-mock.yml"
+  pull_request:
+    paths:
+      - "backend/services/provider-mock/**"
+      - "tests/test_provider_mock.py"
+      - ".github/workflows/test-provider-mock.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.event_name }}-${{ github.workflow }}-${{ github.head_ref }}
+  cancel-in-progress: true
+
+jobs:
+  provider-mock-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Run provider-mock tests in Docker
+        run: make mock-providers-test

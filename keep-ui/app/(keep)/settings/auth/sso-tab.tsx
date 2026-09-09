@@ -1,5 +1,9 @@
 import SSOSettings from "./sso-settings";
 
-export default function SSOSubTab() {
-  return <SSOSettings />;
+interface SSOSubTabProps {
+  selected?: boolean;
+}
+
+export default function SSOSubTab({ selected = true }: SSOSubTabProps) {
+  return <SSOSettings selected={selected} />;
 }

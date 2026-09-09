@@ -1,12 +1,18 @@
+# Development stack: build from local Dockerfiles and mount source for hot reload.
+# Prefer: make up   (or make dev)
 services:
   keep-frontend-dev:
     extends:
       file: docker-compose.common.yml
       service: keep-frontend-common
+    image: keep-frontend-dev:local
+    pull_policy: build
     environment:
+      - AUTH_TYPE=NO_AUTH
       - API_URL=http://keep-backend-dev:8080
       - SENTRY_DISABLED=true
     build:
+      context: .
       dockerfile: docker/Dockerfile.dev.ui
     volumes:
       - ./keep-ui:/app
@@ -19,7 +25,12 @@ services:
     extends:
       file: docker-compose.common.yml
       service: keep-backend-common
+    image: keep-backend-dev:local
+    pull_policy: build
+    environment:
+      - AUTH_TYPE=NO_AUTH
     build:
+      context: .
       dockerfile: docker/Dockerfile.dev.api
     volumes:
       - .:/app

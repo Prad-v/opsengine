@@ -2097,7 +2097,7 @@ def user_exists(tenant_id, username):
         return user is not None
 
 
-def create_user(tenant_id, username, password, role):
+def create_user(tenant_id, username, password, role, must_change_password=False):
     from keep.api.models.db.user import User
 
     password_hash = hashlib.sha256(password.encode()).hexdigest()
@@ -2107,6 +2107,7 @@ def create_user(tenant_id, username, password, role):
             username=username,
             password_hash=password_hash,
             role=role,
+            must_change_password=must_change_password,
         )
         session.add(user)
         session.commit()
@@ -2149,7 +2150,7 @@ def update_user_role(tenant_id, username, role):
     return user
 
 
-def update_user_password(tenant_id, username, password):
+def update_user_password(tenant_id, username, password, clear_must_change=True):
     from keep.api.models.db.user import User
 
     password_hash = hashlib.sha256(password.encode()).hexdigest()
@@ -2162,6 +2163,26 @@ def update_user_password(tenant_id, username, password):
         if not user:
             return None
         user.password_hash = password_hash
+        if clear_must_change:
+            user.must_change_password = False
+        session.add(user)
+        session.commit()
+        session.refresh(user)
+    return user
+
+
+def set_user_must_change_password(tenant_id, username, must_change_password: bool):
+    from keep.api.models.db.user import User
+
+    with Session(engine) as session:
+        user = session.exec(
+            select(User)
+            .where(User.tenant_id == tenant_id)
+            .where(User.username == username)
+        ).first()
+        if not user:
+            return None
+        user.must_change_password = must_change_password
         session.add(user)
         session.commit()
         session.refresh(user)
