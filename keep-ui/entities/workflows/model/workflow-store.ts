@@ -289,6 +289,7 @@ const defaultState: WorkflowStateValues = {
   toolboxConfiguration: null,
   providers: null,
   installedProviders: null,
+  temporalCatalog: null,
   yamlSchema: null,
   secrets: {},
   isInitialized: false,
@@ -368,11 +369,22 @@ export const useWorkflowStore = create<WorkflowState>()(
         set({
           providers,
           yamlSchema: getYamlWorkflowDefinitionSchema(providers),
-          toolboxConfiguration: getToolboxConfiguration(providers),
+          toolboxConfiguration: getToolboxConfiguration(providers, {
+            temporalCatalog: get().temporalCatalog ?? [],
+          }),
         });
       },
       setInstalledProviders: (installedProviders: Provider[]) =>
         set({ installedProviders }),
+      setTemporalCatalog: (temporalCatalog) => {
+        const providers = get().providers ?? [];
+        set({
+          temporalCatalog,
+          toolboxConfiguration: getToolboxConfiguration(providers, {
+            temporalCatalog,
+          }),
+        });
+      },
       setSecrets: (secrets: Record<string, string>) => set({ secrets }),
       setEditorOpen: (open) => set({ editorOpen: open }),
       updateSelectedNodeData: (key, value) => {
@@ -851,7 +863,9 @@ function initializeWorkflow(
   let parsedWorkflow = definition?.value;
   const name = parsedWorkflow?.properties?.name;
 
-  const toolboxConfiguration = getToolboxConfiguration(providers);
+  const toolboxConfiguration = getToolboxConfiguration(providers, {
+    temporalCatalog: get().temporalCatalog ?? [],
+  });
   const yamlSchema = getYamlWorkflowDefinitionSchema(providers, {
     partial: true,
   });

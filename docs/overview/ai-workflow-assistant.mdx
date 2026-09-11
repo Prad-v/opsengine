@@ -25,6 +25,43 @@ Go to "Workflows" -> "+ Create Workflow" to find the AI Assistant:
 
 Launch Blogpost: https://www.keephq.dev/blog/launch-week-ai-workflow-builder
 
+## Enable AI locally (self-hosted)
+
+The assistant is enabled when either:
+
+1. **Settings → AI** — configure an OpenAI API key and model in the UI (stored securely per tenant), or
+2. Environment variables on the frontend / server (`OPENAI_API_KEY` or `OPEN_AI_API_KEY`). Env wins if both are set.
+
+### Via Settings (recommended)
+
+1. Open **Settings → AI** (`/settings?selectedTab=ai`).
+2. Paste your OpenAI (or OpenAI-compatible) API key.
+3. Choose a model from the list (or type a custom model id) and optionally set Base URL / Organization ID.
+4. Click **Save AI settings**. Workflow Builder AI unlocks without restarting.
+
+### Via environment
+
+```bash
+OPENAI_API_KEY=sk-...
+# optional alias also supported:
+# OPEN_AI_API_KEY=sk-...
+```
+
+Restart the UI after changing env vars (`make stop && make start`, or recreate the frontend container).
+
+Optional LiteLLM / local models: set `OPENAI_BASE_URL` (and the same key vars) on the frontend, or use Base URL in Settings → AI. See [Keep with LiteLLM](/deployment/local-llm/keep-with-litellm).
+
+Use **Test connectivity** on Settings → AI to verify the key and selected model before or after saving.
+
+| Env var / Setting | Purpose | Required |
+| --- | --- | --- |
+| `OPENAI_API_KEY` or `OPEN_AI_API_KEY` / Settings API key | Unlocks the UI and authenticates CopilotKit | Yes |
+| `OPENAI_MODEL_NAME` / Settings model | Model override | No |
+| `OPENAI_BASE_URL` / Settings base URL | OpenAI-compatible proxy (e.g. LiteLLM) | No |
+| `OPEN_AI_ORGANIZATION_ID` / Settings org ID | OpenAI organization | No |
+
+Full reference: [Configuration](/deployment/configuration#openai).
+
 ## Frequent questions:
 
 **Model used:** OpenAI, a model hosted by Keep, or other.<br/>

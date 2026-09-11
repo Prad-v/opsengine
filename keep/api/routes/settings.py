@@ -14,6 +14,7 @@ from keep.api.core.config import config
 from keep.api.core.db import get_session
 from keep.api.core.tenant_configuration import TenantConfiguration
 from keep.api.models.alert import AlertDto
+from keep.api.models.ai_settings import AISettings
 from keep.api.models.okta import OktaSettings
 from keep.api.models.smtp import SMTPSettings
 from keep.api.models.webhook import WebhookSettings
@@ -436,6 +437,196 @@ def get_tenant_configuration(
     tenant_configuration = TenantConfiguration()
     config_value = tenant_configuration.get_configuration(tenant_id=tenant_id)
     return JSONResponse(status_code=200, content=config_value)
+
+
+@router.get("/ai", description="Get OpenAI / AI assistant settings")
+async def get_ai_settings(
+    authenticated_entity: AuthenticatedEntity = Depends(
+        IdentityManagerFactory.get_auth_verifier(["read:settings"])
+    ),
+):
+    from keep.api.utils.openai_config import mask_openai_settings, read_openai_settings
+
+    tenant_id = authenticated_entity.tenant_id
+    settings = read_openai_settings(tenant_id)
+    return JSONResponse(status_code=200, content=mask_openai_settings(settings))
+
+
+@router.get(
+    "/ai/runtime",
+    description="Get OpenAI credentials for server-side AI (env overrides tenant secret)",
+)
+async def get_ai_runtime_settings(
+    authenticated_entity: AuthenticatedEntity = Depends(
+        IdentityManagerFactory.get_auth_verifier(["read:settings"])
+    ),
+):
+    from keep.api.utils.openai_config import get_runtime_openai_settings
+
+    tenant_id = authenticated_entity.tenant_id
+    return JSONResponse(
+        status_code=200, content=get_runtime_openai_settings(tenant_id)
+    )
+
+
+@router.post("/ai", description="Install or update OpenAI / AI assistant settings")
+async def update_ai_settings(
+    ai_settings: AISettings = Body(...),
+    authenticated_entity: AuthenticatedEntity = Depends(
+        IdentityManagerFactory.get_auth_verifier(["write:settings"])
+    ),
+):
+    from keep.api.utils.openai_config import (
+        mask_openai_settings,
+        read_openai_settings,
+        write_openai_settings,
+    )
+
+    tenant_id = authenticated_entity.tenant_id
+    existing = read_openai_settings(tenant_id)
+    api_key = (
+        ai_settings.api_key.get_secret_value() if ai_settings.api_key else None
+    )
+    if not api_key:
+        api_key = existing.get("api_key") or ""
+    if not api_key:
+        raise HTTPException(
+            status_code=400,
+            detail="API key is required when configuring AI settings",
+        )
+
+    write_openai_settings(
+        tenant_id,
+        {
+            "api_key": api_key,
+            "model": ai_settings.model or existing.get("model") or "gpt-4o-mini",
+            "base_url": ai_settings.base_url
+            if ai_settings.base_url is not None
+            else existing.get("base_url") or "",
+            "organization_id": ai_settings.organization_id
+            if ai_settings.organization_id is not None
+            else existing.get("organization_id") or "",
+        },
+    )
+    refreshed = read_openai_settings(tenant_id)
+    return {
+        "status": "AI settings updated successfully",
+        "settings": mask_openai_settings(refreshed),
+    }
+
+
+@router.delete("/ai", description="Delete OpenAI / AI assistant settings")
+async def delete_ai_settings(
+    authenticated_entity: AuthenticatedEntity = Depends(
+        IdentityManagerFactory.get_auth_verifier(["delete:settings"])
+    ),
+):
+    from keep.api.utils.openai_config import delete_openai_settings
+
+    tenant_id = authenticated_entity.tenant_id
+    try:
+        delete_openai_settings(tenant_id)
+    except Exception as e:
+        logger.warning(f"Failed to delete AI settings: {e}")
+        raise HTTPException(status_code=404, detail="AI settings not found")
+    return JSONResponse(
+        status_code=200, content={"status": "AI settings deleted successfully"}
+    )
+
+
+@router.get("/ai/models", description="List available OpenAI chat models")
+async def list_ai_models(
+    authenticated_entity: AuthenticatedEntity = Depends(
+        IdentityManagerFactory.get_auth_verifier(["read:settings"])
+    ),
+):
+    from keep.api.utils.openai_config import (
+        get_runtime_openai_settings,
+        list_openai_models,
+    )
+
+    tenant_id = authenticated_entity.tenant_id
+    runtime = get_runtime_openai_settings(tenant_id)
+    result = list_openai_models(
+        api_key=runtime.get("api_key"),
+        base_url=runtime.get("base_url"),
+        organization_id=runtime.get("organization_id"),
+    )
+    return JSONResponse(status_code=200, content=result)
+
+
+@router.post(
+    "/ai/models",
+    description="List OpenAI chat models using a candidate API key (before save)",
+)
+async def list_ai_models_preview(
+    ai_settings: AISettings = Body(...),
+    authenticated_entity: AuthenticatedEntity = Depends(
+        IdentityManagerFactory.get_auth_verifier(["write:settings"])
+    ),
+):
+    from keep.api.utils.openai_config import list_openai_models, read_openai_settings
+
+    tenant_id = authenticated_entity.tenant_id
+    existing = read_openai_settings(tenant_id)
+    api_key = (
+        ai_settings.api_key.get_secret_value() if ai_settings.api_key else None
+    ) or existing.get("api_key")
+    base_url = (
+        ai_settings.base_url
+        if ai_settings.base_url is not None
+        else existing.get("base_url")
+    )
+    organization_id = (
+        ai_settings.organization_id
+        if ai_settings.organization_id is not None
+        else existing.get("organization_id")
+    )
+    result = list_openai_models(
+        api_key=api_key,
+        base_url=base_url or None,
+        organization_id=organization_id or None,
+    )
+    return JSONResponse(status_code=200, content=result)
+
+
+@router.post("/ai/test", description="Test OpenAI / AI assistant connectivity")
+async def test_ai_settings(
+    ai_settings: AISettings = Body(...),
+    authenticated_entity: AuthenticatedEntity = Depends(
+        IdentityManagerFactory.get_auth_verifier(["write:settings"])
+    ),
+):
+    from keep.api.utils.openai_config import (
+        read_openai_settings,
+        test_openai_connectivity,
+    )
+
+    tenant_id = authenticated_entity.tenant_id
+    existing = read_openai_settings(tenant_id)
+    api_key = (
+        ai_settings.api_key.get_secret_value() if ai_settings.api_key else None
+    ) or existing.get("api_key")
+    base_url = (
+        ai_settings.base_url
+        if ai_settings.base_url is not None
+        else existing.get("base_url")
+    )
+    organization_id = (
+        ai_settings.organization_id
+        if ai_settings.organization_id is not None
+        else existing.get("organization_id")
+    )
+    model = ai_settings.model or existing.get("model") or "gpt-4o-mini"
+
+    result = test_openai_connectivity(
+        api_key=api_key,
+        model=model,
+        base_url=base_url or None,
+        organization_id=organization_id or None,
+    )
+    status_code = 200 if result.get("success") else 400
+    return JSONResponse(status_code=status_code, content=result)
 
 
 @router.get("/auth/okta", description="Get Okta authentication settings")

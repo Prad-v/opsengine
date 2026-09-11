@@ -23,6 +23,7 @@ import {
   UserGroupIcon,
   EnvelopeIcon,
   KeyIcon,
+  SparklesIcon,
 } from "@heroicons/react/24/outline";
 import { VscDebugDisconnect } from "react-icons/vsc";
 import { LuWorkflow } from "react-icons/lu";
@@ -81,6 +82,12 @@ const NAVIGATION_OPTIONS = [
     label: "Go to SMTP settings",
     shortcut: ["s"],
     navigate: "/settings?selectedTab=smtp",
+  },
+  {
+    icon: SparklesIcon,
+    label: "Go to AI settings",
+    shortcut: ["i"],
+    navigate: "/settings?selectedTab=ai",
   },
   {
     icon: KeyIcon,

@@ -1,0 +1,53 @@
+---
+title: "Temporal worker (List and Zip)"
+sidebarTitle: "Temporal worker"
+description: "Local Temporal worker that lists a directory and packages the output as a zip."
+---
+
+## Overview
+
+The **temporal-worker** service polls Temporal task queue `keep-ops` and runs
+`ListAndZipDirectory`:
+
+1. Activity `run_ls` — `ls -la` on a sandboxed path under `/data`
+2. Activity `create_zip_from_ls` — write the listing into `/data/output/*.zip`
+
+## Start
+
+```bash
+make deps              # Temporal server + temporal-worker + synthetic-checks
+# or
+make temporal-worker   # keep-ops worker only (server must be up)
+```
+
+Temporal UI: http://localhost:8233
+
+`make start` includes these workers via `deps-up`.
+
+## Register in Keep catalog
+
+1. Connect a **Temporal** provider (`localhost:7233`, namespace `default`)
+2. Run:
+
+```bash
+make register-list-and-zip-catalog
+```
+
+3. Open an incident → **Workflows** → **Start for incident**
+
+Optional incident enrichment: `list_path=sample` (default path inside the worker).
+
+## End-to-end from provider-mock
+
+```bash
+make demo-list-and-zip
+```
+
+Then fire Grafana **Create rule + send both** in the mock UI. Full walkthrough: [Demo: Mock Grafana → Temporal ListAndZip](/overview/demo-mock-grafana-list-and-zip).
+
+## Source
+
+- Service: `backend/services/temporal-worker/`
+- Compose: `docker-compose.temporal.yml`
+- Helm: `helm/temporal-worker/`
+- Tests: `tests/test_temporal_worker_list_and_zip.py`

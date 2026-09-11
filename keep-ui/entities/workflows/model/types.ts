@@ -178,6 +178,20 @@ export type InitializationConfiguration = {
   secrets: Record<string, string>;
 };
 
+export type TemporalCatalogToolboxEntry = {
+  id: number;
+  catalog_key: string;
+  name: string;
+  description?: string | null;
+  workflow_type: string;
+  task_queue: string;
+  workflow_id_template?: string | null;
+  input_mapping?: Record<string, string> | null;
+  provider_id: string;
+  provider_name?: string | null;
+  disabled?: boolean;
+};
+
 export interface WorkflowStateValues {
   workflowId: string | null;
   definition: DefinitionV2 | null;
@@ -189,6 +203,7 @@ export interface WorkflowStateValues {
   toolboxConfiguration: ToolboxConfiguration | null;
   providers: Provider[] | null;
   installedProviders: Provider[] | null;
+  temporalCatalog: TemporalCatalogToolboxEntry[] | null;
   secrets: Record<string, string> | null;
   isLayouted: boolean;
   isInitialized: boolean;
@@ -232,6 +247,7 @@ export interface WorkflowState extends WorkflowStateValues {
   ) => string | null;
   setProviders: (providers: Provider[]) => void;
   setInstalledProviders: (providers: Provider[]) => void;
+  setTemporalCatalog: (catalog: TemporalCatalogToolboxEntry[]) => void;
   setSecrets: (secrets: Record<string, string>) => void;
   setEditorOpen: (open: boolean) => void;
   updateSelectedNodeData: (key: string, value: any) => void;

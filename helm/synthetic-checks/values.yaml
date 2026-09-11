@@ -1,0 +1,32 @@
+replicaCount: 1
+
+image:
+  repository: keep-synthetic-checks
+  tag: "0.1.0"
+  pullPolicy: IfNotPresent
+
+temporal:
+  address: temporal-frontend:7233
+  namespace: default
+  taskQueue: keep-synth
+
+keep:
+  apiUrl: ""
+  # Prefer existing secret; do not put API keys in values by default.
+  apiKeySecretName: ""
+  apiKeySecretKey: KEEP_API_KEY
+
+otel:
+  metricsEnabled: false
+  endpoint: ""
+  metricsEndpoint: ""
+  serviceName: synthetic-checks
+
+serviceAccount:
+  create: true
+  name: ""
+
+resources: {}
+
+# Safe defaults — no credentials in values.
+env: {}

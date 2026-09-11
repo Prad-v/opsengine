@@ -1,0 +1,76 @@
+# End-to-end hybrid demo:
+#   Mock Grafana (2 alerts) → Keep incident → this workflow → Temporal ListAndZipDirectory
+#
+# Prerequisites:
+#   make start && make mock-providers && make temporal-worker
+#   Register Grafana + Temporal in http://localhost:8099
+#   make register-list-and-zip-catalog
+#
+# Install:
+#   make demo-list-and-zip
+#   # or: .venv/bin/keep workflow apply -f examples/workflows/mock-grafana-list-and-zip.yml
+#
+# Fire:
+#   Mock UI → Grafana → "Create rule + send both"
+#   Then open the Payments incident:
+#     Timeline   → correlated Grafana alerts (MockHighCPU / MockHighMemory)
+#     Workflows  → Keep run + Temporal ListAndZipDirectory start
+#     Overview   → enrichments (remediation, temporal_demo, list_path, …)
+workflow:
+  id: mock-grafana-list-and-zip
+  name: Mock Grafana → Temporal ListAndZip
+  description: >
+    On incident created/updated (e.g. Grafana mock payments correlation), start
+    the ListAndZipDirectory Temporal workflow on keep-ops once, enrich the
+    incident for Overview visibility, and log to console.
+  disabled: false
+  triggers:
+    # created: first correlation; updated: when mock appends more alerts to an open INC
+    - type: incident
+      events:
+        - created
+        - updated
+  owners: []
+  services: []
+  consts:
+    temporal_catalog_key: list-and-zip-directory
+    list_path: sample
+  actions:
+    # Run once per incident (skip after enrichment temporal_demo is set)
+    - name: start-list-and-zip
+      if: "not '{{ incident.temporal_demo }}'"
+      provider:
+        type: temporal
+        # Installed name from provider-mock Temporal tab
+        config: "{{ providers.mock-temporal }}"
+        with:
+          operation: start_workflow
+          workflow_type: ListAndZipDirectory
+          task_queue: keep-ops
+          workflow_id: "incident-{{ incident.id }}-list-and-zip-directory"
+          arg:
+            incident_id: "{{ incident.id }}"
+            path: "{{ consts.list_path }}"
+            name: "{{ incident.name }}"
+            severity: "{{ incident.severity }}"
+            status: "{{ incident.status }}"
+          enrich_incident:
+            - key: remediation
+              value: "list-and-zip-started"
+            - key: list_path
+              value: "sample"
+            - key: temporal_last_catalog_id
+              value: "list-and-zip-directory"
+            - key: temporal_demo
+              value: "mock-grafana-list-and-zip"
+
+    - name: log-started
+      if: "not '{{ incident.temporal_demo }}'"
+      provider:
+        type: console
+        with:
+          message: >
+            Temporal ListAndZipDirectory started for incident
+            {{ incident.id }} ({{ incident.name }}).
+            Check Temporal UI http://localhost:8233 and
+            docker exec keep-temporal-worker ls -la /data/output

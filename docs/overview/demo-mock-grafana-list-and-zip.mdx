@@ -1,0 +1,71 @@
+---
+title: "Demo: Mock Grafana → Temporal ListAndZip"
+sidebarTitle: "Mock → Temporal demo"
+description: "End-to-end hybrid demo from provider-mock alerts through a Keep incident into Temporal ListAndZipDirectory."
+---
+
+## Goal
+
+Prove the hybrid path:
+
+1. **Keep** detects/correlates mock Grafana alerts into an incident  
+2. **Keep workflow** starts a **Temporal catalog** workflow (`ListAndZipDirectory`)  
+3. You inspect the **incident Timeline / Workflows / Overview**
+
+## One-command setup
+
+With Keep already running (`make start`):
+
+```bash
+make demo-list-and-zip
+```
+
+This:
+
+- Starts/rebuilds the Temporal worker  
+- Registers **List and Zip Directory** in the catalog  
+- Uploads `examples/workflows/mock-grafana-list-and-zip.yml`
+
+## Fire the demo
+
+```bash
+make mock-providers   # if not already up → http://localhost:8099
+```
+
+1. Mock UI → **Grafana** → **Register**  
+2. Mock UI → **Temporal** → **Register Temporal**  
+3. Grafana → **Create rule + send both**  
+
+Keep opens an incident (payments / mock-prod correlation).
+
+## What to check
+
+| Place | What you should see |
+| --- | --- |
+| **Incident → Timeline** | The two Grafana mock alerts (`MockHighCPU`, `MockHighMemory`) |
+| **Incident → Workflows** | Keep workflow run for `Mock Grafana → Temporal ListAndZip` |
+| **Incident → Overview** | Enrichments `remediation`, `list_path`, `temporal_demo` |
+| **Temporal UI** http://localhost:8233 | Workflow `ListAndZipDirectory` on queue `keep-ops` |
+| Worker output | `docker exec keep-temporal-worker ls -la /data/output` |
+
+> **Timeline vs Activity:** Keep’s **Timeline** tab is alert history (what the mock fires). Keep’s **Activity** tab is comments/status/assign — this demo does not auto-post comments (HTTP to `localhost` is blocked by Keep’s SSRF guard). Use **Workflows** + **Overview** for the Temporal breadcrumb.
+
+## Workflow file
+
+[`examples/workflows/mock-grafana-list-and-zip.yml`](https://github.com/keephq/keep/blob/main/examples/workflows/mock-grafana-list-and-zip.yml)
+
+- Trigger: `incident` created **or** updated (mock correlation often updates an open INC)  
+- Guard: `not '{{ incident.temporal_demo }}'` so Temporal starts once  
+- Action: Temporal `start_workflow` → `ListAndZipDirectory` / `keep-ops`  
+- `enrich_incident` breadcrumbs for Overview  
+- Console log of the start  
+
+## Builder alternative
+
+Instead of (or in addition to) the YAML action, use **Add step → Temporal catalog → List and Zip Directory** in the Keep workflow builder — same catalog entry, pre-filled Temporal fields.
+
+## Related
+
+- [Provider mock](/development/provider-mock)  
+- [Temporal workflow catalog](/overview/temporal-workflow-catalog)  
+- [Temporal worker](/overview/temporal-worker-list-and-zip)  

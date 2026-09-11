@@ -1,6 +1,7 @@
 import { auth } from "@/auth";
 import { Search } from "@/components/navbar/Search";
 import { NoiseReductionLinks } from "@/components/navbar/NoiseReductionLinks";
+import { CatalogLinks } from "@/components/navbar/CatalogLinks";
 import { AlertsLinks } from "@/components/navbar/AlertsLinks";
 import { UserInfo } from "@/components/navbar/UserInfo";
 import { Menu } from "@/components/navbar/Menu";
@@ -21,6 +22,7 @@ export default async function NavbarInner() {
           <IncidentsLinks session={session} />
           <AlertsLinks session={session} />
           <NoiseReductionLinks session={session} />
+          <CatalogLinks session={session} />
           <DashboardLinks />
         </div>
         <UserInfo session={session} />

@@ -10,6 +10,9 @@ BACKEND_PID=""
 FRONTEND_PID=""
 STOP_DEPS_ON_EXIT="${STOP_DEPS_ON_EXIT:-0}"
 API_URL="${API_URL:-http://127.0.0.1:8080}"
+VENV_PYTHON="${ROOT_DIR}/.venv/bin/python"
+KEEP_API_KEY="${KEEP_API_KEY:-keepappkey}"
+AUTO_REGISTER_TEMPORAL_CATALOG="${AUTO_REGISTER_TEMPORAL_CATALOG:-1}"
 
 cleanup() {
   echo ""
@@ -48,11 +51,30 @@ wait_for_api() {
   return 1
 }
 
+register_temporal_catalogs() {
+  if [[ "${AUTO_REGISTER_TEMPORAL_CATALOG}" != "1" ]]; then
+    echo "Skipping Temporal catalog registration (AUTO_REGISTER_TEMPORAL_CATALOG=${AUTO_REGISTER_TEMPORAL_CATALOG})."
+    return 0
+  fi
+  if [[ ! -x "${VENV_PYTHON}" ]]; then
+    echo "No .venv python; skip Temporal catalog registration."
+    return 0
+  fi
+  echo "Registering Temporal catalog entries (best-effort)..."
+  KEEP_API_URL="${API_URL}" KEEP_API_KEY="${KEEP_API_KEY}" \
+    "${VENV_PYTHON}" scripts/register_temporal_list_and_zip_catalog.py \
+    || echo "ListAndZipDirectory catalog registration skipped (connect Temporal provider first)."
+  KEEP_API_URL="${API_URL}" KEEP_API_KEY="${KEEP_API_KEY}" \
+    "${VENV_PYTHON}" scripts/register_temporal_probe_targets_catalog.py \
+    || echo "ProbeTargets catalog registration skipped (connect Temporal provider first)."
+}
+
 echo "Starting Keep API on :8080..."
 make backend &
 BACKEND_PID=$!
 
 wait_for_api
+register_temporal_catalogs
 
 echo "Starting Keep UI on :3000..."
 make frontend &
@@ -60,11 +82,15 @@ FRONTEND_PID=$!
 
 echo ""
 echo "All services started:"
-echo "  UI:       http://localhost:3000"
-echo "  API:      http://localhost:8080"
-echo "  Postgres: localhost:5432"
-echo "  Redis:    localhost:6379"
-echo "  Soketi:   localhost:6001"
+echo "  UI:                http://localhost:3000"
+echo "  API:               http://localhost:8080"
+echo "  Postgres:          localhost:5432"
+echo "  Redis:             localhost:6379"
+echo "  Soketi:            localhost:6001"
+echo "  Temporal:          localhost:7233 (UI http://localhost:8233)"
+echo "  temporal-worker:   keep-ops (ListAndZipDirectory)"
+echo "  synthetic-checks:  keep-synth (HTTP/TCP/DNS probes)"
+echo "  Catalog UI:        /catalog/synthetic-checks  and  /catalog/temporal-workflows"
 echo ""
 echo "Press Ctrl+C to stop backend/frontend."
 echo "Use 'make stop' to also stop Docker deps."

@@ -5,12 +5,12 @@ import {
   WorkflowBuilderWidget,
   WorkflowBuilderWidgetProps,
 } from "./workflow-builder-widget";
-import { useConfig } from "@/utils/hooks/useConfig";
+import { useAISettings } from "@/features/settings/ai";
 
 export function WorkflowBuilderWidgetSafe(props: WorkflowBuilderWidgetProps) {
-  const { data: config } = useConfig();
+  const { isAIEnabled, isLoading } = useAISettings();
 
-  if (!config?.OPEN_AI_API_KEY_SET) {
+  if (isLoading || !isAIEnabled) {
     return <WorkflowBuilderWidget {...props} />;
   }
 

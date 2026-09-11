@@ -1,0 +1,27 @@
+replicaCount: 2
+
+image:
+  tag: "0.1.0"
+
+temporal:
+  address: temporal-frontend:7233
+  namespace: default
+  taskQueue: keep-synth
+
+otel:
+  metricsEnabled: true
+  endpoint: otel-collector:4317
+  serviceName: synthetic-checks
+
+keep:
+  apiUrl: http://keep-backend:8080
+  apiKeySecretName: keep-api-secrets
+  apiKeySecretKey: KEEP_API_KEY
+
+resources:
+  requests:
+    cpu: 100m
+    memory: 128Mi
+  limits:
+    cpu: 500m
+    memory: 512Mi

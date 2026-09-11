@@ -1,0 +1,155 @@
+---
+title: "Synthetic checks"
+sidebarTitle: "Synthetic checks"
+description: "Temporal-backed HTTP, TCP, and DNS blackbox probes with OTLP metrics and Keep alerts."
+---
+
+## Overview
+
+Synthetic checks run blackbox-style probes (**http**, **tcp**, **dns**) on Temporal
+task queue `keep-synth`.
+
+| Mode | How it runs |
+| --- | --- |
+| **Mode 1** | Catalog → **Synthetic checks** UI/API. Keep creates a Temporal **Schedule** that starts `ProbeTargetGroup` on an interval. |
+| **Mode 2** | Start `ProbeTargets` from the Temporal workflow catalog (on-demand target list). |
+
+Failed/recovered probes post `AlertDto` events to Keep (`source: synthetic-checks`).
+Probe metrics export via OpenTelemetry (OTLP) as `probe_success` and `probe_duration_seconds`.
+
+## Architecture
+
+```
+Keep UI / API  →  Temporal Schedule or start_workflow
+                        ↓
+              synthetic-checks worker (keep-synth)
+                        ↓
+              HTTP / TCP / DNS probes
+                   ↓              ↓
+            OTLP metrics    POST /alerts/event
+```
+
+## Start the worker
+
+```bash
+make start                 # deps include Temporal + synthetic-checks worker
+# or
+make deps                  # Temporal server + temporal-worker + synthetic-checks
+make synthetic-checks      # rebuild/restart keep-synth worker only
+```
+
+Temporal UI: http://localhost:8233
+
+`make start` / `make deps` bring up the `synthetic-checks` container on queue
+`keep-synth`. After the API is healthy, `make start` also best-effort registers
+the `ProbeTargets` Temporal catalog entry (skipped until a Temporal provider is connected).
+
+## Mode 1 — API + UI
+
+1. Connect a **Temporal** provider (`localhost:7233`, namespace `default`).
+2. Open **Catalog → Synthetic checks**.
+3. Create a check (prober, targets, interval, module config).
+4. Keep upserts Temporal Schedule `synth-check-{check_key}` (paused when disabled).
+5. Use **Run now** for a one-shot `ProbeTargetGroup`.
+
+### API
+
+| Method | Path | Purpose |
+| --- | --- | --- |
+| `GET` | `/synthetic-checks` | List |
+| `POST` | `/synthetic-checks` | Create + schedule sync |
+| `PUT` | `/synthetic-checks/{id}` | Update + schedule sync |
+| `DELETE` | `/synthetic-checks/{id}` | Delete schedule + row |
+| `POST` | `/synthetic-checks/{id}/run` | Manual run |
+
+### Example module configs
+
+**HTTP**
+
+```json
+{
+  "method": "GET",
+  "timeout_seconds": 5,
+  "valid_status_codes": [200],
+  "fail_if_body_not_matches_regexp": "ok"
+}
+```
+
+**TCP**
+
+```json
+{ "timeout_seconds": 3, "port": 443 }
+```
+
+Targets may be `host:port` or host with `port` in module config.
+
+**DNS**
+
+```json
+{ "timeout_seconds": 3, "query_type": "A", "nameserver": "8.8.8.8" }
+```
+
+## Mode 2 — ProbeTargets catalog
+
+```bash
+make register-probe-targets-catalog
+```
+
+Registers workflow type `ProbeTargets` on queue `keep-synth`. Start from an incident
+**Workflows** tab. Map enrichments such as `synth_prober` / `synth_targets`.
+
+## Keep alerts
+
+Worker posts to `POST /alerts/event` with:
+
+- `source: ["synthetic-checks"]`
+- `fingerprint: synth:{check_key}:{prober}:{target}`
+- `status: firing` on failure, `resolved` on success
+
+Example workflow: [`examples/workflows/synthetic-check-firing.yml`](/examples/workflows/synthetic-check-firing.yml)
+
+## Metrics (OTLP)
+
+Set on the worker:
+
+```bash
+METRIC_OTEL_ENABLED=true
+OTEL_EXPORTER_OTLP_ENDPOINT=otel-collector:4317
+# or OTEL_EXPORTER_OTLP_METRICS_ENDPOINT=...
+OTEL_SERVICE_NAME=synthetic-checks
+```
+
+Metrics:
+
+- `probe_success` (0/1)
+- `probe_duration_seconds`
+
+Labels include `job`, `instance` (target), `prober` / `module`, `check_key`.
+
+The shared collector ([`otel-shared/otel-collector-config.yaml`](/otel-shared/otel-collector-config.yaml))
+exports OTLP metrics to Prometheus.
+
+## Environment
+
+| Variable | Purpose |
+| --- | --- |
+| `TEMPORAL_ADDRESS` | Temporal frontend |
+| `TEMPORAL_NAMESPACE` | Namespace (default `default`) |
+| `TEMPORAL_TASK_QUEUE` | `keep-synth` |
+| `KEEP_API_URL` / `KEEP_API_KEY` | Alert posting |
+| `METRIC_OTEL_ENABLED` | Enable OTLP metrics |
+
+## Source
+
+- Worker: `backend/services/synthetic-checks/`
+- API: `keep/api/routes/synthetic_checks.py`
+- Helm: `helm/synthetic-checks/`
+- Compose: `docker-compose.temporal.yml` service `synthetic-checks`
+- Tests: `tests/test_synthetic_checks_*.py`
+
+## Troubleshooting
+
+- **Schedule sync failed** — Temporal provider address reachable from Keep API? Local hybrid often uses `localhost:7233`.
+- **Workflows stay pending** — `make synthetic-checks` and confirm queue `keep-synth` in Temporal UI.
+- **No Keep alerts** — set `KEEP_API_URL` / `KEEP_API_KEY` on the worker (compose defaults to `host.docker.internal:8080`).
+- **No metrics** — enable `METRIC_OTEL_ENABLED` and point at the OTEL collector.

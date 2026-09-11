@@ -1,11 +1,12 @@
-# Temporal local development server (CLI start-dev: frontend + Web UI + in-memory SQLite).
+# Temporal local development server + Keep ops / synthetic-checks workers.
 # Included automatically by: make deps / make up / make local
 # Standalone:
-#   docker compose -f docker-compose.temporal.yml up -d
+#   docker compose -f docker-compose.temporal.yml up -d --build
 #
 # Frontend (gRPC): localhost:7233
 # Web UI:          http://localhost:8233
 # Namespace:       default
+# Worker queues:   keep-ops (ListAndZipDirectory), keep-synth (Probe*)
 #
 # Keep provider config (host apps): address=localhost:7233, namespace=default, tls=false
 # Keep provider config (in-compose backend): address=temporal:7233
@@ -39,3 +40,46 @@ services:
       retries: 12
       start_period: 10s
 
+  temporal-worker:
+    build:
+      context: ./backend/services/temporal-worker
+      dockerfile: Dockerfile
+    container_name: keep-temporal-worker
+    depends_on:
+      temporal:
+        condition: service_healthy
+    environment:
+      TEMPORAL_ADDRESS: temporal:7233
+      TEMPORAL_NAMESPACE: default
+      TEMPORAL_TASK_QUEUE: keep-ops
+      TEMPORAL_WORKER_ROOT: /data
+      LOG_LEVEL: INFO
+    volumes:
+      - temporal-worker-data:/data
+    restart: unless-stopped
+
+  synthetic-checks:
+    build:
+      context: ./backend/services/synthetic-checks
+      dockerfile: Dockerfile
+    container_name: keep-synthetic-checks
+    depends_on:
+      temporal:
+        condition: service_healthy
+    environment:
+      TEMPORAL_ADDRESS: temporal:7233
+      TEMPORAL_NAMESPACE: default
+      TEMPORAL_TASK_QUEUE: keep-synth
+      LOG_LEVEL: INFO
+      KEEP_API_URL: ${KEEP_API_URL:-http://host.docker.internal:8080}
+      KEEP_API_KEY: ${KEEP_API_KEY:-keepappkey}
+      METRIC_OTEL_ENABLED: ${METRIC_OTEL_ENABLED:-false}
+      OTEL_SERVICE_NAME: synthetic-checks
+      OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-}
+      OTEL_EXPORTER_OTLP_METRICS_ENDPOINT: ${OTEL_EXPORTER_OTLP_METRICS_ENDPOINT:-}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    restart: unless-stopped
+
+volumes:
+  temporal-worker-data:

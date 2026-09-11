@@ -33,7 +33,7 @@ import { RootCauseAnalysis } from "@/components/ui/RootCauseAnalysis";
 import { IncidentChangeSeveritySelect } from "features/incidents/change-incident-severity";
 import { useApi } from "@/shared/lib/hooks/useApi";
 import { startCase, map } from "lodash";
-import { useConfig } from "@/utils/hooks/useConfig";
+import { useAISettings } from "@/features/settings/ai";
 import { EnrichmentEditableField } from "@/app/(keep)/incidents/[id]/enrichments/EnrichmentEditableField";
 import { EnrichmentEditableForm } from "@/app/(keep)/incidents/[id]/enrichments/EnrichmentEditableForm";
 import { FormattedContent } from "@/shared/ui/FormattedContent/FormattedContent";
@@ -48,7 +48,7 @@ const PROVISIONED_ENRICHMENTS = [
   "repositories",
   "rca_points",
   "traces",
-  // Managed by TemporalWorkflowCatalog on the Workflows tab
+  // Managed by Temporal workflow registration on the Workflows tab
   "temporal_workflows",
 ];
 
@@ -72,7 +72,7 @@ function Summary({
   incident: IncidentDto;
 }) {
   const [generatedSummary, setGeneratedSummary] = useState("");
-  const { data: config } = useConfig();
+  const { isAIEnabled } = useAISettings();
   const { updateIncident } = useIncidentActions();
   const context = useCopilotContext();
   useCopilotReadable({
@@ -145,14 +145,12 @@ function Summary({
         variant="secondary"
         onClick={executeTask}
         className="mt-2.5"
-        disabled={generatingSummary || !config?.OPEN_AI_API_KEY_SET}
+        disabled={generatingSummary || !isAIEnabled}
         loading={generatingSummary}
         icon={TbSparkles}
         size="xs"
         tooltip={
-          !config?.OPEN_AI_API_KEY_SET
-            ? "AI is not configured"
-            : "Generate AI summary"
+          !isAIEnabled ? "AI is not configured" : "Generate AI summary"
         }
       >
         AI Summary

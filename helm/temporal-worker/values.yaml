@@ -1,0 +1,21 @@
+replicaCount: 1
+
+image:
+  repository: keep-temporal-worker
+  tag: "0.1.0"
+  pullPolicy: IfNotPresent
+
+temporal:
+  address: temporal-frontend:7233
+  namespace: default
+  taskQueue: keep-ops
+  workerRoot: /data
+
+serviceAccount:
+  create: true
+  name: ""
+
+resources: {}
+
+# Safe defaults — no credentials in values.
+env: {}

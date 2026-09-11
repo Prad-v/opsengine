@@ -23,6 +23,8 @@ from keep.api.models.db.secret import *
 from keep.api.models.db.rule import *
 from keep.api.models.db.statistics import *
 from keep.api.models.db.tenant import *
+from keep.api.models.db.temporal_workflow_catalog import *
+from keep.api.models.db.synthetic_check import *
 from keep.api.models.db.topology import *
 from keep.api.models.db.user import *
 from keep.api.models.db.workflow import *

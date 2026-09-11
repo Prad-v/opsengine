@@ -1,0 +1,57 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "synthetic-checks.fullname" . }}
+  labels:
+    app.kubernetes.io/name: synthetic-checks
+spec:
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: synthetic-checks
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: synthetic-checks
+    spec:
+      serviceAccountName: {{ include "synthetic-checks.serviceAccountName" . }}
+      containers:
+        - name: synthetic-checks
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          env:
+            - name: TEMPORAL_ADDRESS
+              value: {{ .Values.temporal.address | quote }}
+            - name: TEMPORAL_NAMESPACE
+              value: {{ .Values.temporal.namespace | quote }}
+            - name: TEMPORAL_TASK_QUEUE
+              value: {{ .Values.temporal.taskQueue | quote }}
+            - name: OTEL_SERVICE_NAME
+              value: {{ .Values.otel.serviceName | quote }}
+            - name: METRIC_OTEL_ENABLED
+              value: {{ .Values.otel.metricsEnabled | quote }}
+            {{- if .Values.otel.endpoint }}
+            - name: OTEL_EXPORTER_OTLP_ENDPOINT
+              value: {{ .Values.otel.endpoint | quote }}
+            {{- end }}
+            {{- if .Values.otel.metricsEndpoint }}
+            - name: OTEL_EXPORTER_OTLP_METRICS_ENDPOINT
+              value: {{ .Values.otel.metricsEndpoint | quote }}
+            {{- end }}
+            {{- if .Values.keep.apiUrl }}
+            - name: KEEP_API_URL
+              value: {{ .Values.keep.apiUrl | quote }}
+            {{- end }}
+            {{- if .Values.keep.apiKeySecretName }}
+            - name: KEEP_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.keep.apiKeySecretName | quote }}
+                  key: {{ .Values.keep.apiKeySecretKey | quote }}
+            {{- end }}
+            {{- range $key, $value := .Values.env }}
+            - name: {{ $key }}
+              value: {{ $value | quote }}
+            {{- end }}
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}

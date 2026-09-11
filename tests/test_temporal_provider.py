@@ -2,7 +2,6 @@
 Unit tests for Temporal Provider.
 """
 
-import json
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -196,24 +195,7 @@ def test_tls_config_with_api_key(context_manager):
     assert provider._build_tls_config(MagicMock) is True
 
 
-def test_empty_workflow_catalog(temporal_provider):
-    assert temporal_provider.get_workflow_catalog() == []
-
-
-def test_parse_workflow_catalog(context_manager):
-    catalog = [
-        {
-            "id": "remediate-incident",
-            "name": "Remediate Incident",
-            "workflow_type": "RemediateIncident",
-            "task_queue": "keep-ops",
-            "input_mapping": {
-                "incident_id": "id",
-                "name": "name",
-                "severity": "severity",
-            },
-        }
-    ]
+def test_ignores_legacy_workflow_catalog_in_config(context_manager):
     provider = TemporalProvider(
         context_manager=context_manager,
         provider_id="test_temporal",
@@ -221,46 +203,14 @@ def test_parse_workflow_catalog(context_manager):
             authentication={
                 "address": "localhost:7233",
                 "namespace": "default",
-                "workflow_catalog": json.dumps(catalog),
+                "workflow_catalog": "[{invalid",
             }
         ),
     )
-    parsed = provider.get_workflow_catalog()
-    assert len(parsed) == 1
-    assert parsed[0]["id"] == "remediate-incident"
-    assert parsed[0]["workflow_type"] == "RemediateIncident"
-    assert parsed[0]["task_queue"] == "keep-ops"
+    assert provider.authentication_config.address == "localhost:7233"
 
 
-def test_invalid_workflow_catalog(context_manager):
-    with pytest.raises(ProviderException, match="valid JSON"):
-        TemporalProvider(
-            context_manager=context_manager,
-            provider_id="test_temporal",
-            config=ProviderConfig(
-                authentication={
-                    "address": "localhost:7233",
-                    "workflow_catalog": "{not-json",
-                }
-            ),
-        )
-
-
-def test_start_workflow_from_catalog(context_manager):
-    catalog = [
-        {
-            "id": "remediate-incident",
-            "name": "Remediate Incident",
-            "workflow_type": "RemediateIncident",
-            "task_queue": "keep-ops",
-            "workflow_id_template": "incident-{{incident.id}}-{{catalog.id}}",
-            "input_mapping": {
-                "incident_id": "id",
-                "name": "name",
-                "severity": "severity",
-            },
-        }
-    ]
+def test_start_workflow_from_definition(context_manager):
     provider = TemporalProvider(
         context_manager=context_manager,
         provider_id="test_temporal",
@@ -268,10 +218,21 @@ def test_start_workflow_from_catalog(context_manager):
             authentication={
                 "address": "localhost:7233",
                 "namespace": "default",
-                "workflow_catalog": json.dumps(catalog),
             }
         ),
     )
+    entry = {
+        "id": "remediate-incident",
+        "name": "Remediate Incident",
+        "workflow_type": "RemediateIncident",
+        "task_queue": "keep-ops",
+        "workflow_id_template": "incident-{{incident.id}}-{{catalog.id}}",
+        "input_mapping": {
+            "incident_id": "id",
+            "name": "name",
+            "severity": "severity",
+        },
+    }
 
     mock_handle = MagicMock()
     mock_handle.id = "incident-abc-remediate-incident"
@@ -280,8 +241,8 @@ def test_start_workflow_from_catalog(context_manager):
     mock_client.start_workflow = AsyncMock(return_value=mock_handle)
 
     with patch.object(provider, "_connect", new=AsyncMock(return_value=mock_client)):
-        result = provider.start_workflow_from_catalog(
-            catalog_id="remediate-incident",
+        result = provider.start_workflow_from_definition(
+            entry,
             incident={
                 "id": "abc",
                 "name": "Disk full",
@@ -304,9 +265,9 @@ def test_start_workflow_from_catalog(context_manager):
     assert result["incident_id"] == "abc"
 
 
-def test_start_workflow_from_catalog_missing_entry(temporal_provider):
-    with pytest.raises(ProviderException, match="not found"):
-        temporal_provider.start_workflow_from_catalog(
-            catalog_id="missing",
+def test_start_workflow_from_definition_invalid_entry(temporal_provider):
+    with pytest.raises(ProviderException, match="requires id"):
+        temporal_provider.start_workflow_from_definition(
+            {"name": "Incomplete"},
             incident={"id": "1"},
         )

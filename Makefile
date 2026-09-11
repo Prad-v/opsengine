@@ -67,6 +67,9 @@ export REDIS_DB ?= 0
 	install install-backend install-frontend env-frontend ensure-install \
 	backend frontend start run hybrid stop hybrid-stop \
 	mock-providers mock-providers-down mock-providers-test \
+	temporal-worker temporal-worker-down register-list-and-zip-catalog \
+	demo-list-and-zip \
+	synthetic-checks synthetic-checks-down register-probe-targets-catalog \
 	clean clean-images
 
 help: ## Show available targets
@@ -76,12 +79,14 @@ help: ## Show available targets
 	@echo "  make start             Install if needed + Docker deps + backend + frontend"
 	@echo "                         UI http://localhost:3000  API http://localhost:8080"
 	@echo "                         Temporal UI http://localhost:8233"
+	@echo "                         Workers: keep-ops + keep-synth (synthetic checks)"
 	@echo "                         Default auth: DB (admin/admin) — change password on first login"
 	@echo "  make stop              Stop host API/UI and Docker deps"
 	@echo ""
 	@echo "Split terminals (optional):"
 	@echo "  make deps / make backend / make frontend"
-	@echo "                         deps = Postgres, Redis, Soketi, Temporal"
+	@echo "                         deps = Postgres, Redis, Soketi, Temporal,"
+	@echo "                         temporal-worker (keep-ops), synthetic-checks (keep-synth)"
 	@echo ""
 	@echo "Full Docker:"
 	@echo "  make up                Dev images + mounted source"
@@ -91,6 +96,11 @@ help: ## Show available targets
 	@echo "Provider mock (e2e webhooks):"
 	@echo "  make mock-providers      UI at http://localhost:8099"
 	@echo "  make mock-providers-test Run provider-mock tests in Docker"
+	@echo "  make temporal-worker     Build/start Temporal keep-ops worker"
+	@echo "  make register-list-and-zip-catalog  Register ListAndZipDirectory in catalog"
+	@echo "  make demo-list-and-zip    Install mock→Temporal e2e demo workflow"
+	@echo "  make synthetic-checks    Build/start Temporal keep-synth worker"
+	@echo "  make register-probe-targets-catalog  Register ProbeTargets in catalog"
 	@echo ""
 	@awk 'BEGIN {FS = ":.*## "}; /^[a-zA-Z0-9_-]+:.*?## / {printf "  %-18s %s\n", $$1, $$2}' $(MAKEFILE_LIST)
 
@@ -155,15 +165,17 @@ env-frontend: ## Ensure keep-ui/.env.local exists
 
 deps: deps-up ## Alias for deps-up
 
-deps-up: ## Start postgres, redis, soketi, and Temporal in Docker
-	$(COMPOSE) $(COMPOSE_DEPS) up -d
+deps-up: ## Start postgres, redis, soketi, Temporal, temporal-worker, and synthetic-checks in Docker
+	$(COMPOSE) $(COMPOSE_DEPS) up -d --build
 	@$(MAKE) deps-wait
 	@echo ""
 	@echo "Dependencies ready:"
-	@echo "  Postgres  localhost:5432  (keepuser/keeppassword, db=keepdb)"
-	@echo "  Redis     localhost:6379"
-	@echo "  Soketi    localhost:6001"
-	@echo "  Temporal  localhost:7233  (UI http://localhost:8233, namespace=default)"
+	@echo "  Postgres          localhost:5432  (keepuser/keeppassword, db=keepdb)"
+	@echo "  Redis             localhost:6379"
+	@echo "  Soketi            localhost:6001"
+	@echo "  Temporal          localhost:7233  (UI http://localhost:8233, namespace=default)"
+	@echo "  temporal-worker   keep-ops queue (ListAndZipDirectory)"
+	@echo "  synthetic-checks  keep-synth queue (ProbeTarget / ProbeTargetGroup / ProbeTargets)"
 
 deps-wait: ## Wait until dependency healthchecks pass
 	@echo "Waiting for dependency healthchecks..."
@@ -240,6 +252,36 @@ mock-providers-down: ## Stop provider mock service
 
 mock-providers-test: ## Run provider-mock tests inside Docker
 	$(COMPOSE) $(COMPOSE_MOCK) --profile test run --rm --build provider-mock-test
+
+temporal-worker: ## Build and start the Temporal keep-ops worker
+	$(COMPOSE) $(COMPOSE_TEMPORAL) up -d --build temporal-worker
+	@echo ""
+	@echo "Temporal worker polling queue keep-ops (ListAndZipDirectory)."
+	@echo "Register catalog: make register-list-and-zip-catalog"
+
+temporal-worker-down: ## Stop Temporal worker (leaves Temporal server running)
+	$(COMPOSE) $(COMPOSE_TEMPORAL) stop temporal-worker
+
+register-list-and-zip-catalog: ## Register ListAndZipDirectory in Keep Temporal catalog
+	@chmod +x scripts/register_temporal_list_and_zip_catalog.py
+	$(VENV_PYTHON) scripts/register_temporal_list_and_zip_catalog.py
+
+demo-list-and-zip: ## Install mock Grafana → Temporal ListAndZip e2e demo workflow
+	@chmod +x scripts/demo_mock_list_and_zip.sh
+	./scripts/demo_mock_list_and_zip.sh
+
+synthetic-checks: ## Build and start the Temporal keep-synth synthetic-checks worker
+	$(COMPOSE) $(COMPOSE_TEMPORAL) up -d --build synthetic-checks
+	@echo ""
+	@echo "Synthetic-checks worker polling queue keep-synth (ProbeTargetGroup / ProbeTargets)."
+	@echo "UI: Catalog → Synthetic checks   Mode 2: make register-probe-targets-catalog"
+
+synthetic-checks-down: ## Stop synthetic-checks worker (leaves Temporal server running)
+	$(COMPOSE) $(COMPOSE_TEMPORAL) stop synthetic-checks
+
+register-probe-targets-catalog: ## Register ProbeTargets in Keep Temporal catalog
+	@chmod +x scripts/register_temporal_probe_targets_catalog.py
+	$(VENV_PYTHON) scripts/register_temporal_probe_targets_catalog.py
 
 # ---------------------------------------------------------------------------
 # Dev: build from Dockerfile.dev.* and mount local code (hot reload)

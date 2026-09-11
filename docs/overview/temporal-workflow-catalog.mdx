@@ -1,0 +1,86 @@
+---
+title: "Temporal workflow catalog"
+sidebarTitle: "Temporal workflow catalog"
+description: "Register Keep-managed Temporal workflows and start them from incidents."
+---
+
+## Overview
+
+The **Temporal workflow catalog** is Keep’s registry of Temporal workflows your team can start from incidents.
+
+- **Provider** = how to connect to Temporal (address, namespace, auth)
+- **Catalog** = which workflows are available (type, queue, input mapping)
+- **Incident Workflows tab** = start a registered workflow and link the run
+
+## End-user flow
+
+1. **Providers** → connect **Temporal** (connection settings only)
+2. **Catalog → Temporal workflow** → **Register workflow**
+3. Open an **incident → Workflows** → **Start for incident**
+
+## Register a workflow
+
+1. Left sidebar → **Catalog** → **Temporal workflow** (`/catalog/temporal-workflows`)
+2. Click **Register workflow**
+3. Fill in:
+   - **Name** / **Description**
+   - **Workflow type** — Temporal workflow type name
+   - **Task queue**
+   - **Temporal provider** — which connected Temporal provider to use
+   - **Input mapping** (optional JSON object mapping Temporal input keys → incident fields)
+
+Keep auto-generates:
+- **Catalog key** from the name (e.g. `Remediate Incident` → `remediate-incident`)
+- **Workflow id** as `incident-{{incident.id}}-{{catalog.id}}` when a run is started
+
+Registered workflows are stored in Keep (not on the Temporal provider config).
+
+## Use catalog entries in the Keep workflow builder
+
+Registered Temporal catalog workflows appear under **Add step → Temporal catalog**
+in the Keep workflow builder (same place as Steps / Actions).
+
+Selecting a catalog entry inserts a pre-filled **temporal action** that starts that
+workflow (`workflow_type`, `task_queue`, `workflow_id`, and `arg` from the catalog
+`input_mapping`). You can still add Keep provider actions (Slack, Jira, …) before or
+after that step.
+
+## Demo worker: List and Zip Directory
+
+Keep includes a Temporal worker (`backend/services/temporal-worker`) that runs with
+`make deps` / `make temporal-worker`:
+
+- Workflow type: `ListAndZipDirectory`
+- Task queue: `keep-ops`
+- Behavior: `ls` a path under `/data`, write stdout into a zip in `/data/output`
+
+Register it in the catalog:
+
+```bash
+make register-list-and-zip-catalog
+```
+
+Or register manually in the UI with workflow type `ListAndZipDirectory` and queue `keep-ops`.
+
+## Incident registration
+
+1. Open an incident → **Workflows**
+2. Under **Temporal workflow registration**, choose a catalog entry
+3. Click **Start for incident**
+
+Keep starts the Temporal workflow and enriches the incident with linked run metadata (`temporal_workflows`, `temporal_last_workflow_id`, and related fields).
+
+## API
+
+| Method | Path | Purpose |
+| --- | --- | --- |
+| `GET` | `/temporal-workflows` | List catalog |
+| `POST` | `/temporal-workflows` | Register |
+| `PUT` | `/temporal-workflows/{id}` | Update |
+| `DELETE` | `/temporal-workflows/{id}` | Delete |
+| `POST` | `/temporal-workflows/{id}/start` | Start for an incident (`{"incident_id": "..."}`) |
+
+## Related
+
+- [Temporal provider](/providers/documentation/temporal-provider) — connection settings
+- [Workflow automation](/overview/workflow-automation) — Keep YAML workflows that can also call Temporal

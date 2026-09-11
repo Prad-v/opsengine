@@ -11,7 +11,7 @@ import { useApi } from "@/shared/lib/hooks/useApi";
 import { Table } from "@tanstack/react-table";
 
 import { useRevalidateMultiple } from "@/shared/lib/state-utils";
-import { useConfig } from "@/utils/hooks/useConfig";
+import { useAISettings } from "@/features/settings/ai";
 import { XMarkIcon } from "@heroicons/react/24/outline";
 import { ChevronDoubleRightIcon } from "@heroicons/react/24/solid";
 import { AlertChangeStatusModal } from "@/features/alerts/alert-change-status/ui/alert-change-status-modal";
@@ -41,7 +41,7 @@ export default function AlertActions({
 }: Props) {
   const router = useRouter();
   const api = useApi();
-  const { data: config } = useConfig();
+  const { isAIEnabled } = useAISettings();
   const revalidateMultiple = useRevalidateMultiple();
   const presetsMutator = () => revalidateMultiple(["/preset"]);
   const [modalAlert, setModalAlert] = useState<AlertDto | AlertDto[] | null>(null);
@@ -191,9 +191,7 @@ export default function AlertActions({
       </Tooltip>
       <Tooltip
         title={
-          config?.OPEN_AI_API_KEY_SET
-            ? "Create incidents with AI"
-            : "AI is not configured"
+          isAIEnabled ? "Create incidents with AI" : "AI is not configured"
         }
       >
         <span>
@@ -203,7 +201,7 @@ export default function AlertActions({
             variant="contained"
             startIcon={<RocketIcon className="h-4 w-4" />}
             onClick={showCreateIncidentWithAI}
-            disabled={!config?.OPEN_AI_API_KEY_SET}
+            disabled={!isAIEnabled}
           >
             Create incidents with AI
           </Button>

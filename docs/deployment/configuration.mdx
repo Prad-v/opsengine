@@ -201,14 +201,17 @@ The authenticated entity will have:
 |           Env var           |                      Purpose                       | Required |    Default Value    |                        Valid options                         | Backend/Frontend |
 | :-------------------------: | :------------------------------------------------: | :------: | :-----------------: | :----------------------------------------------------------: | :--------------: |
 |     **OPENAI_API_KEY**      |            API key for OpenAI services             |    No    |        None         |                     Valid OpenAI API key                     |       Both       |
+|    **OPEN_AI_API_KEY**      |     Alias for `OPENAI_API_KEY` (frontend CopilotKit)     |    No    |        None         |                     Valid OpenAI API key                     |     Frontend     |
 |    **OPENAI_MODEL_NAME**    |       Model name to use for OpenAI requests        |    No    | "gpt-4o-2024-08-06" | Valid OpenAI model name (e.g., "gpt-4o", "gpt-4o-mini", ...) |       Both       |
 | **OPEN_AI_ORGANIZATION_ID** |        Organization ID for OpenAI services         |    No    |        None         |                 Valid OpenAI organization ID                 |       Both       |
 |     **OPENAI_BASE_URL**     | Base URL for OpenAI API (useful for LiteLLM proxy) |    No    |        None         |          Valid URL (e.g., "http://localhost:4000")           |       Both       |
 | **KEEP_AI_DISABLE_TEMPERATURE** | Omit the `temperature` parameter from AI requests (some models, e.g. reasoning models, only accept the default and reject explicit values) |    No    |        false        |                       true / false                       |     Backend      |
 
 <Tip>
-  For various different LLM based features, we also require to set these
-  environment variables for Keep's frontend too.
+  Workflow Builder AI, incident chat, and related UI features require an OpenAI
+  API key either via **Settings → AI** or `OPENAI_API_KEY` /
+  `OPEN_AI_API_KEY` on the frontend. Without it, the UI shows "AI is disabled".
+  See [AI Workflow Builder Assistant](/overview/ai-workflow-assistant).
 </Tip>
 
 ### Posthog

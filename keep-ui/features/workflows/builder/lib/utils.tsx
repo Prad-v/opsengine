@@ -8,6 +8,8 @@ import {
   V2StepStep,
   V2ActionStep,
 } from "@/entities/workflows/model/types";
+import type { TemporalCatalogEntry } from "@/features/catalog/temporal-workflow";
+import { getTemporalCatalogActionTemplates } from "./temporalCatalogSteps";
 
 const manualTriggerTemplate: V2StepTrigger = {
   type: "manual",
@@ -108,7 +110,8 @@ export const conditionAssertTemplate: Omit<V2StepConditionAssert, "id"> = {
 };
 
 export function getToolboxConfiguration(
-  providers: Provider[]
+  providers: Provider[],
+  options?: { temporalCatalog?: TemporalCatalogEntry[] }
 ): ToolboxConfiguration {
   /**
    * Generates the toolbox items
@@ -141,36 +144,51 @@ export function getToolboxConfiguration(
     }
   }
 
-  return {
-    groups: [
-      {
-        name: "Triggers",
-        steps: [
-          manualTriggerTemplate,
-          alertTriggerTemplate,
-          incidentTriggerTemplate,
-          intervalTriggerTemplate,
-        ],
-      },
-      {
-        name: "Steps",
-        steps: steps,
-      },
-      {
-        name: "Actions",
-        steps: actions,
-      },
-      {
-        name: "Misc",
-        steps: [foreachTemplate],
-      },
-      // TODO: get conditions from API,
-      {
-        name: "Conditions",
-        steps: [conditionThresholdTemplate, conditionAssertTemplate],
-      },
-    ],
-  };
+  const temporalCatalogSteps = getTemporalCatalogActionTemplates(
+    options?.temporalCatalog ?? [],
+    providers
+  );
+
+  const groups: ToolboxConfiguration["groups"] = [
+    {
+      name: "Triggers",
+      steps: [
+        manualTriggerTemplate,
+        alertTriggerTemplate,
+        incidentTriggerTemplate,
+        intervalTriggerTemplate,
+      ],
+    },
+    {
+      name: "Steps",
+      steps: steps,
+    },
+    {
+      name: "Actions",
+      steps: actions,
+    },
+  ];
+
+  if (temporalCatalogSteps.length > 0) {
+    groups.push({
+      name: "Temporal catalog",
+      steps: temporalCatalogSteps,
+    });
+  }
+
+  groups.push(
+    {
+      name: "Misc",
+      steps: [foreachTemplate],
+    },
+    // TODO: get conditions from API,
+    {
+      name: "Conditions",
+      steps: [conditionThresholdTemplate, conditionAssertTemplate],
+    }
+  );
+
+  return { groups };
 }
 
 export const normalizeStepType = (type: string) => {

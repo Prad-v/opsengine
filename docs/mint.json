@@ -74,7 +74,11 @@
         "overview/enrichment/mapping",
         "overview/maintenance-windows",
         "overview/servicetopology",
-        "overview/workflow-automation"
+        "overview/workflow-automation",
+        "overview/temporal-workflow-catalog",
+        "overview/temporal-worker-list-and-zip",
+        "overview/synthetic-checks",
+        "overview/demo-mock-grafana-list-and-zip"
       ]
     },
     {
@@ -328,7 +332,8 @@
           "group": "Local LLM",
           "pages": ["deployment/local-llm/keep-with-litellm"]
         },
-        "deployment/stress-testing"
+        "deployment/stress-testing",
+        "deployment/scale-1m-events-architecture"
       ]
     },
     {

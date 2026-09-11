@@ -1,0 +1,274 @@
+---
+title: "Scale target: 1M events / day"
+sidebarTitle: "Scale to 1M events"
+description: "Architecture overview and phased roadmap for 1M events → 5K incidents → 5K workflows per day. Revisit after core functionality is complete."
+---
+
+<Warning>
+This is a **planning / backlog** document. Finish current Temporal catalog, worker, and workflow features first, then return here to implement the scale phases below.
+</Warning>
+
+## Target
+
+| Metric | Target | Average rate |
+|--------|--------|--------------|
+| Events (alerts) | **1,000,000 / day** | ~12/s · ~700/min |
+| Incidents | **5,000 / day** | ~3.5/min |
+| Workflows | **5,000 / day** | ~3.5/min |
+
+That implies roughly **0.5%** of events become incidents (aggressive dedupe + selective correlation). Design and test for **peaks** (often 5–20× average), not only daily averages.
+
+Related: [Specifications and stress testing](/deployment/stress-testing).
+
+## Current architecture
+
+Opsengine (Keep) digests alerts into incidents and runs Keep workflows. Temporal is a **provider action** for remediation, not the core digest engine.
+
+```text
+┌─────────────┐   ┌──────────────┐   ┌─────────────────┐
+│ keep-ui     │   │ Providers    │   │ Kafka / SQS     │
+│ (Next.js)   │   │ webhooks     │   │ consumers       │
+└──────┬──────┘   └──────┬───────┘   └────────┬────────┘
+       │                 │                     │
+       ▼                 ▼                     ▼
+┌──────────────────────────────────────────────────────┐
+│              Keep API (FastAPI / gunicorn)           │
+│  routes → enqueue → process_event → RulesEngine      │
+│  WorkflowManager / WorkflowScheduler (in-process)    │
+└────────────┬───────────────────┬─────────────────────┘
+             │                   │
+    REDIS?   │                   │ optional Temporal step
+             ▼                   ▼
+┌────────────────────┐   ┌─────────────────────────────┐
+│ Redis + ARQ        │   │ Temporal (:7233)            │
+│ basic_processing   │   │ workers: keep-ops / synth   │
+│ (workflows queue   │   │ helm/temporal-worker        │
+│  mostly unfinished)│   └─────────────────────────────┘
+└─────────┬──────────┘
+          ▼
+┌────────────────────┐   ┌─────────────┐
+│ Postgres           │   │ Elastic     │
+│ alerts/incidents/  │   │ (optional   │
+│ workflows          │   │  search)    │
+└────────────────────┘   └─────────────┘
+```
+
+### Component map
+
+| Layer | Role | Key paths |
+|-------|------|-----------|
+| Ingest | Webhooks + optional Kafka/SQS | `keep/api/routes/alerts.py`, `keep/event_subscriber/` |
+| Digest | Format → enrich → dedupe → DB | `keep/api/tasks/process_event_task.py` (`process_event`) |
+| Correlate | CEL rules → incidents | `keep/rulesengine/rulesengine.py` |
+| Automate | Keep workflows (alert/incident triggers) | `keep/workflowmanager/` |
+| Orchestrate | Temporal actions | `keep/providers/temporal_provider/`, `backend/services/temporal-worker/` |
+| UI | Ops console | `keep-ui/` |
+
+### Data plane
+
+```text
+POST /alerts/event[/{provider}]
+        │
+        ├─ REDIS=false → ThreadPoolExecutor (KEEP_EVENT_WORKERS=5)
+        └─ REDIS=true  → ARQ queue `basic_processing`
+                │
+                ▼
+         process_event()
+                │
+   format_alert → enrich → maintenance → dedupe
+                │
+                ▼
+         Alert / LastAlert (Postgres)
+                │
+        ┌───────┴────────┐
+        ▼                ▼
+ WorkflowManager    RulesEngine (CEL)
+ insert_events      → Incident + AlertToIncident
+        │                │
+        │                └─ insert_incident (created/updated)
+        ▼
+ WorkflowScheduler (1s poll, max ~20 workers)
+        │
+        └─ optional TemporalProvider.start_workflow
+```
+
+Local default (`Makefile`): Postgres + Redis may be available, but **`REDIS=false`** — digest runs in a **5-thread pool inside the API**.
+
+### Queue topology
+
+| Queue | Purpose | Status |
+|-------|---------|--------|
+| `basic_processing` | Events, topology, incidents | Wired when `REDIS=true` |
+| `workflows` | Keep workflow execution | Defined; Redis enqueue **unfinished** |
+| `maintenance` | Watcher / maintenance recovery | Wired |
+
+There is **no Celery**. Async work uses **ARQ + Redis**.
+
+### Temporal
+
+- Provider: start/manage Temporal workflows from Keep steps or catalog
+- Catalog UI/API: register workflow types, queues, input mapping
+- Workers: `backend/services/temporal-worker/` (`keep-ops`), `backend/services/synthetic-checks/` (`keep-synth`)
+- Helm: `helm/temporal-worker/`, `helm/synthetic-checks/`
+
+Docs: [Temporal workflow catalog](/overview/temporal-workflow-catalog), [Temporal provider](/providers/documentation/temporal-provider).
+
+## Capacity vs stress guidance
+
+From [stress testing](/deployment/stress-testing):
+
+| Your target | Avg rate | Doc reference |
+|-------------|----------|---------------|
+| 1M events/day | ~700/min | Digestion tested at 100–1000 alerts/min |
+| 5K workflows/day | ~3.5/min | Workflows tested at 10–100/min |
+
+- Redis is recommended above **~1,000 alerts/min** or when the API becomes the ingest bottleneck.
+- Average rate sits just under that line; **peaks will cross it**.
+- Digestion + 5K workflows/day are achievable **if** you run Postgres + Redis/ARQ (+ Elasticsearch as total alert cardinality grows).
+
+## What scales today vs gaps
+
+| Stage | Scales? | Notes |
+|-------|---------|--------|
+| Webhook ingress | Yes | More API replicas; tune rate limits |
+| Event digest | Partially | `REDIS=true` + ARQ (`KEEP_WORKERS` × `KEEP_EVENT_WORKERS`) |
+| Dedup | Helps a lot | Full duplicates exit early — critical for 1M → 5K |
+| Correlation | Weak | O(rules × events) CEL; called out as non-scaling in `keep/api/models/db/rule.py` |
+| Keep workflows | Weak | Redis path incomplete (`workflowmanager.py` TODO); scheduler in-process, 1s poll, in-memory queue |
+| Temporal remediations | Yes | Scale Temporal workers/task queues independently |
+| DB | Must harden | Default pool `5+10`; avoid SQLite |
+| Search | Optional → needed | ES for large total stored alerts |
+
+### Known code gaps
+
+1. **Workflow Redis enqueue unfinished** — `KEEP_ARQ_QUEUE_WORKFLOWS` exists; execution still largely in-process with the API.
+2. **RulesEngine scans all rules per event** — expensive under noisy peaks.
+3. **`insert_events` loads tenant workflows** for every non-deduped batch.
+4. **Consumers + scheduler + digest** can share one API process — bad for production load.
+5. **Helm** covers Temporal workers more than full Keep API/ARQ autoscaling.
+
+## Target production topology
+
+```text
+                    ┌─ API replicas (auth, CRUD, UI APIs)
+Ingest ────────────►┤
+ (webhooks/Kafka)   └─ enqueue only → Redis/ARQ
+                              │
+                              ▼
+                    ARQ digest workers (N pods)
+                      process_event + RulesEngine
+                              │
+              ┌───────────────┼────────────────┐
+              ▼               ▼                ▼
+           Postgres      Elastic (search)   Workflow enqueue
+           (alerts +                        (finish Redis path
+            incidents)                       or Temporal-first)
+                              │
+                              ▼
+                    Dedicated workflow workers
+                              │
+                              ▼
+                    Temporal (heavy remediations)
+```
+
+### Operating principles
+
+1. **Always Postgres** for this volume — never SQLite.
+2. **`REDIS=true` + dedicated ARQ** — API does not digest in-thread.
+3. **Separate processes:** API vs digest workers vs workflow workers.
+4. **Elasticsearch** once cumulative alerts grow into hundreds of thousands+.
+5. **Aggressive dedupe + tight CEL rules** to keep ~0.5% incident rate.
+6. **Prefer Temporal for heavy automation**; keep Keep workflows thin (trigger → start Temporal).
+7. **Finish or bypass** the incomplete ARQ workflow path before relying on Keep workflows under peak.
+
+### Rough sizing (starting point)
+
+| Component | Starting point for ~1M events/day |
+|-----------|-----------------------------------|
+| API | 2–3 replicas, 4–8 vCPU / 8–16 GB |
+| ARQ digest workers | 2–4 workers × thread pool 5–10; scale on queue lag |
+| Postgres | 8+ vCPU / 32 GB, tuned indexes, pool ≫ default |
+| Redis | 4 vCPU / 8 GB |
+| Elasticsearch | 2–3 nodes when total stored alerts climb |
+| Temporal workers | Scale by remediation concurrency, not raw event rate |
+
+Tune from measured ingest lag and DB saturation, not from this table alone.
+
+## Phased roadmap (revisit after features land)
+
+### Phase 0 — Config / ops only (no code)
+
+- Postgres only; `REDIS=true`; use `docker-compose-with-arq.yml` patterns in prod.
+- Raise `KEEP_WORKERS`, `KEEP_EVENT_WORKERS`, `DATABASE_POOL_SIZE` / `DATABASE_MAX_OVERFLOW`.
+- Disable or raise API rate limits for ingest paths if they throttle legitimate webhooks.
+- Run API and ARQ workers as **separate** containers/pods.
+- Enable Elasticsearch when alert history search slows down.
+
+### Phase 1 — Digest path hardening
+
+- Dedicated ARQ pool for `basic_processing` only (`KEEP_ARQ_TASK_POOL`).
+- Metrics: queue depth, `process_event` latency p95, DB pool wait, dedupe hit rate.
+- Load-test peaks at 3–10k events/min (see [STRESS.md](https://github.com/keephq/keep/blob/main/STRESS.md)).
+
+### Phase 2 — Workflow offload
+
+- Finish Redis/`run_workflow_in_worker` path in `WorkflowManager`.
+- Or: standardize incident remediations as **Temporal catalog** starts so Keep workflows stay thin.
+- Move scheduler off the API process; persist workflow queue (avoid in-memory-only).
+
+### Phase 3 — Correlation scale
+
+- Cache compiled CEL; avoid reloading all rules/workflows per event.
+- Index or shard rules (by tenant, fingerprint prefix, or alert fields).
+- Measure rules × events cost; cap noisy fingerprints.
+
+### Phase 4 — Platform packaging
+
+- Full Helm for Keep API + ARQ + Redis + Postgres (+ ES), with `values-dev` / `values-prod`.
+- CI image tags and chart version bumps aligned with existing Temporal charts.
+- Autoscale digest workers on Redis queue lag.
+
+## Load-test checkpoints
+
+Use these gates before calling the target “done”:
+
+| Checkpoint | Pass criteria |
+|------------|---------------|
+| Sustained ingest | 700+ events/min for 1h with stable p95 digest latency |
+| Peak ingest | 3–10k events/min burst; backlog drains without API OOM |
+| Incident ratio | ~0.5% (or agreed SLA) under realistic noise |
+| Workflows | 5K+ Keep or Temporal runs/day without scheduler backlog growth |
+| Dedup | High full-duplicate skip rate under replay storms |
+| DB | No sustained connection pool exhaustion; indexes cover LastAlert / fingerprint paths |
+| UI | Incident and alert list remain usable with large totals (ES if needed) |
+
+## Key knobs (reference)
+
+| Setting | Default (typical) | Role |
+|---------|-------------------|------|
+| `REDIS` | `false` | Enable ARQ queues |
+| `KEEP_EVENT_WORKERS` | `5` | Threads per digest process |
+| `KEEP_WORKERS` | `2` | ARQ gunicorn workers |
+| `KEEP_ARQ_TASK_POOL` | `all` if Redis | Which queues this process serves |
+| `KEEP_MAX_WORKFLOW_WORKERS` | `20` | In-process workflow concurrency |
+| `KEEP_CORRELATION_ENABLED` | `true` | RulesEngine on/off |
+| `DATABASE_POOL_SIZE` / `MAX_OVERFLOW` | `5` / `10` | SQLAlchemy pool |
+
+## Related docs and code
+
+- [Specifications and stress testing](/deployment/stress-testing)
+- [How Keep gets alerts](/overview/howdoeskeepgetmyalerts)
+- [Deduplication](/overview/deduplication)
+- [Correlation rules](/overview/correlation-rules)
+- [Workflow automation](/overview/workflow-automation)
+- [Temporal workflow catalog](/overview/temporal-workflow-catalog)
+- Compose: `docker-compose-with-arq.yml`, `docker-compose.deps.yml`, `docker-compose.temporal.yml`
+- Stress harness: [STRESS.md](https://github.com/keephq/keep/blob/main/STRESS.md)
+
+## Status
+
+| Item | Status |
+|------|--------|
+| Feature work (Temporal catalog, workers, demos) | In progress — complete first |
+| Phase 0 config runbook | Documented here; not production-validated for 1M/day |
+| Phase 1–4 implementation | Backlog — revisit after functionality is complete |

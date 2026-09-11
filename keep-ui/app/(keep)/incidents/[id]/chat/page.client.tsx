@@ -2,8 +2,8 @@
 
 import { IncidentChat } from "./incident-chat";
 import { IncidentDto } from "@/entities/incidents/model";
-import { useConfig } from "@/utils/hooks/useConfig";
 import { CopilotKit } from "@copilotkit/react-core";
+import { useAISettings } from "@/features/settings/ai";
 
 export function IncidentChatClientPage({
   incident,
@@ -12,10 +12,9 @@ export function IncidentChatClientPage({
   incident: IncidentDto;
   mutateIncident: () => void;
 }) {
-  const { data: config } = useConfig();
+  const { isAIEnabled, isLoading } = useAISettings();
 
-  // If AI is not enabled, return null to collapse the chat section
-  if (!config?.OPEN_AI_API_KEY_SET) {
+  if (isLoading || !isAIEnabled) {
     return null;
   }
 

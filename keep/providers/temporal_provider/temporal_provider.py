@@ -18,25 +18,6 @@ from keep.contextmanager.contextmanager import ContextManager
 from keep.exceptions.provider_exception import ProviderException
 from keep.providers.base.base_provider import BaseProvider
 from keep.providers.models.provider_config import ProviderConfig, ProviderScope
-from keep.providers.models.provider_method import ProviderMethod
-
-DEFAULT_WORKFLOW_CATALOG = [
-    {
-        "id": "remediate-incident",
-        "name": "Remediate Incident",
-        "description": "Start a Temporal remediation workflow for a Keep incident",
-        "workflow_type": "RemediateIncident",
-        "task_queue": "keep-ops",
-        "workflow_id_template": "incident-{{incident.id}}-{{catalog.id}}",
-        "input_mapping": {
-            "incident_id": "id",
-            "name": "name",
-            "severity": "severity",
-            "status": "status",
-            "services": "services",
-        },
-    }
-]
 
 
 @pydantic.dataclasses.dataclass
@@ -108,21 +89,6 @@ class TemporalProviderAuthConfig:
         },
     )
 
-    workflow_catalog: Optional[str] = dataclasses.field(
-        default=None,
-        metadata={
-            "required": False,
-            "description": (
-                "Keep-managed Temporal workflow catalog as JSON array. "
-                "Each entry needs id, name, workflow_type, task_queue; "
-                "optional description, workflow_id_template, input_mapping."
-            ),
-            "hint": json.dumps(DEFAULT_WORKFLOW_CATALOG, indent=2),
-            "type": "textarea",
-            "placeholder": "Paste JSON array of catalog workflows",
-        },
-    )
-
 
 class TemporalProvider(BaseProvider):
     """Start and manage Temporal workflows from Keep actions and steps."""
@@ -131,7 +97,8 @@ class TemporalProvider(BaseProvider):
     PROVIDER_CATEGORY = ["Orchestration"]
     PROVIDER_TAGS = ["data"]
     provider_description = (
-        "Start Temporal workflows when Keep alerts or incidents are received."
+        "Start Temporal workflows when Keep alerts or incidents are received. "
+        "Register workflows under Catalog → Temporal workflow."
     )
 
     PROVIDER_SCOPES = [
@@ -143,21 +110,6 @@ class TemporalProvider(BaseProvider):
         ),
     ]
 
-    PROVIDER_METHODS = [
-        ProviderMethod(
-            name="get_workflow_catalog",
-            func_name="get_workflow_catalog",
-            description="List Keep-managed Temporal workflows available to start",
-            type="view",
-        ),
-        ProviderMethod(
-            name="start_workflow_from_catalog",
-            func_name="start_workflow_from_catalog",
-            description="Start a catalog Temporal workflow and link it to an incident",
-            type="action",
-        ),
-    ]
-
     def __init__(
         self, context_manager: ContextManager, provider_id: str, config: ProviderConfig
     ):
@@ -165,11 +117,13 @@ class TemporalProvider(BaseProvider):
         self.authentication_config: TemporalProviderAuthConfig
 
     def validate_config(self):
-        self.authentication_config = TemporalProviderAuthConfig(
-            **self.config.authentication
-        )
-        # Fail fast if catalog JSON is present but invalid.
-        self._parse_workflow_catalog()
+        # Ignore legacy workflow_catalog key if still present in stored secrets.
+        auth = {
+            k: v
+            for k, v in (self.config.authentication or {}).items()
+            if k != "workflow_catalog"
+        }
+        self.authentication_config = TemporalProviderAuthConfig(**auth)
 
     def dispose(self):
         """Temporal clients are created per-call; nothing to dispose."""
@@ -183,47 +137,39 @@ class TemporalProvider(BaseProvider):
             self.logger.exception("Failed to validate Temporal connection")
             return {"connect": str(exc)}
 
-    def get_workflow_catalog(self) -> list[dict]:
-        """
-        Return the Keep-managed Temporal workflow catalog.
-
-        Used by the incident Workflows UI to show startable Temporal workflows.
-        """
-        return self._parse_workflow_catalog()
-
-    def start_workflow_from_catalog(
-        self, catalog_id: str, incident: dict | str | None = None
+    def start_workflow_from_definition(
+        self, entry: dict | str, incident: dict | str | None = None
     ) -> dict:
         """
-        Start a Temporal workflow defined in the Keep-managed catalog.
+        Start a Temporal workflow from a Keep catalog definition.
 
         Args:
-            catalog_id: Catalog entry id (not Temporal workflow id).
-            incident: Incident payload (dict or JSON string) used for input_mapping
-                and workflow_id_template rendering.
+            entry: Catalog entry dict (or JSON string) with workflow_type, task_queue,
+                and optional id/name/workflow_id_template/input_mapping.
+            incident: Incident payload used for input_mapping and workflow_id_template.
         """
-        entry = self._get_catalog_entry(catalog_id)
+        catalog_entry = self._normalize_catalog_entry(entry)
         incident_data = self._normalize_incident_payload(incident)
         workflow_input = self._build_input_from_mapping(
-            entry.get("input_mapping") or {}, incident_data
+            catalog_entry.get("input_mapping") or {}, incident_data
         )
         workflow_id = self._render_workflow_id(
-            entry.get("workflow_id_template"),
+            catalog_entry.get("workflow_id_template"),
             incident_data=incident_data,
-            catalog_entry=entry,
+            catalog_entry=catalog_entry,
         )
 
         result = self._notify(
             operation="start_workflow",
-            workflow_type=entry["workflow_type"],
-            task_queue=entry["task_queue"],
+            workflow_type=catalog_entry["workflow_type"],
+            task_queue=catalog_entry["task_queue"],
             workflow_id=workflow_id,
             arg=workflow_input,
         )
         return {
             **result,
-            "catalog_id": entry["id"],
-            "catalog_name": entry.get("name") or entry["id"],
+            "catalog_id": catalog_entry["id"],
+            "catalog_name": catalog_entry.get("name") or catalog_entry["id"],
             "incident_id": incident_data.get("id"),
             "input": workflow_input,
         }
@@ -632,60 +578,36 @@ class TemporalProvider(BaseProvider):
                 return value
         return value
 
-    def _parse_workflow_catalog(self) -> list[dict]:
-        raw = self.authentication_config.workflow_catalog
-        if raw is None or (isinstance(raw, str) and not raw.strip()):
-            return []
-
-        if isinstance(raw, list):
-            catalog = raw
-        elif isinstance(raw, str):
+    def _normalize_catalog_entry(self, entry: dict | str | None) -> dict:
+        if entry is None:
+            raise ProviderException("catalog entry is required")
+        if isinstance(entry, str):
             try:
-                catalog = json.loads(raw)
+                entry = json.loads(entry)
             except json.JSONDecodeError as exc:
                 raise ProviderException(
-                    f"workflow_catalog must be valid JSON: {exc}"
+                    f"catalog entry must be a JSON object: {exc}"
                 ) from exc
-        else:
-            raise ProviderException("workflow_catalog must be a JSON array or string")
+        if not isinstance(entry, dict):
+            raise ProviderException("catalog entry must be a dict or JSON object")
 
-        if not isinstance(catalog, list):
-            raise ProviderException("workflow_catalog must be a JSON array")
-
-        normalized: list[dict] = []
-        for index, entry in enumerate(catalog):
-            if not isinstance(entry, dict):
-                raise ProviderException(
-                    f"workflow_catalog[{index}] must be an object"
-                )
-            catalog_id = entry.get("id")
-            workflow_type = entry.get("workflow_type")
-            task_queue = entry.get("task_queue")
-            if not catalog_id or not workflow_type or not task_queue:
-                raise ProviderException(
-                    f"workflow_catalog[{index}] requires id, workflow_type, and task_queue"
-                )
-            normalized.append(
-                {
-                    "id": str(catalog_id),
-                    "name": entry.get("name") or str(catalog_id),
-                    "description": entry.get("description") or "",
-                    "workflow_type": str(workflow_type),
-                    "task_queue": str(task_queue),
-                    "workflow_id_template": entry.get("workflow_id_template")
-                    or "incident-{{incident.id}}-{{catalog.id}}",
-                    "input_mapping": entry.get("input_mapping") or {},
-                }
+        catalog_id = entry.get("id") or entry.get("catalog_key") or entry.get("name")
+        workflow_type = entry.get("workflow_type")
+        task_queue = entry.get("task_queue")
+        if not catalog_id or not workflow_type or not task_queue:
+            raise ProviderException(
+                "catalog entry requires id (or catalog_key/name), workflow_type, and task_queue"
             )
-        return normalized
-
-    def _get_catalog_entry(self, catalog_id: str) -> dict:
-        if not catalog_id:
-            raise ProviderException("catalog_id is required")
-        for entry in self._parse_workflow_catalog():
-            if entry["id"] == catalog_id:
-                return entry
-        raise ProviderException(f"Catalog workflow '{catalog_id}' not found")
+        return {
+            "id": str(catalog_id),
+            "name": entry.get("name") or str(catalog_id),
+            "description": entry.get("description") or "",
+            "workflow_type": str(workflow_type),
+            "task_queue": str(task_queue),
+            "workflow_id_template": entry.get("workflow_id_template")
+            or "incident-{{incident.id}}-{{catalog.id}}",
+            "input_mapping": entry.get("input_mapping") or {},
+        }
 
     @staticmethod
     def _normalize_incident_payload(incident: dict | str | None) -> dict:
@@ -787,6 +709,103 @@ class TemporalProvider(BaseProvider):
         except TypeError:
             return str(value)
 
+    def upsert_interval_schedule(
+        self,
+        schedule_id: str,
+        workflow_type: str,
+        task_queue: str,
+        workflow_arg: Any,
+        interval_seconds: int,
+        paused: bool = False,
+        workflow_id: Optional[str] = None,
+    ) -> dict[str, Any]:
+        """Create or update a Temporal Schedule that starts a workflow on an interval."""
+        return self._run_async(
+            self._upsert_interval_schedule(
+                schedule_id=schedule_id,
+                workflow_type=workflow_type,
+                task_queue=task_queue,
+                workflow_arg=workflow_arg,
+                interval_seconds=interval_seconds,
+                paused=paused,
+                workflow_id=workflow_id,
+            )
+        )
+
+    def delete_schedule(self, schedule_id: str) -> dict[str, Any]:
+        """Delete a Temporal Schedule if it exists."""
+        return self._run_async(self._delete_schedule(schedule_id))
+
+    async def _upsert_interval_schedule(
+        self,
+        schedule_id: str,
+        workflow_type: str,
+        task_queue: str,
+        workflow_arg: Any,
+        interval_seconds: int,
+        paused: bool,
+        workflow_id: Optional[str],
+    ) -> dict[str, Any]:
+        from datetime import timedelta
+
+        from temporalio.client import (
+            Schedule,
+            ScheduleActionStartWorkflow,
+            ScheduleIntervalSpec,
+            ScheduleSpec,
+            ScheduleState,
+            ScheduleUpdate,
+        )
+
+        client = await self._connect()
+        wf_id = workflow_id or schedule_id
+        schedule = Schedule(
+            action=ScheduleActionStartWorkflow(
+                workflow_type,
+                workflow_arg,
+                id=wf_id,
+                task_queue=task_queue,
+            ),
+            spec=ScheduleSpec(
+                intervals=[
+                    ScheduleIntervalSpec(every=timedelta(seconds=max(10, int(interval_seconds))))
+                ]
+            ),
+            state=ScheduleState(paused=paused),
+        )
+
+        handle = client.get_schedule_handle(schedule_id)
+        try:
+            await handle.describe()
+            await handle.update(lambda _: ScheduleUpdate(schedule=schedule))
+            action = "updated"
+        except Exception:
+            await client.create_schedule(schedule_id, schedule)
+            action = "created"
+
+        return {
+            "schedule_id": schedule_id,
+            "action": action,
+            "paused": paused,
+            "interval_seconds": interval_seconds,
+            "workflow_type": workflow_type,
+            "task_queue": task_queue,
+        }
+
+    async def _delete_schedule(self, schedule_id: str) -> dict[str, Any]:
+        client = await self._connect()
+        handle = client.get_schedule_handle(schedule_id)
+        try:
+            await handle.delete()
+            return {"schedule_id": schedule_id, "action": "deleted"}
+        except Exception as exc:
+            # Treat missing schedule as success so Keep can clean up DB rows.
+            self.logger.warning(
+                "Temporal schedule delete ignored",
+                extra={"schedule_id": schedule_id, "error": str(exc)},
+            )
+            return {"schedule_id": schedule_id, "action": "missing_or_deleted"}
+
     @staticmethod
     def _run_async(coro):
         """Run an async Temporal SDK call from Keep's sync workflow executor."""
@@ -814,11 +833,11 @@ if __name__ == "__main__":
             "namespace": os.environ.get("TEMPORAL_NAMESPACE", "default"),
             "api_key": os.environ.get("TEMPORAL_API_KEY"),
             "tls": os.environ.get("TEMPORAL_TLS", "false").lower() == "true",
-            "workflow_catalog": os.environ.get("TEMPORAL_WORKFLOW_CATALOG"),
         }
     )
     provider = TemporalProvider(
-        context_manager=context_manager, provider_id="test", config=config
+        context_manager=context_manager,
+        provider_id="temporal-test",
+        config=config,
     )
     print(provider.validate_scopes())
-    print(provider.get_workflow_catalog())

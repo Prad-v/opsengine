@@ -1,0 +1,17 @@
+replicaCount: 1
+
+image:
+  tag: "0.1.0"
+
+temporal:
+  address: temporal-frontend:7233
+  namespace: default
+  taskQueue: keep-synth
+
+otel:
+  metricsEnabled: true
+  endpoint: otel-collector:4317
+  serviceName: synthetic-checks
+
+keep:
+  apiUrl: http://keep-backend:8080

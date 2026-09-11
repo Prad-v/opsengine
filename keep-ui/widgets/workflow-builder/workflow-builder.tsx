@@ -22,6 +22,7 @@ import { WorkflowBuilderChatSafe } from "@/features/workflows/ai-assistant";
 import debounce from "lodash.debounce";
 import { getOrderedWorkflowYamlStringFromJSON } from "@/entities/workflows/lib/yaml-utils";
 import { useWorkflowSecrets } from "@/utils/hooks/useWorkflowSecrets";
+import { useTemporalWorkflowCatalog } from "@/features/catalog/temporal-workflow";
 
 interface Props {
   loadedYamlFileContents: string | null;
@@ -42,6 +43,7 @@ export function WorkflowBuilder({
   const {
     getSecrets: { data: workflowSecrets },
   } = useWorkflowSecrets(workflowId ?? null);
+  const { catalog: temporalCatalog } = useTemporalWorkflowCatalog();
   const {
     // Definition
     definition,
@@ -58,6 +60,7 @@ export function WorkflowBuilder({
     initializeWorkflow,
     setProviders,
     setInstalledProviders,
+    setTemporalCatalog,
     setSecrets,
     updateFromYamlString,
   } = useWorkflowStore();
@@ -80,6 +83,14 @@ export function WorkflowBuilder({
     // setProviders and setInstalledProviders shouldn't change
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [providers, installedProviders]
+  );
+
+  useEffect(
+    function syncTemporalCatalog() {
+      setTemporalCatalog(temporalCatalog ?? []);
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [temporalCatalog]
   );
 
   useEffect(

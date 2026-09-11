@@ -1,6 +1,6 @@
 import { render, screen } from "@testing-library/react";
 import { WorkflowBuilderWidgetSafe } from "../workflow-builder-widget-safe";
-import { useConfig } from "@/utils/hooks/useConfig";
+import { useAISettings } from "@/features/settings/ai";
 import { WorkflowBuilderWidget } from "../workflow-builder-widget";
 
 // Mock the actual WorkflowBuilderWidget component
@@ -22,9 +22,8 @@ jest.mock("@copilotkit/react-core", () => ({
   ),
 }));
 
-// Mock useConfig hook
-jest.mock("@/utils/hooks/useConfig", () => ({
-  useConfig: jest.fn(),
+jest.mock("@/features/settings/ai", () => ({
+  useAISettings: jest.fn(),
 }));
 
 describe("WorkflowBuilderWidgetSafe", () => {
@@ -36,10 +35,10 @@ describe("WorkflowBuilderWidgetSafe", () => {
     (WorkflowBuilderWidget as jest.Mock).mockClear();
   });
 
-  it("should render WorkflowBuilderWidget with props when OpenAI key is not set", () => {
-    // Mock useConfig to return OpenAI key not set
-    (useConfig as jest.Mock).mockReturnValue({
-      data: { OPEN_AI_API_KEY_SET: false },
+  it("should render WorkflowBuilderWidget with props when AI is not enabled", () => {
+    (useAISettings as jest.Mock).mockReturnValue({
+      isAIEnabled: false,
+      isLoading: false,
     });
 
     render(
@@ -49,7 +48,6 @@ describe("WorkflowBuilderWidgetSafe", () => {
       />
     );
 
-    // Verify WorkflowBuilderWidget was called with correct props
     expect(WorkflowBuilderWidget).toHaveBeenCalledWith(
       {
         workflowRaw: mockWorkflowRaw,
@@ -58,7 +56,6 @@ describe("WorkflowBuilderWidgetSafe", () => {
       undefined
     );
 
-    // Verify the rendered content
     expect(screen.getByTestId("workflow-builder")).toBeInTheDocument();
     expect(
       screen.getByText(`workflowRaw: ${mockWorkflowRaw}`)
@@ -66,12 +63,13 @@ describe("WorkflowBuilderWidgetSafe", () => {
     expect(
       screen.getByText(`workflowId: ${mockWorkflowId}`)
     ).toBeInTheDocument();
+    expect(screen.queryByTestId("copilot-wrapper")).not.toBeInTheDocument();
   });
 
-  it("should wrap WorkflowBuilderWidget with CopilotKit when OpenAI key is set", () => {
-    // Mock useConfig to return OpenAI key set
-    (useConfig as jest.Mock).mockReturnValue({
-      data: { OPEN_AI_API_KEY_SET: true },
+  it("should wrap WorkflowBuilderWidget with CopilotKit when AI is enabled", () => {
+    (useAISettings as jest.Mock).mockReturnValue({
+      isAIEnabled: true,
+      isLoading: false,
     });
 
     render(
@@ -81,10 +79,8 @@ describe("WorkflowBuilderWidgetSafe", () => {
       />
     );
 
-    // Verify CopilotKit wrapper is present
     expect(screen.getByTestId("copilot-wrapper")).toBeInTheDocument();
 
-    // Verify WorkflowBuilderWidget was called with correct props
     expect(WorkflowBuilderWidget).toHaveBeenCalledWith(
       {
         workflowRaw: mockWorkflowRaw,
@@ -93,7 +89,6 @@ describe("WorkflowBuilderWidgetSafe", () => {
       undefined
     );
 
-    // Verify the rendered content is inside CopilotKit
     const copilotWrapper = screen.getByTestId("copilot-wrapper");
     expect(copilotWrapper).toContainElement(
       screen.getByTestId("workflow-builder")

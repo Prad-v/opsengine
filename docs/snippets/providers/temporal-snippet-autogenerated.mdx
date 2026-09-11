@@ -10,7 +10,6 @@ This provider requires authentication.
 - **tls_client_cert**: mTLS client certificate PEM contents (required: False, sensitive: True)
 - **tls_client_key**: mTLS client private key PEM contents (required: False, sensitive: True)
 - **tls_server_root_ca_cert**: Optional server CA certificate PEM contents for mTLS (required: False, sensitive: True)
-- **workflow_catalog**: Keep-managed Temporal workflow catalog as JSON array. Each entry needs id, name, workflow_type, task_queue; optional description, workflow_id_template, input_mapping. (required: False, sensitive: False)
 
 Certain scopes may be required to perform specific actions or queries via the provider. Below is a summary of relevant scopes and their use cases:
 - **connect**: Connect to the Temporal frontend and access the namespace (mandatory) 
@@ -60,18 +59,10 @@ actions:
 
 
 
-
 Check the following workflow example:
 - [incident-to-temporal.yml](https://github.com/keephq/keep/blob/main/examples/workflows/incident-to-temporal.yml)
 
 
 ## Provider Methods
-The provider exposes the following [Provider Methods](/providers/provider-methods#via-ai-assistant). They are available in the [AI Assistant](/overview/ai-incident-assistant).
 
-- **get_workflow_catalog** List Keep-managed Temporal workflows available to start (view, scopes: no additional scopes)
-
-- **start_workflow_from_catalog** Start a catalog Temporal workflow and link it to an incident (action, scopes: no additional scopes)
-
-    - `catalog_id`: Catalog entry id (not Temporal workflow id).
-    - `incident`: Incident payload (dict or JSON string) used for input_mapping
-and workflow_id_template rendering.
+Register Temporal workflows under **Catalog → Temporal workflow**. The provider starts workflows from Keep YAML actions or from the catalog start API using `start_workflow_from_definition`.

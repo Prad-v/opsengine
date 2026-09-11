@@ -2,7 +2,7 @@
 
 import type { IncidentDto } from "@/entities/incidents/model";
 import IncidentWorkflowTable from "./incident-workflow-table";
-import { TemporalWorkflowCatalog } from "@/features/incidents/temporal-workflow-catalog";
+import { TemporalWorkflowIncidentRegistration } from "@/features/catalog/temporal-workflow";
 
 interface Props {
   incident: IncidentDto;
@@ -11,7 +11,7 @@ interface Props {
 export default function IncidentWorkflowsClient({ incident }: Props) {
   return (
     <div className="flex flex-col gap-4">
-      <TemporalWorkflowCatalog incident={incident} />
+      <TemporalWorkflowIncidentRegistration incident={incident} />
       <IncidentWorkflowTable incident={incident} />
     </div>
   );

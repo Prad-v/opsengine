@@ -83,6 +83,16 @@ Both mock payloads also set `labels.cluster=mock-prod` and `labels.host=srv-paym
 4. Click **Register Temporal**.
 5. Confirm **mock-temporal** under Installed Providers in Keep, then use a workflow such as `examples/workflows/incident-to-temporal.yml`.
 
+### Full hybrid demo (Grafana → incident → Temporal)
+
+One-command install after `make start`:
+
+```bash
+make demo-list-and-zip
+```
+
+Then in the mock UI: Grafana → **Create rule + send both**. Open the incident in Keep and check **Timeline** (alerts), **Workflows** (Keep + Temporal), and **Overview** enrichments. See [Demo: Mock Grafana → Temporal ListAndZip](/overview/demo-mock-grafana-list-and-zip).
+
 If Keep runs inside Docker Compose, set address to `temporal:7233` (or `host.docker.internal:7233`) before registering.
 
 ## API (optional)

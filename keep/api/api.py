@@ -55,6 +55,8 @@ from keep.api.routes import (
     settings,
     status,
     tags,
+    synthetic_checks,
+    temporal_workflows,
     topology,
     whoami,
     workflows,
@@ -324,6 +326,16 @@ def get_app(
     app.include_router(topology.router, prefix="/topology", tags=["topology"])
     app.include_router(
         deduplications.router, prefix="/deduplications", tags=["deduplications"]
+    )
+    app.include_router(
+        temporal_workflows.router,
+        prefix="/temporal-workflows",
+        tags=["temporal", "catalog"],
+    )
+    app.include_router(
+        synthetic_checks.router,
+        prefix="/synthetic-checks",
+        tags=["synthetic-checks", "catalog"],
     )
     app.include_router(facets.router, prefix="/{entity_name}/facets", tags=["facets"])
     app.include_router(facets.router, prefix="/{entity_name}/facets", tags=["facets"])

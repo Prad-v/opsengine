@@ -1,0 +1,23 @@
+workflow:
+  id: synthetic-check-firing
+  name: Synthetic check firing notification
+  description: >
+    Triggers when a synthetic-checks worker posts a firing alert to Keep.
+    Extend with Slack/Jira/Temporal remediation as needed.
+  triggers:
+    - type: alert
+      filters:
+        - key: source
+          value: r".*synthetic-checks.*"
+        - key: status
+          value: firing
+  actions:
+    - name: enrich-synthetic-failure
+      provider:
+        type: mock
+        with:
+          enrich_alert:
+            - key: synth_handled
+              value: "true"
+            - key: synth_fingerprint
+              value: "{{ alert.fingerprint }}"

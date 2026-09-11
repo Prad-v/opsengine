@@ -1,0 +1,8 @@
+# Dev overlay — points at local/dev Temporal.
+image:
+  tag: "0.1.0"
+
+temporal:
+  address: temporal:7233
+  namespace: default
+  taskQueue: keep-ops
