@@ -106,7 +106,7 @@ Worker posts to `POST /alerts/event` with:
 - `fingerprint: synth:{check_key}:{prober}:{target}`
 - `status: firing` on failure, `resolved` on success
 
-Example workflow: [`examples/workflows/synthetic-check-firing.yml`](/examples/workflows/synthetic-check-firing.yml)
+Example workflow: [`examples/workflows/synthetic-check-firing.yml`](https://github.com/Prad-v/opsengine/blob/develop/examples/workflows/synthetic-check-firing.yml)
 
 ## Metrics (OTLP)
 
@@ -126,7 +126,7 @@ Metrics:
 
 Labels include `job`, `instance` (target), `prober` / `module`, `check_key`.
 
-The shared collector ([`otel-shared/otel-collector-config.yaml`](/otel-shared/otel-collector-config.yaml))
+The shared collector ([`otel-shared/otel-collector-config.yaml`](https://github.com/Prad-v/opsengine/blob/develop/otel-shared/otel-collector-config.yaml))
 exports OTLP metrics to Prometheus.
 
 ## Environment

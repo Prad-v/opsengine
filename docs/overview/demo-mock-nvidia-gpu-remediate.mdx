@@ -1,0 +1,66 @@
+---
+title: "Demo: NVIDIA GPU → Temporal remediate"
+sidebarTitle: "GPU remediate demo"
+description: "End-to-end AI datacenter demo: NVIDIA GPU mock alerts → Keep incident → Temporal remediation → resolve or email."
+---
+
+## Goal
+
+Prove the AI datacenter remediation path:
+
+1. **Provider mock** fires NVIDIA / DCGM Grafana alerts into Keep  
+2. Keep correlates them into a **GPU** incident  
+3. Keep workflow starts Temporal **`RemediateNvidiaGpu`**  
+4. Temporal remediates the **mock NVIDIA GPU server**  
+   - **Success** → resolves the Keep incident  
+   - **Failure** → posts a mock ops email (incident stays open)
+
+## One-command setup
+
+`make start` already:
+
+- Starts provider-mock (`:8099`) and the Temporal worker (`RemediateNvidiaGpu`)
+- Registers **mock-grafana** + **mock-temporal** into Keep (best-effort)
+- Registers **Remediate NVIDIA GPU** in the Temporal catalog
+- Uploads `examples/workflows/mock-nvidia-gpu-remediate.yml`
+
+To re-run only the GPU demo setup after Keep is up:
+
+```bash
+make demo-nvidia-gpu
+```
+
+Disable auto-setup: `AUTO_SETUP_NVIDIA_GPU_DEMO=0 make start`
+
+## Fire the demo
+
+1. Mock UI → **Grafana** → **Register**  
+2. Mock UI → **Temporal** → **Register Temporal**  
+3. Success path: Grafana → **GPU: rule + temp/mem**  
+4. Failure path: **NVIDIA GPU server** tab → enable **Force fail**, then re-fire GPU alerts  
+
+## What to check
+
+| Place | Success | Failure (`Force fail`) |
+| --- | --- | --- |
+| **Incident** | Status becomes **resolved** | Stays open |
+| **Incident → Workflows** | Keep workflow + Temporal start | Same |
+| **Incident → Overview** | `gpu_remediation=started` | Same |
+| **Mock → NVIDIA GPU server** | Remediations show **ok** | Remediations show **fail** |
+| **Mock → Failure emails** | Empty (or prior) | New email to `ops@ai-dc.local` |
+| **Temporal UI** http://localhost:8233 | Workflow `RemediateNvidiaGpu` completed | Completed with `ok=false` |
+
+## Workflow file
+
+[`examples/workflows/mock-nvidia-gpu-remediate.yml`](https://github.com/keephq/keep/blob/main/examples/workflows/mock-nvidia-gpu-remediate.yml)
+
+- Trigger: incident `created` / `updated`  
+- Guard: incident name contains `GPU` and enrichment `gpu_remediation` not set  
+- Action: Temporal `start_workflow` → `RemediateNvidiaGpu` / `keep-ops`  
+- Temporal activities call provider-mock `/gpu/server/remediate`, then Keep `/incidents/{id}/status` or `/gpu/emails`
+
+## Related
+
+- [Provider mock](/development/provider-mock)  
+- [Temporal worker](/overview/temporal-worker-list-and-zip)  
+- [Demo: Mock Grafana → Temporal ListAndZip](/overview/demo-mock-grafana-list-and-zip)  
