@@ -7,8 +7,17 @@ RUN apk add --no-cache libc6-compat
 WORKDIR /app
 
 # Install dependencies based on the preferred package manager
+# NPM_CI=0 (docker-compose.local.yml / make k8s-start) falls back to npm install
+# when package-lock.json is stale.
+ARG NPM_CI=1
 COPY package.json package-lock.json ./
-RUN npm ci  --noproxy registry.npmjs.org --maxsockets 1
+# Cache npm downloads across builds. Avoid --maxsockets 1 (serial, very slow).
+RUN --mount=type=cache,target=/root/.npm \
+    if [ "$NPM_CI" = "0" ]; then \
+      npm install --noproxy registry.npmjs.org; \
+    else \
+      npm ci --noproxy registry.npmjs.org; \
+    fi
 
 
 # Rebuild the source code only when needed
@@ -24,7 +33,8 @@ ENV NEXT_TELEMETRY_DISABLED 1
 
 # If using npm comment out above and use below instead
 ENV API_URL http://localhost:8080
-RUN NODE_OPTIONS=--max-old-space-size=8192  npm run build
+ARG NODE_MAX_OLD_SPACE_SIZE=8192
+RUN NODE_OPTIONS=--max-old-space-size=${NODE_MAX_OLD_SPACE_SIZE}  npm run build
 
 
 # Production image, copy all the files and run next

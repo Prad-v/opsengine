@@ -69,7 +69,7 @@ jobs:
 
       - name: Install dependencies
         working-directory: keep-ui
-        run: npm ci
+        run: npm install --no-audit --no-fund
 
       - name: Run workflow examples validation
         working-directory: keep-ui

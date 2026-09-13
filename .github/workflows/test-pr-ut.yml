@@ -6,10 +6,30 @@ on:
     paths:
       - "keep/**"
       - "tests/**"
+      - "docker/alpine-native-wheels.txt"
+      - "docker/**"
+      - "scripts/deploy_kind.sh"
+      - "scripts/k8s_ui.sh"
+      - "scripts/bump_helm_charts.sh"
+      - "scripts/package_ci_artifacts.sh"
+      - "helm/**"
+      - "backend/services/**"
+      - ".github/workflows/**"
+      - "poetry.lock"
   pull_request:
     paths:
       - "keep/**"
       - "tests/**"
+      - "docker/alpine-native-wheels.txt"
+      - "docker/**"
+      - "scripts/deploy_kind.sh"
+      - "scripts/k8s_ui.sh"
+      - "scripts/bump_helm_charts.sh"
+      - "scripts/package_ci_artifacts.sh"
+      - "helm/**"
+      - "backend/services/**"
+      - ".github/workflows/**"
+      - "poetry.lock"
   workflow_dispatch:
 
 permissions:

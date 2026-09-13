@@ -1,0 +1,31 @@
+# syntax=docker/dockerfile:1
+# Precompile Alpine (musl) wheels that PyPI does not publish.
+# Build once: make api-alpine-wheels
+# Output image: keep-api-alpine-wheels:py313  (contains /wheels/*.whl)
+FROM python:3.13.5-alpine
+
+RUN apk add --no-cache \
+    bash \
+    gcc \
+    g++ \
+    musl-dev \
+    libstdc++ \
+    linux-headers \
+    build-base \
+    openssl-dev \
+    cmake \
+    ninja
+
+WORKDIR /build
+COPY docker/alpine-native-wheels.txt /build/alpine-native-wheels.txt
+
+# Parallel gRPC compile; reuse BuildKit pip cache across rebuilds.
+ENV GRPC_PYTHON_BUILD_SYSTEM_OPENSSL=1 \
+    GRPC_PYTHON_BUILD_EXT_COMPILER_JOBS=2 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1
+
+RUN --mount=type=cache,target=/root/.cache/pip \
+    pip wheel -r /build/alpine-native-wheels.txt -w /wheels
+
+# Keep the image tiny-ish: only wheels + a listing.
+RUN ls -l /wheels

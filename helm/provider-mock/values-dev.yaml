@@ -1,0 +1,20 @@
+# Dev / kind overlay — local image, in-cluster Keep + Temporal.
+image:
+  tag: "0.1.0"
+  pullPolicy: IfNotPresent
+
+service:
+  type: NodePort
+  nodePort: 30099
+
+keep:
+  apiUrl: http://keep-backend:8080
+  apiKey: keepappkey
+
+publicBaseUrl: http://provider-mock:8099
+
+temporal:
+  address: temporal:7233
+  namespace: default
+  tls: "false"
+  uiUrl: http://localhost:8233

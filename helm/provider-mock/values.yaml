@@ -1,0 +1,34 @@
+replicaCount: 1
+
+image:
+  repository: keep-provider-mock
+  tag: "0.1.0"
+  pullPolicy: IfNotPresent
+
+service:
+  type: ClusterIP
+  port: 8099
+  nodePort: ""
+
+keep:
+  apiUrl: ""
+  apiKey: ""
+  apiKeySecretName: ""
+  apiKeySecretKey: KEEP_API_KEY
+
+publicBaseUrl: ""
+
+temporal:
+  address: temporal:7233
+  namespace: default
+  tls: "false"
+  uiUrl: ""
+
+serviceAccount:
+  create: true
+  name: ""
+
+resources: {}
+
+# Safe defaults — no credentials in values.
+env: {}

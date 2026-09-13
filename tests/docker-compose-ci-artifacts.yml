@@ -1,0 +1,28 @@
+# Package Helm charts and validate CI publish wiring (no host helm/pytest).
+services:
+  ci-artifacts-test:
+    image: alpine/helm:3.16.4
+    working_dir: /work
+    volumes:
+      - ..:/work:ro
+    entrypoint:
+      - /bin/sh
+      - -c
+      - |
+        set -eu
+        mkdir -p /tmp/charts
+        for chart in helm/temporal helm/temporal-worker helm/provider-mock helm/synthetic-checks; do
+          helm lint "$$chart"
+          helm package "$$chart" --destination /tmp/charts
+        done
+        helm repo index /tmp/charts
+        test -f /tmp/charts/index.yaml
+        packaged="$$(ls /tmp/charts/*.tgz | wc -l | tr -d ' ')"
+        test "$$packaged" = "4"
+        grep -q "actions/upload-artifact@v4" .github/workflows/publish-k8s-images.yml
+        grep -q "opsengine-docker-images-" .github/workflows/publish-k8s-images.yml
+        grep -q "opsengine-helm-charts-" .github/workflows/publish-k8s-images.yml
+        grep -q "package_ci_artifacts.sh" .github/workflows/publish-k8s-images.yml
+        grep -q "SAVE_IMAGES=1" .github/workflows/publish-k8s-images.yml
+        grep -q "docker save" scripts/package_ci_artifacts.sh
+        echo "ci artifacts ok"

@@ -10,9 +10,6 @@ on:
       python-version:
         required: true
         type: string
-      is-fork:
-        required: true
-        type: boolean
       backend-image-name:
         required: true
         type: string
@@ -26,7 +23,6 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
-      packages: write
     env:
       REDIS: ${{ inputs.redis_enabled }}
       REDIS_HOST: keep-redis
@@ -36,15 +32,25 @@ jobs:
       FRONTEND_IMAGE: ${{ inputs.frontend-image-name }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
-      - name: Login to GitHub Container Registry
-        if: ${{ inputs.is-fork != true }}
-        uses: docker/login-action@v2
+      - name: Download frontend image artifact
+        uses: actions/download-artifact@v4
         with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
+          name: e2e-keep-frontend
+          path: dist/e2e
+
+      - name: Download backend image artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: e2e-keep-backend
+          path: dist/e2e
+
+      - name: Load CI images
+        run: |
+          gunzip -c dist/e2e/keep-frontend.tar.gz | docker load
+          gunzip -c dist/e2e/keep-backend.tar.gz | docker load
+          docker image ls
 
       - name: Set up Python ${{ inputs.python-version }}
         uses: actions/setup-python@v4
@@ -87,42 +93,6 @@ jobs:
         run: |
           poetry run playwright install --with-deps
 
-      # For forks: Build images locally again since they don't persist between jobs
-      - name: Set up Docker Buildx
-        if: ${{ inputs.is-fork == true }}
-        id: buildx
-        uses: docker/setup-buildx-action@v2
-
-      - name: Rebuild frontend image locally for fork PRs
-        if: ${{ inputs.is-fork == true }}
-        uses: docker/build-push-action@v4
-        with:
-          context: keep-ui
-          file: ./docker/Dockerfile.ui
-          push: false
-          load: true
-          tags: |
-            keep-frontend:local
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-          build-args: |
-            BUILDKIT_INLINE_CACHE=1
-
-      - name: Rebuild backend image locally for fork PRs
-        if: ${{ inputs.is-fork == true }}
-        uses: docker/build-push-action@v4
-        with:
-          context: .
-          file: ./docker/Dockerfile.api
-          push: false
-          load: true
-          tags: |
-            keep-backend:local
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-          build-args: |
-            BUILDKIT_INLINE_CACHE=1
-
       # Create a modified compose file with our built images
       - name: Create modified docker-compose file with built images
         run: |
@@ -140,13 +110,7 @@ jobs:
         run: |
           echo "Starting ALL services for ${{ inputs.db-type }}..."
 
-          # Pull the required images first (only needed for non-fork builds)
-          if [[ "${{ inputs.is-fork }}" != "true" ]]; then
-            docker compose -p keep --project-directory . -f tests/e2e_tests/docker-compose-modified.yml pull
-          fi
-
-          # Start all services together
-          docker compose -p keep --project-directory . -f tests/e2e_tests/docker-compose-modified.yml up -d
+          docker compose -p keep --project-directory . -f tests/e2e_tests/docker-compose-modified.yml up -d --no-pull
 
           # Show running containers
           docker ps

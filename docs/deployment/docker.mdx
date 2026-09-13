@@ -22,10 +22,24 @@ make prod
 | --- | --- | --- |
 | Host apps + Docker deps (best for coding) | `make start` | One command: install if needed + Poetry/npm apps + Postgres/Redis/Soketi/Temporal |
 | Dev with hot reload (full Docker) | `make up` | `docker-compose.dev.yml` + Temporal |
-| Production Dockerfiles from this repo | `make local` | `docker-compose.local.yml` + Temporal |
+| Production Dockerfiles from this repo | `make local` | `docker-compose.local.yml` + Temporal. Builds Alpine grpcio wheels once (`make api-alpine-wheels`). |
 | Published registry images | `make prod` | `docker-compose.yml` |
 
 See [Development getting started](/development/getting-started) for ports, logs, and cleanup.
+
+### Precompile Alpine grpcio wheels
+
+Production `docker/Dockerfile.api` is Alpine. PyPI has no musl wheel for `grpcio`, so a cold `pip install` compiles it from source (often 20–40 minutes).
+
+Build the wheelhouse **once** per grpcio version (image `keep-api-alpine-wheels:py313`):
+
+```shell
+make api-alpine-wheels
+```
+
+`make local` / `make local-build` / `make k8s-start` run that target first. Later API image builds copy `/wheels/*.whl` and skip the compile. `make k8s-start-fresh` rebuilds the wheelhouse and the kind **backend/worker/mock** images with `--no-cache` (the UI stays on the host). Rebuild wheels only when `docker/alpine-native-wheels.txt` (must match `poetry.lock`) changes. Add other Alpine-only source packages to that file if a later `pip install` still compiles.
+
+On Apple Silicon the wheel is `musllinux` **aarch64**. CI (amd64) builds its own wheelhouse and uploads the API/UI/worker/mock images plus packaged Helm charts as [GitHub Actions artifacts](/deployment/ci-artifacts). The two wheelhouses are not interchangeable.
 
 ```bash start.sh
 #!/bin/bash

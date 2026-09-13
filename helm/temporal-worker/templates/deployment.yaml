@@ -15,6 +15,28 @@ spec:
         app.kubernetes.io/name: temporal-worker
     spec:
       serviceAccountName: {{ include "temporal-worker.serviceAccountName" . }}
+      initContainers:
+        - name: wait-temporal
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          env:
+            - name: TEMPORAL_ADDRESS
+              value: {{ .Values.temporal.address | quote }}
+          command:
+            - python
+            - -c
+            - |
+              import os, socket, time
+              hostport = os.environ.get("TEMPORAL_ADDRESS", "temporal:7233")
+              host, _, port = hostport.partition(":")
+              port = int(port or "7233")
+              for _ in range(60):
+                  try:
+                      socket.create_connection((host, port), 2).close()
+                      raise SystemExit(0)
+                  except OSError:
+                      time.sleep(2)
+              raise SystemExit("temporal not reachable")
       containers:
         - name: temporal-worker
           image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
@@ -28,6 +50,28 @@ spec:
               value: {{ .Values.temporal.taskQueue | quote }}
             - name: TEMPORAL_WORKER_ROOT
               value: {{ .Values.temporal.workerRoot | quote }}
+            {{- if .Values.keep.apiUrl }}
+            - name: KEEP_API_URL
+              value: {{ .Values.keep.apiUrl | quote }}
+            {{- end }}
+            {{- if .Values.keep.apiKeySecretName }}
+            - name: KEEP_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.keep.apiKeySecretName | quote }}
+                  key: {{ .Values.keep.apiKeySecretKey | quote }}
+            {{- else if .Values.keep.apiKey }}
+            - name: KEEP_API_KEY
+              value: {{ .Values.keep.apiKey | quote }}
+            {{- end }}
+            {{- if .Values.gpu.mockUrl }}
+            - name: GPU_MOCK_URL
+              value: {{ .Values.gpu.mockUrl | quote }}
+            {{- end }}
+            {{- if .Values.gpu.alertEmailTo }}
+            - name: GPU_ALERT_EMAIL_TO
+              value: {{ .Values.gpu.alertEmailTo | quote }}
+            {{- end }}
             {{- range $key, $value := .Values.env }}
             - name: {{ $key }}
               value: {{ $value | quote }}

@@ -1,0 +1,42 @@
+name: Helm Charts
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "helm/**"
+      - "tests/test_helm_charts.py"
+      - "tests/test_ci_artifacts.py"
+      - "tests/docker-compose-helm-charts.yml"
+      - "tests/docker-compose-ci-artifacts.yml"
+      - "scripts/package_ci_artifacts.sh"
+      - ".github/workflows/test-helm-charts.yml"
+      - ".github/workflows/publish-k8s-images.yml"
+  pull_request:
+    paths:
+      - "helm/**"
+      - "tests/test_helm_charts.py"
+      - "tests/test_ci_artifacts.py"
+      - "tests/docker-compose-helm-charts.yml"
+      - "tests/docker-compose-ci-artifacts.yml"
+      - "scripts/package_ci_artifacts.sh"
+      - ".github/workflows/test-helm-charts.yml"
+      - ".github/workflows/publish-k8s-images.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.event_name }}-${{ github.workflow }}-${{ github.head_ref }}
+  cancel-in-progress: true
+
+jobs:
+  helm-template:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Render Helm charts in Docker
+        run: docker compose -f tests/docker-compose-helm-charts.yml up --build --abort-on-container-exit --exit-code-from helm-test
+
+      - name: Package Helm charts and validate CI artifacts
+        run: docker compose -f tests/docker-compose-ci-artifacts.yml up --abort-on-container-exit --exit-code-from ci-artifacts-test

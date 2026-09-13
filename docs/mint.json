@@ -78,7 +78,8 @@
         "overview/temporal-workflow-catalog",
         "overview/temporal-worker-list-and-zip",
         "overview/synthetic-checks",
-        "overview/demo-mock-grafana-list-and-zip"
+        "overview/demo-mock-grafana-list-and-zip",
+        "overview/demo-mock-nvidia-gpu-remediate"
       ]
     },
     {
@@ -320,6 +321,8 @@
               "pages": [
                 "deployment/kubernetes/overview",
                 "deployment/kubernetes/installation",
+                "deployment/kubernetes/kind-local",
+                "deployment/ci-artifacts",
                 "deployment/kubernetes/architecture",
                 "deployment/kubernetes/openshift"
               ]

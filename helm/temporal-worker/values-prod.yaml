@@ -1,15 +1,24 @@
-# Prod overlay — set image repository/tag via CI.
+# Prod overlay (namespace: keep-prod). CI sets tag to the published artifact.
 image:
-  repository: your-registry/keep-temporal-worker
-  tag: "0.1.0"
+  repository: keep-temporal-worker
+  tag: "0.1.1"
   pullPolicy: IfNotPresent
 
 replicaCount: 2
 
 temporal:
-  address: temporal-frontend.temporal.svc.cluster.local:7233
+  address: temporal.keep-prod.svc.cluster.local:7233
   namespace: default
   taskQueue: keep-ops
+
+keep:
+  apiUrl: http://keep-backend.keep-prod.svc.cluster.local:8080
+  apiKeySecretName: keep-api-keys
+  apiKeySecretKey: KEEP_API_KEY
+
+gpu:
+  mockUrl: http://provider-mock.keep-prod.svc.cluster.local:8099
+  alertEmailTo: ops@ai-dc.local
 
 resources:
   requests:

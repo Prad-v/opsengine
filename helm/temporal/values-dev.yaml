@@ -1,0 +1,8 @@
+# Dev / kind overlay — single-node Temporal start-dev.
+image:
+  tag: "1.4.1"
+  pullPolicy: IfNotPresent
+
+service:
+  type: NodePort
+  uiNodePort: 30233

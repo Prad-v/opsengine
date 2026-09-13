@@ -1,0 +1,36 @@
+# kind cluster for a local Helm deploy of Keep + Temporal + provider-mock.
+# Host :80/:443 → ingress-nginx (prod namespace Keep UI).
+# Host :8080 → keep-backend NodePort 30080 (local-dev namespace).
+# Host :6001 → keep-websocket NodePort 30601 (local-dev namespace).
+# Host :8099 → provider-mock NodePort 30099 (local-dev namespace).
+# Host :8233 → Temporal UI NodePort 30233 (local-dev namespace).
+kind: Cluster
+apiVersion: kind.x-k8s.io/v1alpha4
+name: opsengine
+nodes:
+  - role: control-plane
+    kubeadmConfigPatches:
+      - |
+        kind: InitConfiguration
+        nodeRegistration:
+          kubeletExtraArgs:
+            node-labels: "ingress-ready=true"
+    extraPortMappings:
+      - containerPort: 80
+        hostPort: 80
+        protocol: TCP
+      - containerPort: 443
+        hostPort: 443
+        protocol: TCP
+      - containerPort: 30080
+        hostPort: 8080
+        protocol: TCP
+      - containerPort: 30601
+        hostPort: 6001
+        protocol: TCP
+      - containerPort: 30099
+        hostPort: 8099
+        protocol: TCP
+      - containerPort: 30233
+        hostPort: 8233
+        protocol: TCP

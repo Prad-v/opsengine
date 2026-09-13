@@ -1,6 +1,6 @@
 apiVersion: v2
 name: temporal-worker
-description: Keep Temporal worker for ListAndZipDirectory (keep-ops queue)
+description: Keep Temporal worker for ListAndZipDirectory and RemediateNvidiaGpu (keep-ops queue)
 type: application
-version: 0.1.0
-appVersion: "0.1.0"
+version: 0.1.1
+appVersion: "0.1.1"

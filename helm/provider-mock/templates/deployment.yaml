@@ -1,0 +1,73 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "provider-mock.fullname" . }}
+  labels:
+    app.kubernetes.io/name: provider-mock
+spec:
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: provider-mock
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: provider-mock
+    spec:
+      serviceAccountName: {{ include "provider-mock.serviceAccountName" . }}
+      containers:
+        - name: provider-mock
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          ports:
+            - name: http
+              containerPort: {{ .Values.service.port }}
+          env:
+            - name: PORT
+              value: {{ .Values.service.port | quote }}
+            {{- if .Values.keep.apiUrl }}
+            - name: KEEP_API_URL
+              value: {{ .Values.keep.apiUrl | quote }}
+            {{- end }}
+            {{- if .Values.keep.apiKeySecretName }}
+            - name: KEEP_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.keep.apiKeySecretName | quote }}
+                  key: {{ .Values.keep.apiKeySecretKey | quote }}
+            {{- else if .Values.keep.apiKey }}
+            - name: KEEP_API_KEY
+              value: {{ .Values.keep.apiKey | quote }}
+            {{- end }}
+            {{- if .Values.publicBaseUrl }}
+            - name: PUBLIC_BASE_URL
+              value: {{ .Values.publicBaseUrl | quote }}
+            {{- end }}
+            - name: TEMPORAL_ADDRESS
+              value: {{ .Values.temporal.address | quote }}
+            - name: TEMPORAL_NAMESPACE
+              value: {{ .Values.temporal.namespace | quote }}
+            - name: TEMPORAL_TLS
+              value: {{ .Values.temporal.tls | quote }}
+            {{- if .Values.temporal.uiUrl }}
+            - name: TEMPORAL_UI_URL
+              value: {{ .Values.temporal.uiUrl | quote }}
+            {{- end }}
+            {{- range $key, $value := .Values.env }}
+            - name: {{ $key }}
+              value: {{ $value | quote }}
+            {{- end }}
+          readinessProbe:
+            httpGet:
+              path: /api/health
+              port: http
+            initialDelaySeconds: 3
+            periodSeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /api/health
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 15
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}

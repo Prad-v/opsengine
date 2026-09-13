@@ -13,6 +13,8 @@ We maintain an opinionated, batteries-included Helm chart, but you can customize
 
 ## Next steps
 - Install Keep on [Kubernetes](/deployment/kubernetes/installation).
+- Local [kind cluster](/deployment/kubernetes/kind-local) — `make k8s-start` (namespace `keep`, local backend images + host UI) and `make k8s-prod` (namespace `keep-prod`, published Helm / CI artifact images).
+- [CI images and Helm charts](/deployment/ci-artifacts) — GitHub Actions builds images and charts and uploads them as artifacts.
 - Keep's [Helm Chart](https://github.com/keephq/helm-charts).
 - Keep with [Kubernetes Secret Manager](/deployment/secret-store#kubernetes-secret-manager)
 - Deep dive to Keep's kubernetes [Architecture](/deployment/kubernetes/architecture).

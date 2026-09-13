@@ -1,0 +1,17 @@
+# Prod overlay — point at a real Temporal cluster instead of start-dev.
+# This chart is for local kind only; production should use the official
+# Temporal Helm chart and set temporal-worker.temporal.address accordingly.
+image:
+  repository: temporalio/temporal
+  tag: "1.4.1"
+  pullPolicy: IfNotPresent
+
+replicaCount: 1
+
+resources:
+  requests:
+    cpu: 100m
+    memory: 256Mi
+  limits:
+    cpu: "1"
+    memory: 1Gi

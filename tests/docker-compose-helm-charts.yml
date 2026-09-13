@@ -1,0 +1,39 @@
+# Render local Helm charts inside Docker (no host helm binary).
+services:
+  helm-test:
+    image: alpine/helm:3.16.4
+    working_dir: /work
+    volumes:
+      - ..:/work:ro
+    entrypoint:
+      - /bin/sh
+      - -c
+      - |
+        set -eu
+        helm template temporal helm/temporal -f helm/temporal/values.yaml -f helm/temporal/values-dev.yaml >/tmp/temporal.yml
+        helm template temporal-worker helm/temporal-worker -f helm/temporal-worker/values.yaml -f helm/temporal-worker/values-dev.yaml >/tmp/worker.yml
+        helm template provider-mock helm/provider-mock -f helm/provider-mock/values.yaml -f helm/provider-mock/values-dev.yaml >/tmp/mock.yml
+        helm template synthetic-checks helm/synthetic-checks -f helm/synthetic-checks/values.yaml -f helm/synthetic-checks/values-dev.yaml >/tmp/synth.yml
+        helm template temporal-worker helm/temporal-worker -f helm/temporal-worker/values.yaml -f helm/temporal-worker/values-prod.yaml >/tmp/worker-prod.yml
+        helm template provider-mock helm/provider-mock -f helm/provider-mock/values.yaml -f helm/provider-mock/values-prod.yaml >/tmp/mock-prod.yml
+        grep -q "start-dev" /tmp/temporal.yml
+        grep -q "GPU_MOCK_URL" /tmp/worker.yml
+        grep -q "KEEP_API_URL" /tmp/mock.yml
+        grep -q "TEMPORAL_ADDRESS" /tmp/synth.yml
+        grep -q "keep-prod" /tmp/worker-prod.yml
+        grep -q "keep-prod" /tmp/mock-prod.yml
+        grep -q "repository: keep-backend" helm/keep-values-kind.yaml
+        grep -q "tag: local" helm/keep-values-kind.yaml
+        grep -q "enabled: false" helm/keep-values-kind.yaml
+        if grep -q "keep-frontend" helm/keep-values-kind.yaml; then
+          echo "keep-values-kind.yaml must not pin a frontend image" >&2
+          exit 1
+        fi
+        grep -q "keep-prod" helm/keep-values-prod.yaml
+        grep -q "frontend:" helm/keep-values-prod.yaml
+        grep -q "enabled: true" helm/keep-values-prod.yaml
+        if grep -q "tag: local" helm/keep-values-prod.yaml; then
+          echo "keep-values-prod.yaml must not use local tags" >&2
+          exit 1
+        fi
+        echo "helm charts rendered ok"

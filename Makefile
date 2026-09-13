@@ -1,7 +1,7 @@
 # Keep / OpsEngine local development helpers
 #
 # One command for day-to-day coding:
-#   make start       # install if needed + Docker deps + backend + frontend
+#   make start       # install if needed + Docker deps (incl. provider-mock) + backend + frontend
 #
 # Other modes:
 #   make up          # full stack in Docker with live-mounted source
@@ -31,6 +31,8 @@ COMPOSE_DEV := -f docker-compose.dev.yml $(COMPOSE_TEMPORAL)
 COMPOSE_LOCAL := -f docker-compose.local.yml $(COMPOSE_TEMPORAL)
 COMPOSE_PROD := -f docker-compose.yml
 COMPOSE_DEPS := -f docker-compose.deps.yml $(COMPOSE_TEMPORAL)
+COMPOSE_MOCK := -f backend/services/provider-mock/docker-compose.yml
+COMPOSE_WHEELS := -f docker-compose.alpine-wheels.yml
 
 # Host-process backend defaults (overridable: `make backend AUTH_TYPE=NO_AUTH`)
 export AUTH_TYPE ?= DB
@@ -68,8 +70,10 @@ export REDIS_DB ?= 0
 	backend frontend start run hybrid stop hybrid-stop \
 	mock-providers mock-providers-down mock-providers-test \
 	temporal-worker temporal-worker-down register-list-and-zip-catalog \
-	demo-list-and-zip \
+	register-nvidia-gpu-catalog demo-list-and-zip demo-nvidia-gpu \
 	synthetic-checks synthetic-checks-down register-probe-targets-catalog \
+	kind-up kind-down k8s-start k8s-start-fresh k8s-prod k8s-ui k8s-stop k8s-e2e \
+	api-alpine-wheels \
 	clean clean-images
 
 help: ## Show available targets
@@ -79,28 +83,43 @@ help: ## Show available targets
 	@echo "  make start             Install if needed + Docker deps + backend + frontend"
 	@echo "                         UI http://localhost:3000  API http://localhost:8080"
 	@echo "                         Temporal UI http://localhost:8233"
+	@echo "                         Provider mock http://localhost:8099 (Grafana/Mimir/VM + NVIDIA GPU)"
+	@echo "                         Auto-setup: NVIDIA GPU remediate workflow + Temporal catalog"
 	@echo "                         Workers: keep-ops + keep-synth (synthetic checks)"
 	@echo "                         Default auth: DB (admin/admin) — change password on first login"
-	@echo "  make stop              Stop host API/UI and Docker deps"
+	@echo "  make stop              Stop host API/UI and Docker deps (incl. provider-mock)"
 	@echo ""
 	@echo "Split terminals (optional):"
 	@echo "  make deps / make backend / make frontend"
 	@echo "                         deps = Postgres, Redis, Soketi, Temporal,"
-	@echo "                         temporal-worker (keep-ops), synthetic-checks (keep-synth)"
+	@echo "                         temporal-worker (keep-ops), synthetic-checks (keep-synth),"
+	@echo "                         provider-mock (http://localhost:8099)"
 	@echo ""
 	@echo "Full Docker:"
 	@echo "  make up                Dev images + mounted source"
 	@echo "  make local             Production Dockerfiles from this checkout"
+	@echo "  make api-alpine-wheels Precompile Alpine grpcio wheels (once per grpcio version)"
 	@echo "  make prod              Pull published keep-api / keep-ui images"
 	@echo ""
-	@echo "Provider mock (e2e webhooks):"
-	@echo "  make mock-providers      UI at http://localhost:8099"
+	@echo "Provider mock (also started by make start / make deps):"
+	@echo "  make mock-providers      Restart mock UI only (http://localhost:8099)"
 	@echo "  make mock-providers-test Run provider-mock tests in Docker"
 	@echo "  make temporal-worker     Build/start Temporal keep-ops worker"
 	@echo "  make register-list-and-zip-catalog  Register ListAndZipDirectory in catalog"
-	@echo "  make demo-list-and-zip    Install mock→Temporal e2e demo workflow"
+	@echo "  make register-nvidia-gpu-catalog    Register RemediateNvidiaGpu in catalog"
+	@echo "  make demo-list-and-zip    Install mock→Temporal ListAndZip e2e demo"
+	@echo "  make demo-nvidia-gpu     Re-run NVIDIA GPU remediate e2e setup (also done by make start)"
 	@echo "  make synthetic-checks    Build/start Temporal keep-synth worker"
 	@echo "  make register-probe-targets-catalog  Register ProbeTargets in catalog"
+	@echo ""
+	@echo "Kubernetes (kind + Helm, two namespaces):"
+	@echo "  make k8s-start         Local-dev ns 'keep': backend/worker/mock + host UI"
+	@echo "                         API http://localhost:8080  UI http://localhost:3000"
+	@echo "  make k8s-start-fresh   Same as k8s-start but --no-cache (recompile grpcio + backend)"
+	@echo "  make k8s-prod          Prod ns 'keep-prod': official/CI-artifact Helm images + in-cluster UI"
+	@echo "  make k8s-stop          Delete the opsengine kind cluster"
+	@echo "  make k8s-e2e           NVIDIA GPU remediations e2e against the kind deploy"
+	@echo "  make kind-up / kind-down   Aliases for k8s-start / k8s-stop"
 	@echo ""
 	@awk 'BEGIN {FS = ":.*## "}; /^[a-zA-Z0-9_-]+:.*?## / {printf "  %-18s %s\n", $$1, $$2}' $(MAKEFILE_LIST)
 
@@ -165,8 +184,9 @@ env-frontend: ## Ensure keep-ui/.env.local exists
 
 deps: deps-up ## Alias for deps-up
 
-deps-up: ## Start postgres, redis, soketi, Temporal, temporal-worker, and synthetic-checks in Docker
+deps-up: ## Start postgres, redis, soketi, Temporal, workers, and provider-mock in Docker
 	$(COMPOSE) $(COMPOSE_DEPS) up -d --build
+	$(COMPOSE) $(COMPOSE_MOCK) up --build -d
 	@$(MAKE) deps-wait
 	@echo ""
 	@echo "Dependencies ready:"
@@ -174,24 +194,27 @@ deps-up: ## Start postgres, redis, soketi, Temporal, temporal-worker, and synthe
 	@echo "  Redis             localhost:6379"
 	@echo "  Soketi            localhost:6001"
 	@echo "  Temporal          localhost:7233  (UI http://localhost:8233, namespace=default)"
-	@echo "  temporal-worker   keep-ops queue (ListAndZipDirectory)"
+	@echo "  temporal-worker   keep-ops queue (ListAndZipDirectory, RemediateNvidiaGpu)"
 	@echo "  synthetic-checks  keep-synth queue (ProbeTarget / ProbeTargetGroup / ProbeTargets)"
+	@echo "  Provider mock     http://localhost:8099  (Grafana/Mimir/VM + NVIDIA GPU alerts)"
 
 deps-wait: ## Wait until dependency healthchecks pass
 	@echo "Waiting for dependency healthchecks..."
 	@for i in $$(seq 1 90); do \
 		if $(COMPOSE) $(COMPOSE_DEPS) exec -T keep-database pg_isready -U keepuser -d keepdb >/dev/null 2>&1 \
 			&& $(COMPOSE) $(COMPOSE_DEPS) exec -T keep-redis redis-cli ping >/dev/null 2>&1 \
-			&& $(COMPOSE) $(COMPOSE_DEPS) exec -T temporal temporal operator cluster health --address 127.0.0.1:7233 >/dev/null 2>&1; then \
+			&& $(COMPOSE) $(COMPOSE_DEPS) exec -T temporal temporal operator cluster health --address 127.0.0.1:7233 >/dev/null 2>&1 \
+			&& curl -sf http://127.0.0.1:8099/api/health >/dev/null 2>&1; then \
 			echo "Dependencies are healthy."; \
 			exit 0; \
 		fi; \
 		sleep 1; \
 	done; \
-	echo "Timed out waiting for dependencies. Check: make deps-logs"; \
+	echo "Timed out waiting for dependencies. Check: make deps-logs / make mock-providers"; \
 	exit 1
 
-deps-down: ## Stop Docker dependencies
+deps-down: ## Stop Docker dependencies (incl. provider-mock)
+	-$(COMPOSE) $(COMPOSE_MOCK) down
 	$(COMPOSE) $(COMPOSE_DEPS) down
 
 deps-logs: ## Follow dependency container logs
@@ -199,7 +222,7 @@ deps-logs: ## Follow dependency container logs
 
 deps-ps: ## Show dependency container status
 	$(COMPOSE) $(COMPOSE_DEPS) ps
-
+	@$(COMPOSE) $(COMPOSE_MOCK) ps
 ensure-install: ## Install backend/frontend only if missing
 	@need_backend=0; need_frontend=0; \
 	if [ ! -x "$(KEEP_BIN)" ]; then need_backend=1; fi; \
@@ -222,26 +245,25 @@ frontend: env-frontend ## Run Keep UI on the host (npm)
 	@test -d $(UI_DIR)/node_modules || { echo "Run 'make install-frontend' first"; exit 1; }
 	cd $(UI_DIR) && npm run dev
 
-start: ensure-state ensure-install deps-up ## One command: install (if needed) + deps + backend + frontend
+start: ensure-state ensure-install deps-up ## One command: install + deps + backend/frontend + GPU demo setup
 	@chmod +x scripts/run-hybrid-local.sh
 	./scripts/run-hybrid-local.sh
 
 run: start ## Alias for start
 hybrid: start ## Alias for start
 
-stop: ## Stop host API/UI and Docker dependencies
+stop: ## Stop host API/UI and Docker dependencies (incl. provider-mock)
 	@pkill -f "$(KEEP_BIN) api" 2>/dev/null || true
 	@pkill -f "poetry run keep api" 2>/dev/null || true
 	@pkill -f "keep api" 2>/dev/null || true
 	@pkill -f "next dev" 2>/dev/null || true
+	-$(COMPOSE) $(COMPOSE_MOCK) down
 	-$(COMPOSE) $(COMPOSE_DEPS) down
-	@echo "Stopped backend, frontend, and Docker deps."
+	@echo "Stopped backend, frontend, Docker deps, and provider-mock."
 
 hybrid-stop: stop ## Alias for stop
 
-COMPOSE_MOCK := -f backend/services/provider-mock/docker-compose.yml
-
-mock-providers: ## Start Grafana/Mimir/VictoriaMetrics provider mock UI (http://localhost:8099)
+mock-providers: ## Restart provider-mock UI only (also started by make start / make deps)
 	$(COMPOSE) $(COMPOSE_MOCK) up --build -d
 	@echo ""
 	@echo "Provider mock UI: http://localhost:8099"
@@ -266,9 +288,17 @@ register-list-and-zip-catalog: ## Register ListAndZipDirectory in Keep Temporal 
 	@chmod +x scripts/register_temporal_list_and_zip_catalog.py
 	$(VENV_PYTHON) scripts/register_temporal_list_and_zip_catalog.py
 
+register-nvidia-gpu-catalog: ## Register RemediateNvidiaGpu in Keep Temporal catalog
+	@chmod +x scripts/register_temporal_nvidia_gpu_catalog.py
+	$(VENV_PYTHON) scripts/register_temporal_nvidia_gpu_catalog.py
+
 demo-list-and-zip: ## Install mock Grafana → Temporal ListAndZip e2e demo workflow
 	@chmod +x scripts/demo_mock_list_and_zip.sh
 	./scripts/demo_mock_list_and_zip.sh
+
+demo-nvidia-gpu: ## Re-run NVIDIA GPU remediate e2e setup (also auto-run by make start)
+	@chmod +x scripts/demo_mock_nvidia_gpu.sh
+	./scripts/demo_mock_nvidia_gpu.sh
 
 synthetic-checks: ## Build and start the Temporal keep-synth synthetic-checks worker
 	$(COMPOSE) $(COMPOSE_TEMPORAL) up -d --build synthetic-checks
@@ -317,13 +347,16 @@ down: ## Stop and remove the dev stack
 # Local: production Dockerfiles built from this checkout (no registry pull)
 # ---------------------------------------------------------------------------
 
-local: ensure-state ## Build prod Dockerfiles from source and run (foreground)
+local: ensure-state api-alpine-wheels ## Build prod Dockerfiles from source and run (foreground)
 	$(COMPOSE) $(COMPOSE_LOCAL) up --build
 
-local-d: ensure-state ## Build prod Dockerfiles from source and run (detached)
+local-d: ensure-state api-alpine-wheels ## Build prod Dockerfiles from source and run (detached)
 	$(COMPOSE) $(COMPOSE_LOCAL) up --build -d
 
-local-build: ensure-state ## Build local production images only
+api-alpine-wheels: ## Precompile Alpine musl wheels (grpcio) into keep-api-alpine-wheels:py313 (once per version; ~20–40 min first time)
+	$(COMPOSE) $(COMPOSE_WHEELS) build alpine-wheels
+
+local-build: ensure-state api-alpine-wheels ## Build local production images only
 	$(COMPOSE) $(COMPOSE_LOCAL) build
 
 local-down: ## Stop the local-build stack
@@ -343,6 +376,37 @@ prod-down: ## Stop the published-image stack
 	$(COMPOSE) $(COMPOSE_PROD) down
 
 # ---------------------------------------------------------------------------
+# Kubernetes (kind + Helm)
+# ---------------------------------------------------------------------------
+
+k8s-start: ## Local-dev namespace (keep): local backend/worker/mock, then host UI
+	@chmod +x scripts/deploy_kind.sh scripts/k8s_ui.sh
+	MODE=dev K8S_UI=1 ./scripts/deploy_kind.sh
+
+k8s-start-fresh: ## Same as k8s-start but --no-cache (recompile grpcio + backend/worker/mock)
+	@chmod +x scripts/deploy_kind.sh scripts/k8s_ui.sh
+	MODE=dev K8S_UI=1 K8S_FRESH=1 ./scripts/deploy_kind.sh
+
+k8s-prod: ## Prod namespace (keep-prod): published Helm / CI artifact images + in-cluster UI
+	@chmod +x scripts/deploy_kind.sh
+	MODE=prod ./scripts/deploy_kind.sh
+
+k8s-ui: ## Restart host UI only (already started by make k8s-start)
+	@chmod +x scripts/k8s_ui.sh
+	./scripts/k8s_ui.sh
+
+k8s-stop: ## Delete the opsengine kind cluster
+	-kind delete cluster --name opsengine
+
+k8s-e2e: ## Run NVIDIA GPU remediations e2e against the kind deploy
+	@chmod +x scripts/e2e_k8s_nvidia_gpu.sh
+	./scripts/e2e_k8s_nvidia_gpu.sh
+
+kind-up: k8s-start ## Alias for k8s-start
+
+kind-down: k8s-stop ## Alias for k8s-stop
+
+# ---------------------------------------------------------------------------
 # Cleanup
 # ---------------------------------------------------------------------------
 
@@ -352,7 +416,8 @@ clean: ## Stop all compose modes and remove orphan containers
 	-$(COMPOSE) $(COMPOSE_PROD) down --remove-orphans
 	-$(COMPOSE) $(COMPOSE_DEPS) down --remove-orphans
 	-$(COMPOSE) $(COMPOSE_TEMPORAL) down --remove-orphans
-	-$(COMPOSE) -f backend/services/provider-mock/docker-compose.yml --profile test down --remove-orphans
+	-$(COMPOSE) $(COMPOSE_MOCK) --profile test down --remove-orphans
+	-$(COMPOSE) $(COMPOSE_MOCK) down --remove-orphans
 
 clean-images: clean ## Also remove locally built Keep images
 	-docker rmi keep-frontend-dev:local keep-backend-dev:local keep-frontend:local keep-backend:local 2>/dev/null || true

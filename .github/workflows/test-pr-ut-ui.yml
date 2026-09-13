@@ -37,7 +37,7 @@ jobs:
 
       - name: Install dependencies
         working-directory: keep-ui
-        run: npm ci
+        run: npm install --no-audit --no-fund
 
       - name: Run frontend tests
         working-directory: keep-ui

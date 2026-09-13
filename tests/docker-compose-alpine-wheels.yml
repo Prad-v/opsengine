@@ -1,0 +1,16 @@
+# Pin check for docker/alpine-native-wheels.txt vs poetry.lock (no host pytest).
+services:
+  alpine-wheels-test:
+    image: python:3.13.5-alpine
+    working_dir: /work
+    volumes:
+      - ..:/work:ro
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        set -eu
+        pip install --no-cache-dir pytest
+        pytest -q --noconftest -o cache_dir=/tmp/pytest-cache \
+          tests/test_alpine_grpcio_wheels.py \
+          tests/test_k8s_start.py \
+          tests/test_ci_artifacts.py

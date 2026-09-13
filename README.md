@@ -909,12 +909,17 @@ workflow:
 Keep can run in various environments and configurations. From this repo, the Makefile covers local hybrid and full Docker modes:
 
 ```shell
-make start    # one command: install if needed + Docker deps + API + UI
-make stop     # stop API, UI, and Docker deps
+make start    # install + Docker deps (provider-mock :8099) + API/UI + NVIDIA GPU demo setup
+make stop     # stop API, UI, Docker deps, and provider-mock
 # make up     # full stack in Docker with mounted source
-# make local  # production Dockerfiles built from this checkout
+# make local  # production Dockerfiles (precompiles Alpine grpcio once)
+# make api-alpine-wheels  # rebuild keep-api-alpine-wheels:py313 only
 # make prod   # pull published images instead
-make mock-providers  # mock Grafana / Mimir / VictoriaMetrics UI for e2e webhooks
+make k8s-start        # kind ns keep: local API/worker/mock + host UI :3000
+make k8s-prod         # kind ns keep-prod: published Helm / CI artifact images
+make k8s-start-fresh  # no-cache rebuild of backend/worker/mock + host UI
+make k8s-stop         # delete the kind cluster
+make demo-nvidia-gpu  # re-run GPU remediate demo setup (already included in make start)
 make help     # list all targets
 ```
 
@@ -922,6 +927,8 @@ make help     # list all targets
 - Provider mock for e2e alert ingestion: [Provider mock](docs/development/provider-mock.mdx).
 - Material UI migration (Incidents & Feed): [Material UI](docs/development/material-ui.mdx).
 - Running Keep on [Kubernetes](https://docs.keephq.dev/deployment/kubernetes/installation).
+- Local kind cluster (two namespaces): `make k8s-start` for local images + host UI, `make k8s-prod` for published Helm / CI artifact images ([kind-local](docs/deployment/kubernetes/kind-local.mdx)).
+- CI Docker images and Helm charts: [CI artifacts](docs/deployment/ci-artifacts.mdx).
 - Running Keep with [Docker](https://docs.keephq.dev/deployment/docker).
 - Running Keep on [AWS ECS](https://docs.keephq.dev/deployment/ecs).
 - Running Keep on [OpenShift](https://docs.keephq.dev/deployment/kubernetes/openshift).

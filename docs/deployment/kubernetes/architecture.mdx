@@ -14,6 +14,8 @@ Keep architecture composes of two main components:
 
 ## Kubernetes Architecture
 
+On a local kind cluster this repo uses two namespaces: `keep` (local backend images + host UI) and `keep-prod` (published Helm / CI artifact images + in-cluster UI). See [Local kind](/deployment/kubernetes/kind-local).
+
 Keep uses a single unified NGINX ingress controller to route traffic to all components (frontend, backend, and websocket). The ingress handles path-based routing:
 
 By default:

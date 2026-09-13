@@ -1,0 +1,5 @@
+# Packages with no musl/Alpine wheel on PyPI — compile once into
+# keep-api-alpine-wheels:py313 (make api-alpine-wheels).
+# Pin must match poetry.lock.
+grpcio==1.68.1
+google-crc32c==1.6.0

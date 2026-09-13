@@ -1,0 +1,51 @@
+name: Alpine grpcio wheels
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "docker/alpine-native-wheels.txt"
+      - "docker/Dockerfile.api.alpine-wheels"
+      - "docker/Dockerfile.api"
+      - "poetry.lock"
+      - "tests/test_alpine_grpcio_wheels.py"
+      - "tests/test_k8s_start.py"
+      - "tests/test_k8s_namespaces.py"
+      - "tests/test_ci_artifacts.py"
+      - "tests/docker-compose-alpine-wheels.yml"
+      - "scripts/deploy_kind.sh"
+      - "scripts/package_ci_artifacts.sh"
+      - "Makefile"
+      - ".github/workflows/test-alpine-wheels.yml"
+      - ".github/workflows/publish-k8s-images.yml"
+  pull_request:
+    paths:
+      - "docker/alpine-native-wheels.txt"
+      - "docker/Dockerfile.api.alpine-wheels"
+      - "docker/Dockerfile.api"
+      - "poetry.lock"
+      - "tests/test_alpine_grpcio_wheels.py"
+      - "tests/test_k8s_start.py"
+      - "tests/test_k8s_namespaces.py"
+      - "tests/test_ci_artifacts.py"
+      - "tests/docker-compose-alpine-wheels.yml"
+      - "scripts/deploy_kind.sh"
+      - "scripts/package_ci_artifacts.sh"
+      - "Makefile"
+      - ".github/workflows/test-alpine-wheels.yml"
+      - ".github/workflows/publish-k8s-images.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.event_name }}-${{ github.workflow }}-${{ github.head_ref }}
+  cancel-in-progress: true
+
+jobs:
+  pin-check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Alpine wheel pins match poetry.lock
+        run: docker compose -f tests/docker-compose-alpine-wheels.yml up --abort-on-container-exit --exit-code-from alpine-wheels-test

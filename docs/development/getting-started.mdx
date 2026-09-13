@@ -5,7 +5,7 @@ sidebarTitle: "Getting started"
 
 ### Hybrid local development (recommended for coding)
 
-Run the **API and UI on your machine** (Poetry venv + Node), and run **Postgres, Redis, Soketi, and Temporal in Docker**.
+Run the **API and UI on your machine** (Poetry venv + Node), and run **Postgres, Redis, Soketi, Temporal, and the provider-mock in Docker**.
 
 Clone the repo:
 ```
@@ -28,7 +28,7 @@ make stop
 
 `make start` will:
 1. Install local deps if missing (`poetry` + `npm`)
-2. Start `docker-compose.deps.yml` + `docker-compose.temporal.yml` (Postgres `:5432`, Redis `:6379`, Soketi `:6001`, Temporal `:7233` / UI `:8233`)
+2. Start `docker-compose.deps.yml` + `docker-compose.temporal.yml` (Postgres `:5432`, Redis `:6379`, Soketi `:6001`, Temporal `:7233` / UI `:8233`) and the **provider-mock** UI (`:8099`)
 3. Run `poetry run keep api` on `:8080`
 4. Run `npm run dev` in `keep-ui` on `:3000`
 
@@ -42,6 +42,7 @@ make stop
 | Redis | Docker | `localhost:6379` |
 | Soketi | Docker | `localhost:6001` |
 | Temporal | Docker | gRPC `localhost:7233`, UI http://localhost:8233 (`default` namespace) |
+| Provider mock | Docker | http://localhost:8099 (Grafana/Mimir/VM + NVIDIA GPU alerts) |
 
 Useful split terminals (optional; `make start` already covers this):
 
@@ -54,13 +55,15 @@ make stop        # stop API, UI, and Docker deps
 
 ### Provider mock (Grafana / Mimir / VictoriaMetrics)
 
-With Keep running, start the mock alert-source UI to register providers and fire webhook events for e2e validation:
+`make start` (and `make deps`) starts the provider-mock UI automatically at [http://localhost:8099](http://localhost:8099). Use it to register mock Grafana / Mimir / VictoriaMetrics providers and fire webhook events (including the **NVIDIA GPU / AI datacenter** pack). Full guide: [Provider mock](/development/provider-mock).
+
+To restart only the mock:
 
 ```
 make mock-providers
 ```
 
-Open [http://localhost:8099](http://localhost:8099). Full guide: [Provider mock](/development/provider-mock).
+Grafana includes a **payments** correlation demo and an **NVIDIA GPU / AI datacenter** pack (DCGM-style H100 alerts). `make start` auto-wires the remediation loop (Temporal → mock GPU server → resolve or email). See [GPU remediate demo](/overview/demo-mock-nvidia-gpu-remediate). Re-run with `make demo-nvidia-gpu` if needed.
 
 > Do not run `make start` and `make up` at the same time — both claim port `8080`. The Providers page may then show a different Keep API than the one the mock registered into.
 
@@ -124,7 +127,19 @@ If you want production Dockerfiles (`docker/Dockerfile.api`, `docker/Dockerfile.
 make local
 ```
 
-See also [Docker deployment](/deployment/docker) for pulling published images with `make prod`.
+The first run compiles Alpine `grpcio` into `keep-api-alpine-wheels:py313` (`make api-alpine-wheels`). Later API rebuilds reuse those musl wheels. See [Docker deployment](/deployment/docker#precompile-alpine-grpcio-wheels). Published images: `make prod`.
+
+### Kubernetes on a local kind cluster
+
+Two namespaces on one kind cluster:
+
+```
+make k8s-start          # namespace keep: local API/worker/mock, then host UI :3000
+make k8s-prod           # namespace keep-prod: published Helm / CI artifact images + in-cluster UI
+make k8s-start-fresh    # no-cache rebuild of backend/worker/mock, then host UI
+```
+
+`make k8s-start` uses the production API Dockerfile (Alpine + precompiled grpcio wheels) and the Temporal worker / provider-mock images, then `kind load` + Helm, then starts the host UI (`npm run dev`). The Keep UI is not built as a Docker image. Stop Compose first (`make stop`) so ports `8080`, `6001`, `8099`, `8233`, and `3000` are free. Tear down with `make k8s-stop`. Full steps: [Local kind cluster](/deployment/kubernetes/kind-local). Prefer `make start` when you do not need Kubernetes.
 
 ### Install Keep CLI
 

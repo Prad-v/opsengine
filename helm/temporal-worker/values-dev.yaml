@@ -1,8 +1,17 @@
-# Dev overlay — points at local/dev Temporal.
+# Dev / kind overlay — in-cluster Temporal, Keep, and provider-mock.
 image:
-  tag: "0.1.0"
+  tag: "0.1.1"
+  pullPolicy: IfNotPresent
 
 temporal:
   address: temporal:7233
   namespace: default
   taskQueue: keep-ops
+
+keep:
+  apiUrl: http://keep-backend:8080
+  apiKey: keepappkey
+
+gpu:
+  mockUrl: http://provider-mock:8099
+  alertEmailTo: ops@ai-dc.local

@@ -1,0 +1,21 @@
+replicaCount: 1
+
+image:
+  repository: temporalio/temporal
+  tag: "1.4.1"
+  pullPolicy: IfNotPresent
+
+service:
+  type: ClusterIP
+  grpcPort: 7233
+  uiPort: 8233
+  # Set when exposing the UI through kind extraPortMappings.
+  uiNodePort: ""
+
+serviceAccount:
+  create: true
+  name: ""
+
+resources: {}
+
+env: {}

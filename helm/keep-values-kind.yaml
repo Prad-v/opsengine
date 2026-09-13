@@ -1,0 +1,62 @@
+# Local-dev overlay for kind (namespace: keep).
+# API / websocket / MySQL come from this checkout's keep-backend:local image.
+# Keep UI is NOT deployed in-cluster — run it on the host: make k8s-ui
+
+global:
+  ingress:
+    enabled: false
+    className: nginx
+
+backend:
+  enabled: true
+  image:
+    repository: keep-backend
+    tag: local
+    pullPolicy: Never
+  service:
+    type: NodePort
+    port: 8080
+  env:
+    - name: DATABASE_CONNECTION_STRING
+      value: mysql+pymysql://root@keep-database:3306/keep
+    - name: DATABASE_NAME
+      value: keep-database
+    - name: SECRET_MANAGER_TYPE
+      value: k8s
+    - name: PORT
+      value: "8080"
+    - name: PUSHER_APP_ID
+      value: "1"
+    - name: PUSHER_APP_KEY
+      value: keepappkey
+    - name: PUSHER_APP_SECRET
+      value: keepappsecret
+    - name: PUSHER_HOST
+      value: keep-websocket
+    - name: PUSHER_PORT
+      value: "6001"
+    - name: PROMETHEUS_MULTIPROC_DIR
+      value: /tmp/prometheus
+    - name: AUTH_TYPE
+      value: NOAUTH
+    - name: KEEP_DEFAULT_API_KEYS
+      value: mock-admin:admin:keepappkey
+
+# Host `npm run dev` (make k8s-ui) talks to the NodePort-mapped API.
+frontend:
+  enabled: false
+
+websocket:
+  image:
+    pullPolicy: IfNotPresent
+  service:
+    type: NodePort
+    port: 6001
+
+database:
+  pv:
+    enabled: true
+    size: 5Gi
+  pvc:
+    enabled: true
+    size: 5Gi

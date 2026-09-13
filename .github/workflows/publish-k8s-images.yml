@@ -1,0 +1,179 @@
+name: Publish images and Helm charts
+
+# Build production images, package Helm charts, and upload both as GitHub
+# Actions artifacts. On main, also bump chart versions and prod image tags.
+on:
+  push:
+    branches:
+      - main
+      - develop
+  workflow_dispatch:
+
+concurrency:
+  group: publish-k8s-images-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+  actions: read
+
+jobs:
+  publish:
+    if: github.event_name == 'workflow_dispatch' || !contains(github.event.head_commit.message, '[skip ci]')
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    outputs:
+      image_tag: ${{ steps.meta.outputs.image_tag }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Image metadata
+        id: meta
+        run: |
+          SHORT_SHA="$(echo '${{ github.sha }}' | cut -c1-7)"
+          echo "image_tag=sha-${SHORT_SHA}" >> "$GITHUB_OUTPUT"
+          echo "short_sha=${SHORT_SHA}" >> "$GITHUB_OUTPUT"
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Precompile Alpine grpcio wheels
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./docker/Dockerfile.api.alpine-wheels
+          push: false
+          load: true
+          tags: keep-api-alpine-wheels:py313
+          cache-from: type=gha,scope=alpine-native-wheels
+          cache-to: type=gha,scope=alpine-native-wheels,mode=max
+
+      - name: Build Keep API
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: docker/Dockerfile.api
+          push: false
+          load: true
+          tags: |
+            keep-backend:${{ steps.meta.outputs.image_tag }}
+            keep-backend:latest
+          build-args: |
+            ALPINE_WHEELS_IMAGE=alpine-wheels
+          build-contexts: |
+            alpine-wheels=docker-image://keep-api-alpine-wheels:py313
+          cache-from: type=gha,scope=keep-backend
+          cache-to: type=gha,mode=max,scope=keep-backend
+
+      - name: Build Keep UI
+        uses: docker/build-push-action@v6
+        with:
+          context: ./keep-ui
+          file: docker/Dockerfile.ui
+          push: false
+          load: true
+          tags: |
+            keep-frontend:${{ steps.meta.outputs.image_tag }}
+            keep-frontend:latest
+          build-args: |
+            NODE_MAX_OLD_SPACE_SIZE=4096
+            NPM_CI=0
+          cache-from: type=gha,scope=keep-frontend
+          cache-to: type=gha,mode=max,scope=keep-frontend
+
+      - name: Build temporal-worker
+        uses: docker/build-push-action@v6
+        with:
+          context: ./backend/services/temporal-worker
+          file: backend/services/temporal-worker/Dockerfile
+          push: false
+          load: true
+          tags: |
+            keep-temporal-worker:${{ steps.meta.outputs.image_tag }}
+            keep-temporal-worker:latest
+          cache-from: type=gha,scope=keep-temporal-worker
+          cache-to: type=gha,mode=max,scope=keep-temporal-worker
+
+      - name: Build provider-mock
+        uses: docker/build-push-action@v6
+        with:
+          context: ./backend/services/provider-mock
+          file: backend/services/provider-mock/Dockerfile
+          push: false
+          load: true
+          tags: |
+            keep-provider-mock:${{ steps.meta.outputs.image_tag }}
+            keep-provider-mock:latest
+          cache-from: type=gha,scope=keep-provider-mock
+          cache-to: type=gha,mode=max,scope=keep-provider-mock
+
+      - name: Bump Helm chart versions and prod image tags
+        run: |
+          chmod +x scripts/bump_helm_charts.sh
+          IMAGE_REGISTRY="" \
+          IMAGE_TAG="${{ steps.meta.outputs.image_tag }}" \
+            ./scripts/bump_helm_charts.sh
+
+      - name: Package Helm charts and save images
+        run: |
+          chmod +x scripts/package_ci_artifacts.sh
+          IMAGE_TAG="${{ steps.meta.outputs.image_tag }}" \
+          SAVE_IMAGES=1 \
+          GITHUB_SHA="${{ github.sha }}" \
+            ./scripts/package_ci_artifacts.sh
+
+      - name: Upload Docker image artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: opsengine-docker-images-${{ steps.meta.outputs.image_tag }}
+          path: dist/ci-artifacts/images/
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Upload Helm chart artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: opsengine-helm-charts-${{ steps.meta.outputs.image_tag }}
+          path: |
+            dist/ci-artifacts/charts/
+            dist/ci-artifacts/manifest.txt
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Write job summary
+        run: |
+          {
+            echo "## CI artifacts"
+            echo ""
+            echo "- Image tag: \`${{ steps.meta.outputs.image_tag }}\`"
+            echo "- Docker images: artifact \`opsengine-docker-images-${{ steps.meta.outputs.image_tag }}\`"
+            echo "- Helm charts: artifact \`opsengine-helm-charts-${{ steps.meta.outputs.image_tag }}\`"
+            echo ""
+            echo "Download from this run, then:"
+            echo "\`\`\`bash"
+            echo "gunzip -c keep-backend__${{ steps.meta.outputs.image_tag }}.tar.gz | docker load"
+            echo "helm upgrade --install temporal-worker ./temporal-worker-*.tgz"
+            echo "\`\`\`"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Commit Helm version bump
+        if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add helm/temporal-worker/Chart.yaml helm/provider-mock/Chart.yaml helm/temporal/Chart.yaml \
+            helm/synthetic-checks/Chart.yaml \
+            helm/temporal-worker/values-prod.yaml helm/provider-mock/values-prod.yaml \
+            helm/keep-values-prod.yaml
+          if git diff --cached --quiet; then
+            echo "No Helm changes to commit"
+            exit 0
+          fi
+          git commit -m "$(cat <<'EOF'
+          chore(helm): bump charts and prod image tags [skip ci]
+
+          Published Docker/Helm artifacts from CI; prod values now point at those tags.
+          EOF
+          )"
+          git push

@@ -1,0 +1,98 @@
+---
+title: "CI images and Helm charts"
+sidebarTitle: "CI artifacts"
+description: "GitHub Actions builds Docker images and Helm charts, then uploads them as downloadable artifacts."
+---
+
+Every push to `main` or `develop` (and manual **workflow_dispatch**) runs [Publish images and Helm charts](https://github.com/Prad-v/opsengine/actions/workflows/publish-k8s-images.yml). That workflow:
+
+1. Precompiles Alpine `grpcio` wheels
+2. Builds `keep-backend`, `keep-frontend`, `keep-temporal-worker`, and `keep-provider-mock`
+3. Bumps Helm chart patch versions and prod image tags
+4. Packages the charts with `helm package`
+5. Saves the images as gzipped tarballs
+6. Uploads both as **GitHub Actions artifacts**
+
+A second **CI** workflow always runs the Dockerized Helm, Alpine-wheel, and provider-mock tests.
+
+## Artifact names
+
+| Artifact | Contents |
+| --- | --- |
+| `opsengine-docker-images-sha-<commit>` | `keep-backend`, `keep-frontend`, `keep-temporal-worker`, `keep-provider-mock` tarballs |
+| `opsengine-helm-charts-sha-<commit>` | `.tgz` charts, `index.yaml`, and `manifest.txt` |
+
+Image tag format is `sha-<7-char commit>`. Retention is 14 days for images and 30 days for charts.
+
+## Download and load
+
+From the successful run page, download the artifacts, or use the GitHub CLI:
+
+```bash
+gh run download <run-id> --name opsengine-docker-images-sha-<commit>
+gh run download <run-id> --name opsengine-helm-charts-sha-<commit>
+
+gunzip -c keep-backend__sha-<commit>.tar.gz | docker load
+gunzip -c keep-frontend__sha-<commit>.tar.gz | docker load
+gunzip -c keep-temporal-worker__sha-<commit>.tar.gz | docker load
+gunzip -c keep-provider-mock__sha-<commit>.tar.gz | docker load
+```
+
+Then install a chart:
+
+```bash
+helm upgrade --install temporal-worker ./temporal-worker-*.tgz \
+  -n keep-prod --create-namespace \
+  -f helm/temporal-worker/values.yaml \
+  -f helm/temporal-worker/values-prod.yaml
+```
+
+For a local kind cluster, load the images into the node after `docker load`:
+
+```bash
+kind load docker-image keep-backend:sha-<commit> --name opsengine
+make k8s-prod
+```
+
+## What CI tests on every commit
+
+All of these run inside Docker Compose (no host Poetry/Helm):
+
+| Workflow | What it checks |
+| --- | --- |
+| **CI** | Helm render, Helm package, Alpine wheel pins, provider-mock |
+| **Helm Charts** | Same Helm render + package when `helm/` changes |
+| **Alpine grpcio wheels** | Pin file matches `poetry.lock` |
+| **Provider Mock Tests** | Mock Grafana / GPU server |
+| **Unit Tests** | Keep API pytest (path-filtered) |
+| **Tests (E2E)** | Playwright against backend/frontend images passed as artifacts |
+
+E2E no longer pushes to GHCR. Build jobs upload `e2e-keep-frontend` and `e2e-keep-backend`; the test jobs `docker load` those tarballs.
+
+## Helm version bumps
+
+On a successful publish to `main` or `develop`, CI commits a patch bump of:
+
+- `helm/temporal/Chart.yaml`
+- `helm/temporal-worker/Chart.yaml`
+- `helm/provider-mock/Chart.yaml`
+- `helm/synthetic-checks/Chart.yaml`
+- prod `repository` / `tag` in `values-prod.yaml` and `helm/keep-values-prod.yaml`
+
+The commit message includes `[skip ci]` so the bump does not rebuild images.
+
+## Local equivalent
+
+```bash
+# Package charts only (used by CI tests)
+docker compose -f tests/docker-compose-ci-artifacts.yml up --abort-on-container-exit --exit-code-from ci-artifacts-test
+
+# After images exist locally:
+IMAGE_TAG=sha-local SAVE_IMAGES=1 ./scripts/package_ci_artifacts.sh
+```
+
+## Related
+
+- [Local kind cluster](/deployment/kubernetes/kind-local)
+- [Docker](/deployment/docker)
+- [Getting started](/development/getting-started)

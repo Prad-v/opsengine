@@ -2,7 +2,7 @@ replicaCount: 1
 
 image:
   repository: keep-temporal-worker
-  tag: "0.1.0"
+  tag: "0.1.1"
   pullPolicy: IfNotPresent
 
 temporal:
@@ -10,6 +10,16 @@ temporal:
   namespace: default
   taskQueue: keep-ops
   workerRoot: /data
+
+keep:
+  apiUrl: ""
+  apiKey: ""
+  apiKeySecretName: ""
+  apiKeySecretKey: KEEP_API_KEY
+
+gpu:
+  mockUrl: ""
+  alertEmailTo: "ops@ai-dc.local"
 
 serviceAccount:
   create: true

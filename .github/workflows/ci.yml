@@ -1,0 +1,42 @@
+name: CI
+
+# Always-on Dockerized suite. Every commit runs helm, wheels, mock, and artifact checks.
+# Heavy Keep unit / e2e / docs jobs stay in their own workflows.
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  helm-charts:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Render and package Helm charts
+        run: |
+          docker compose -f tests/docker-compose-helm-charts.yml up --abort-on-container-exit --exit-code-from helm-test
+          docker compose -f tests/docker-compose-ci-artifacts.yml up --abort-on-container-exit --exit-code-from ci-artifacts-test
+
+  alpine-wheels:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Alpine wheel pins match poetry.lock
+        run: docker compose -f tests/docker-compose-alpine-wheels.yml up --abort-on-container-exit --exit-code-from alpine-wheels-test
+
+  provider-mock:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Provider-mock tests in Docker
+        run: make mock-providers-test

@@ -1,3 +1,9 @@
+# syntax=docker/dockerfile:1
+# Precompiled musl wheels (grpcio, …). Build once: make api-alpine-wheels
+# CI overrides ALPINE_WHEELS_IMAGE + build-contexts so buildx can see the image.
+ARG ALPINE_WHEELS_IMAGE=keep-api-alpine-wheels:py313
+FROM ${ALPINE_WHEELS_IMAGE} AS alpine-wheels
+
 FROM python:3.13.5-alpine as base
 
 # Install bash and runtime dependencies for grpc
@@ -36,14 +42,19 @@ RUN apk add --no-cache \
 
 ENV PIP_DEFAULT_TIMEOUT=100 \
     PIP_DISABLE_PIP_VERSION_CHECK=1 \
-    PIP_NO_CACHE_DIR=1 \
     POETRY_VERSION=1.3.2
 
 RUN pip install "poetry==$POETRY_VERSION"
 RUN python -m venv /venv
 COPY pyproject.toml poetry.lock ./
-RUN poetry export -f requirements.txt --output requirements.txt --without-hashes --only main && \
-    /venv/bin/python -m pip install --upgrade -r requirements.txt && \
+COPY --from=alpine-wheels /wheels /wheels
+# Install precompiled musl wheels first so pip does not compile grpcio.
+RUN --mount=type=cache,target=/root/.cache/pip \
+    poetry export -f requirements.txt --output requirements.txt --without-hashes --only main && \
+    /venv/bin/python -m pip install --no-index --find-links=/wheels \
+      --only-binary=:all: grpcio google-crc32c && \
+    /venv/bin/python -m pip install --find-links=/wheels --prefer-binary \
+      --upgrade -r requirements.txt && \
     pip uninstall -y poetry
 COPY keep keep
 COPY ee keep/ee

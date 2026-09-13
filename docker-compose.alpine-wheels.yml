@@ -1,0 +1,10 @@
+# One-time Alpine musl wheelhouse (grpcio, google-crc32c).
+#   make api-alpine-wheels
+services:
+  alpine-wheels:
+    image: keep-api-alpine-wheels:py313
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.api.alpine-wheels
+    # Image is the artifact; no long-running process.
+    command: ["true"]

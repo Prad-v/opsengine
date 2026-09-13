@@ -14,7 +14,7 @@ otel:
   serviceName: synthetic-checks
 
 keep:
-  apiUrl: http://keep-backend:8080
+  apiUrl: http://keep-backend.keep-prod.svc.cluster.local:8080
   apiKeySecretName: keep-api-secrets
   apiKeySecretKey: KEEP_API_KEY
 

@@ -1,0 +1,28 @@
+# Prod overlay (namespace: keep-prod). CI sets tag to the published artifact.
+# Demo service — ClusterIP only; do not expose publicly.
+image:
+  repository: keep-provider-mock
+  tag: "0.1.0"
+  pullPolicy: IfNotPresent
+
+replicaCount: 1
+
+keep:
+  apiUrl: http://keep-backend.keep-prod.svc.cluster.local:8080
+  apiKeySecretName: keep-api-keys
+  apiKeySecretKey: KEEP_API_KEY
+
+publicBaseUrl: http://provider-mock.keep-prod.svc.cluster.local:8099
+
+temporal:
+  address: temporal.keep-prod.svc.cluster.local:7233
+  namespace: default
+  tls: "false"
+
+resources:
+  requests:
+    cpu: 50m
+    memory: 128Mi
+  limits:
+    cpu: 500m
+    memory: 512Mi

@@ -1,0 +1,20 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "temporal.fullname" . }}
+  labels:
+    app.kubernetes.io/name: temporal
+spec:
+  type: {{ .Values.service.type }}
+  selector:
+    app.kubernetes.io/name: temporal
+  ports:
+    - name: grpc
+      port: {{ .Values.service.grpcPort }}
+      targetPort: grpc
+    - name: ui
+      port: {{ .Values.service.uiPort }}
+      targetPort: ui
+      {{- if and (eq .Values.service.type "NodePort") .Values.service.uiNodePort }}
+      nodePort: {{ .Values.service.uiNodePort }}
+      {{- end }}

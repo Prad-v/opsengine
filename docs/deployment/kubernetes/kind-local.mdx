@@ -1,0 +1,160 @@
+---
+title: "Local kind cluster"
+sidebarTitle: "Local kind"
+description: "Two namespaces on kind: local-dev (host UI + local backend images) and prod (published Helm / CI artifact images)."
+---
+
+Use this path when you want the current repo (including provider-mock NVIDIA GPU remediations) on Kubernetes instead of Docker Compose.
+
+`make k8s-start` builds **backend** images from this checkout (Alpine grpcio wheelhouse, Keep API, Temporal worker, provider-mock), loads them into kind, Helm-installs the **local-dev** namespace, then starts the Keep UI on the host (`npm run dev`). The UI is **not** built as a Docker image.
+
+CI on `main` / `develop` builds the production UI/API/worker/mock images, packages Helm charts, and uploads both as [GitHub Actions artifacts](/deployment/ci-artifacts). `make k8s-prod` installs those published images into the **prod** namespace after you `docker load` / `kind load` the artifacts.
+
+## Namespaces
+
+| Namespace | Command | Images | UI |
+| --- | --- | --- | --- |
+| `keep` | `make k8s-start` | Local (`keep-backend:local`, worker/mock tags) | Host Next.js (http://localhost:3000) |
+| `keep-prod` | `make k8s-prod` | Published Helm / CI artifacts (`keep-values-prod.yaml`) | In-cluster Keep UI (http://localhost) |
+
+Both namespaces are created by `make k8s-start`. Only `keep` is fully deployed until you run `make k8s-prod`.
+
+Ingress-nginx is installed into `ingress-nginx`. Prod uses it for the in-cluster UI. Local-dev exposes the API on host **8080** and Soketi on **6001**.
+
+## What gets installed (local-dev `keep`)
+
+| Workload | How | URL |
+| --- | --- | --- |
+| Keep API | Official `keephq/keep` chart + **local** `keep-backend:local` | http://localhost:8080 |
+| Keep UI | Host `npm run dev` (started by `make k8s-start`) | http://localhost:3000 |
+| Keep websocket / MySQL | Chart images (`soketi`, `mysql`) | websocket `localhost:6001` |
+| Temporal `start-dev` | `helm/temporal` | UI http://localhost:8233 |
+| Temporal worker (`ListAndZipDirectory`, `RemediateNvidiaGpu`) | `helm/temporal-worker` (local image) | in-cluster queue `keep-ops` |
+| Provider mock (Grafana / Mimir / VM + GPU server) | `helm/provider-mock` (local image) | http://localhost:8099 |
+
+## What gets installed (prod `keep-prod`)
+
+Same Helm charts, with `helm/keep-values-prod.yaml` and each chart's `values-prod.yaml`. Images come from GitHub Container Registry after CI, or from the official Keep Artifact Registry until the first publish.
+
+## Prerequisites
+
+- Docker Desktop (or another Docker engine)
+- [kind](https://kind.sigs.k8s.io/)
+- Helm 3
+- kubectl
+- Node.js 20+ (host UI)
+
+Free host ports **8080**, **6001**, **8099**, and **8233** for local-dev (stop `make start` / Compose first). Prod also uses **80** for ingress.
+
+## One-command local-dev deploy
+
+```bash
+make k8s-start
+```
+
+That deploys the cluster, then leaves `npm run dev` in the foreground. Open http://localhost:3000. Ctrl+C stops the UI only; the kind cluster stays up.
+
+Rebuild backend/worker/mock with no cache:
+
+```bash
+make k8s-start-fresh
+```
+
+Equivalent: `make kind-up` or `MODE=dev ./scripts/deploy_kind.sh` (`K8S_FRESH=1` for a no-cache rebuild). Skip the host UI with `K8S_UI=0 make k8s-start`.
+
+That script:
+
+1. Builds Alpine musl wheels (`keep-api-alpine-wheels:py313`) — grpcio compile once, then cached
+2. Builds **Keep API only** with `docker compose -f docker-compose.local.yml` (`docker/Dockerfile.api`) → `keep-backend:local`
+3. Builds `temporal-worker` and `provider-mock` with Docker Compose
+4. Creates kind cluster `opsengine` from `helm/kind-opsengine.yaml` (or reuses it)
+5. Creates namespaces `keep` and `keep-prod`
+6. Loads the local backend/worker/mock images into the kind node (`kind load docker-image`)
+7. Helm-installs ingress-nginx, Keep (frontend **disabled**), Temporal, the worker, and provider-mock into `keep`
+8. Pins Keep API / websocket NodePorts (`30080` / `30601`) and restarts those deployments
+9. Starts the host UI (`npm run dev` on http://localhost:3000)
+
+Stop `make start` / Compose first so host ports **8080**, **6001**, **8099**, and **8233** are free.
+
+If you already had a kind cluster from before these port mappings existed, recreate it once: `make k8s-stop && make k8s-start`. The script falls back to `kubectl port-forward` if `:8080` is not reachable.
+
+## Prod namespace (published images)
+
+```bash
+make k8s-prod
+```
+
+Helm-installs the official `keephq/keep` chart plus this repo's Temporal charts into `keep-prod` using `values-prod.yaml`. No local image build. After CI has published to GHCR, those tags are used; until then the Keep API/UI images are the official Artifact Registry tags.
+
+On `main` / `develop`, [Publish images and Helm charts](https://github.com/Prad-v/opsengine/actions/workflows/publish-k8s-images.yml) builds API + UI + worker + mock, uploads `keep-*:sha-<commit>` image tarballs and packaged charts as artifacts, and bumps Helm chart versions / `keep-values-prod.yaml` tags.
+
+## Faster iteration
+
+| Do | Why |
+| --- | --- |
+| `make k8s-start` | Backend on kind, then host UI hot-reloads. No Next production image. |
+| `make start` | Host API **and** UI — fastest for feature work, no cluster. |
+| `make k8s-start-fresh` | `--no-cache` rebuild of wheels + API/worker/mock. |
+| `make k8s-prod` | Verify the published Helm path (CI images / official Keep images). |
+| `make api-alpine-wheels` alone | Only the wheelhouse. `k8s-start` already runs this. |
+| Give Docker Desktop 8GB+ RAM | Local-dev no longer needs 16GB for a Next production image. |
+
+After wheels exist, an incremental API rebuild is `pip install` of the musl wheels (seconds), not another grpcio compile.
+
+## Tear down
+
+```bash
+make k8s-stop
+```
+
+Deletes the `opsengine` kind cluster (both namespaces).
+
+## Environment variables (local-dev, in-cluster)
+
+| Service | Variable | Kind value |
+| --- | --- | --- |
+| provider-mock | `KEEP_API_URL` | `http://keep-backend:8080` |
+| provider-mock | `PUBLIC_BASE_URL` | `http://provider-mock:8099` |
+| provider-mock | `TEMPORAL_ADDRESS` | `temporal:7233` |
+| temporal-worker | `TEMPORAL_ADDRESS` | `temporal:7233` |
+| temporal-worker | `GPU_MOCK_URL` | `http://provider-mock:8099` |
+| temporal-worker | `KEEP_API_URL` | `http://keep-backend:8080` |
+| host UI | `API_URL` | `http://localhost:8080` |
+
+Dev overlays live in each chart's `values-dev.yaml` and `helm/keep-values-kind.yaml`. Production overlays (`values-prod.yaml`, `helm/keep-values-prod.yaml`) keep credentials out of default values and expect an existing secret for API keys.
+
+## GPU remediations demo
+
+After pods are Ready and the host UI is up:
+
+1. Open http://localhost:8099 → **Grafana** → **Register**
+2. **Temporal** → **Register Temporal**
+3. Grafana → **GPU: rule + temp/mem**
+4. Confirm on the incident in Keep (http://localhost:3000) and in Temporal UI (`RemediateNvidiaGpu`)
+
+Or run the scripted e2e (no Compose workers):
+
+```bash
+make k8s-e2e
+```
+
+See [GPU remediate demo](/overview/demo-mock-nvidia-gpu-remediate).
+
+## Troubleshooting
+
+| Symptom | What to check |
+| --- | --- |
+| `kind get clusters` is empty but Docker Desktop still lists old contexts | Stale kubeconfig. `kubectl config delete-context kind-<name>` (and matching cluster/user). |
+| Host UI cannot reach the API | `curl http://localhost:8080/healthcheck` and `kubectl -n keep get svc keep-backend`. Recreate the cluster if NodePort 30080 was added after the cluster existed. |
+| Keep UI not on http://localhost after `make k8s-prod` | `kubectl -n ingress-nginx get pods` and `kubectl -n keep-prod get ingress` |
+| Provider mock / Temporal UI unreachable | kind extraPortMappings require NodePorts `30099` and `30233` |
+| Worker cannot remediate GPU | `kubectl -n keep logs deploy/temporal-worker` — `GPU_MOCK_URL` must be `http://provider-mock:8099` |
+| Image pull / `ErrImageNeverPull` for `keep-backend:local` | Re-run `make k8s-start` so Compose build + `kind load` run again |
+| API changes not showing after a rebuild | The tag stays `local`; the script `rollout restart`s those deployments after `kind load` |
+| `keep-prod` ImagePullBackOff for worker/mock | Download the CI image artifacts, `docker load`, then `kind load docker-image` |
+
+## Related
+
+- [Kubernetes installation](/deployment/kubernetes/installation)
+- [Provider mock](/development/provider-mock)
+- [GPU remediate demo](/overview/demo-mock-nvidia-gpu-remediate)
