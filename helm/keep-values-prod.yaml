@@ -12,7 +12,7 @@ backend:
   enabled: true
   image:
     repository: keep-backend
-    tag: "sha-5b75ebb"
+    tag: "sha-89a585d"
     pullPolicy: IfNotPresent
   env:
     - name: DATABASE_CONNECTION_STRING
@@ -44,7 +44,7 @@ frontend:
   enabled: true
   image:
     repository: keep-frontend
-    tag: "sha-5b75ebb"
+    tag: "sha-89a585d"
     pullPolicy: IfNotPresent
   env:
     - name: NEXTAUTH_SECRET
