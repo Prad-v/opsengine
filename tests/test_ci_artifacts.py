@@ -30,9 +30,10 @@ def test_publish_workflow_uploads_github_artifacts():
 
 def test_package_script_covers_charts_and_images():
     text = PACKAGE.read_text()
-    # alpine/helm's ENTRYPOINT is helm, so the script calls `package`, not `helm package`.
+    # alpine/helm ENTRYPOINT is helm, so invoke package/lint as the image command.
     assert 'package "$chart"' in text
     assert 'lint "$chart"' in text
+    assert "alpine/helm:" in text
     assert "helm/temporal" in text
     assert "helm/temporal-worker" in text
     assert "helm/provider-mock" in text
