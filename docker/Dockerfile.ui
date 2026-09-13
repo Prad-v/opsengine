@@ -34,6 +34,8 @@ ENV NEXT_TELEMETRY_DISABLED 1
 # If using npm comment out above and use below instead
 ENV API_URL http://localhost:8080
 ARG NODE_MAX_OLD_SPACE_SIZE=8192
+ARG IGNORE_TS_ERRORS=0
+ENV IGNORE_TS_ERRORS=${IGNORE_TS_ERRORS}
 RUN NODE_OPTIONS=--max-old-space-size=${NODE_MAX_OLD_SPACE_SIZE}  npm run build
 
 

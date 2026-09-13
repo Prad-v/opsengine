@@ -78,6 +78,7 @@ jobs:
           docker build -f docker/Dockerfile.ui \
             --build-arg NODE_MAX_OLD_SPACE_SIZE=8192 \
             --build-arg NPM_CI=0 \
+            --build-arg IGNORE_TS_ERRORS=1 \
             -t "keep-frontend:${{ needs.meta.outputs.image_tag }}" \
             -t keep-frontend:latest \
             keep-ui

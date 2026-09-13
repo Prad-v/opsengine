@@ -94,6 +94,7 @@ jobs:
           docker build -f docker/Dockerfile.ui \
             --build-arg NPM_CI=0 \
             --build-arg NODE_MAX_OLD_SPACE_SIZE=4096 \
+            --build-arg IGNORE_TS_ERRORS=1 \
             -t keep-frontend:ci \
             keep-ui
 

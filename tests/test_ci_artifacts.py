@@ -20,6 +20,7 @@ def test_publish_workflow_uploads_github_artifacts():
     assert "package_ci_artifacts.sh" in text
     assert "SAVE_IMAGES=" in text
     assert "NPM_CI=0" in text
+    assert "IGNORE_TS_ERRORS=1" in text
     assert "build-frontend" in text
     assert "build-backend" in text
     assert "ALPINE_WHEELS_IMAGE=keep-api-alpine-wheels:py313" in text

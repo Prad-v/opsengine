@@ -8,6 +8,7 @@ import ReactSelect, {
   SingleValueProps,
   StylesConfig,
 } from "react-select";
+import CreatableSelect from "react-select/creatable";
 import Image from "next/image";
 
 type OptionType = { value: string; label: string; logoUrl?: string };
@@ -53,11 +54,20 @@ const customComponents = {
   SingleValue: CustomSingleValue as any,
 };
 
+type CreatableSelectProps<
+  Option,
+  IsMulti extends boolean,
+  Group extends GroupBase<Option>,
+> = SelectProps<Option, IsMulti, Group> & {
+  isCreatable?: boolean;
+  onCreateOption?: (inputValue: string) => void;
+};
+
 export function Select<
   Option = OptionType,
   IsMulti extends boolean = false,
   Group extends GroupBase<Option> = GroupBase<Option>,
->(props: SelectProps<Option, IsMulti, Group>) {
+>(props: CreatableSelectProps<Option, IsMulti, Group>) {
   const customSelectStyles: StylesConfig<Option, IsMulti, Group> = {
     control: (provided, state) => ({
       ...provided,
@@ -121,11 +131,23 @@ export function Select<
     }),
   };
 
+  const { isCreatable, ...rest } = props;
+
+  if (isCreatable) {
+    return (
+      <CreatableSelect
+        components={customComponents}
+        styles={customSelectStyles}
+        {...rest}
+      />
+    );
+  }
+
   return (
     <ReactSelect
       components={customComponents}
       styles={customSelectStyles}
-      {...props}
+      {...rest}
     />
   );
 }
