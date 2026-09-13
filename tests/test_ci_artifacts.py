@@ -30,7 +30,7 @@ def test_publish_workflow_uploads_github_artifacts():
 
 def test_package_script_covers_charts_and_images():
     text = PACKAGE.read_text()
-    assert "helm package" in text
+    assert 'package "$chart"' in text
     assert "helm/temporal" in text
     assert "helm/temporal-worker" in text
     assert "helm/provider-mock" in text
