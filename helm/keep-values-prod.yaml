@@ -11,8 +11,8 @@ global:
 backend:
   enabled: true
   image:
-    repository: us-central1-docker.pkg.dev/keephq/keep/keep-api
-    tag: latest
+    repository: keep-backend
+    tag: "sha-5b75ebb"
     pullPolicy: IfNotPresent
   env:
     - name: DATABASE_CONNECTION_STRING
@@ -43,8 +43,8 @@ backend:
 frontend:
   enabled: true
   image:
-    repository: us-central1-docker.pkg.dev/keephq/keep/keep-ui
-    tag: latest
+    repository: keep-frontend
+    tag: "sha-5b75ebb"
     pullPolicy: IfNotPresent
   env:
     - name: NEXTAUTH_SECRET
