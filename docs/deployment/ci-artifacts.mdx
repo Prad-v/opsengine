@@ -6,12 +6,13 @@ description: "GitHub Actions builds Docker images and Helm charts, then uploads 
 
 Every push to `main` or `develop` (and manual **workflow_dispatch**) runs [Publish images and Helm charts](https://github.com/Prad-v/opsengine/actions/workflows/publish-k8s-images.yml). That workflow:
 
-1. Precompiles Alpine `grpcio` wheels and builds `keep-backend` (one job)
-2. Builds `keep-frontend` (with `IGNORE_TS_ERRORS=1` so leftover Next.js types do not block the image), `keep-temporal-worker`, and `keep-provider-mock` in parallel
-3. Bumps Helm chart patch versions and prod image tags after all images succeed
-4. Packages the charts with `helm package`
-5. Saves the images as gzipped tarballs
-6. Uploads both as **GitHub Actions artifacts**
+1. Starts the four image builds immediately (no metadata job). Each job tags images as `sha-<7-char commit>` from `GITHUB_SHA`
+2. Precompiles Alpine `grpcio` wheels and builds `keep-backend`
+3. Builds `keep-frontend` (with `IGNORE_TS_ERRORS=1` so leftover Next.js types do not block the image), `keep-temporal-worker`, and `keep-provider-mock` in parallel
+4. Bumps Helm chart patch versions and prod image tags after all images succeed
+5. Packages the charts with Helm (`alpine/helm` entrypoint is `helm`, so CI calls `package` / `lint`)
+6. Saves the images as gzipped tarballs
+7. Uploads both as **GitHub Actions artifacts**
 
 A second **CI** workflow always runs the Dockerized Helm, Alpine-wheel, and provider-mock tests.
 

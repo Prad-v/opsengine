@@ -26,6 +26,9 @@ def test_publish_workflow_uploads_github_artifacts():
     assert "ALPINE_WHEELS_IMAGE=keep-api-alpine-wheels:py313" in text
     assert "docker build -f docker/Dockerfile.api" in text
     assert "docker build -f docker/Dockerfile.ui" in text
+    assert "IMAGE_TAG=sha-${GITHUB_SHA:0:7}" in text
+    assert "needs: meta" not in text
+    assert "needs.meta" not in text
 
 
 def test_package_script_covers_charts_and_images():
