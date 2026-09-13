@@ -27,19 +27,16 @@ IMAGES=(
 mkdir -p "$OUT/charts" "$OUT/images"
 
 echo "Packaging Helm charts → $OUT/charts"
-docker run --rm \
-  -v "$ROOT:/work:ro" \
-  -v "$OUT/charts:/out" \
-  -w /work \
-  "$HELM_IMAGE" \
-  sh -c '
-    set -eu
-    for chart in '"${CHARTS[*]}"'; do
-      helm lint "$chart"
-      helm package "$chart" --destination /out
-    done
-    helm repo index /out
-  '
+# alpine/helm's entrypoint is helm, so invoke helm subcommands directly.
+for chart in "${CHARTS[@]}"; do
+  docker run --rm -v "$ROOT:/work:ro" -w /work "$HELM_IMAGE" lint "$chart"
+  docker run --rm \
+    -v "$ROOT:/work:ro" \
+    -v "$OUT/charts:/out" \
+    -w /work \
+    "$HELM_IMAGE" package "$chart" --destination /out
+done
+docker run --rm -v "$OUT/charts:/out" -w /out "$HELM_IMAGE" repo index /out
 
 if [ "${SAVE_IMAGES:-0}" = "1" ]; then
   echo "Saving Docker images → $OUT/images"
