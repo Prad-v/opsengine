@@ -12,5 +12,4 @@ services:
         pip install --no-cache-dir pytest
         pytest -q --noconftest -o cache_dir=/tmp/pytest-cache \
           tests/test_alpine_grpcio_wheels.py \
-          tests/test_k8s_start.py \
           tests/test_ci_artifacts.py

@@ -29,7 +29,7 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-      - name: Alpine wheel pins match poetry.lock
+      - name: Alpine wheel pins and CI artifact wiring
         run: docker compose -f tests/docker-compose-alpine-wheels.yml up --abort-on-container-exit --exit-code-from alpine-wheels-test
 
   provider-mock:
