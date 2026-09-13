@@ -58,9 +58,14 @@ export const EnrichmentEditableField = ({
       ? stringedValue.split(",").map((s) => s.trim())
       : stringedValue.toString().trim();
 
-    if (Array.isArray(newValue) && xor(value, newValue).length === 0) {
-      return;
-    } else if (value == newValue) {
+    if (Array.isArray(newValue)) {
+      const previous = Array.isArray(value)
+        ? value.map(formatEnrichmentItem)
+        : [];
+      if (xor(previous, newValue).length === 0) {
+        return;
+      }
+    } else if (toDisplayString(value) === newValue) {
       return;
     }
 

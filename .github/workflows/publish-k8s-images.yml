@@ -1,7 +1,7 @@
 name: Publish images and Helm charts
 
-# Build production images, package Helm charts, and upload both as GitHub
-# Actions artifacts. On main, also bump chart versions and prod image tags.
+# Build production images in parallel, package Helm charts, and upload both
+# as GitHub Actions artifacts. On main/develop, also bump chart versions.
 on:
   push:
     branches:
@@ -18,80 +18,181 @@ permissions:
   actions: read
 
 jobs:
-  publish:
+  meta:
     if: github.event_name == 'workflow_dispatch' || !contains(github.event.head_commit.message, '[skip ci]')
     runs-on: ubuntu-latest
-    timeout-minutes: 120
     outputs:
       image_tag: ${{ steps.meta.outputs.image_tag }}
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
       - name: Image metadata
         id: meta
         run: |
           SHORT_SHA="$(echo '${{ github.sha }}' | cut -c1-7)"
           echo "image_tag=sha-${SHORT_SHA}" >> "$GITHUB_OUTPUT"
-          echo "short_sha=${SHORT_SHA}" >> "$GITHUB_OUTPUT"
 
+  build-backend:
+    needs: meta
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
         with:
           driver: docker
-
       - name: Precompile Alpine grpcio wheels
         run: docker build -f docker/Dockerfile.api.alpine-wheels -t keep-api-alpine-wheels:py313 .
-
       - name: Build Keep API
         run: |
           docker build -f docker/Dockerfile.api \
             --build-arg ALPINE_WHEELS_IMAGE=keep-api-alpine-wheels:py313 \
-            -t "keep-backend:${{ steps.meta.outputs.image_tag }}" \
+            -t "keep-backend:${{ needs.meta.outputs.image_tag }}" \
             -t keep-backend:latest .
+      - name: Save backend image
+        run: |
+          mkdir -p dist/ci-artifacts/images
+          docker save "keep-backend:${{ needs.meta.outputs.image_tag }}" \
+            | gzip -1 > "dist/ci-artifacts/images/keep-backend__${{ needs.meta.outputs.image_tag }}.tar.gz"
+      - name: Upload backend image
+        uses: actions/upload-artifact@v4
+        with:
+          name: opsengine-image-keep-backend-${{ needs.meta.outputs.image_tag }}
+          path: dist/ci-artifacts/images/
+          if-no-files-found: error
+          retention-days: 14
 
+  build-frontend:
+    needs: meta
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+        with:
+          driver: docker
       - name: Build Keep UI
         run: |
           docker build -f docker/Dockerfile.ui \
-            --build-arg NODE_MAX_OLD_SPACE_SIZE=4096 \
+            --build-arg NODE_MAX_OLD_SPACE_SIZE=8192 \
             --build-arg NPM_CI=0 \
-            -t "keep-frontend:${{ steps.meta.outputs.image_tag }}" \
+            -t "keep-frontend:${{ needs.meta.outputs.image_tag }}" \
             -t keep-frontend:latest \
             keep-ui
+      - name: Save frontend image
+        run: |
+          mkdir -p dist/ci-artifacts/images
+          docker save "keep-frontend:${{ needs.meta.outputs.image_tag }}" \
+            | gzip -1 > "dist/ci-artifacts/images/keep-frontend__${{ needs.meta.outputs.image_tag }}.tar.gz"
+      - name: Upload frontend image
+        uses: actions/upload-artifact@v4
+        with:
+          name: opsengine-image-keep-frontend-${{ needs.meta.outputs.image_tag }}
+          path: dist/ci-artifacts/images/
+          if-no-files-found: error
+          retention-days: 14
 
+  build-temporal-worker:
+    needs: meta
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+        with:
+          driver: docker
       - name: Build temporal-worker
         run: |
           docker build -f backend/services/temporal-worker/Dockerfile \
-            -t "keep-temporal-worker:${{ steps.meta.outputs.image_tag }}" \
+            -t "keep-temporal-worker:${{ needs.meta.outputs.image_tag }}" \
             -t keep-temporal-worker:latest \
             backend/services/temporal-worker
+      - name: Save worker image
+        run: |
+          mkdir -p dist/ci-artifacts/images
+          docker save "keep-temporal-worker:${{ needs.meta.outputs.image_tag }}" \
+            | gzip -1 > "dist/ci-artifacts/images/keep-temporal-worker__${{ needs.meta.outputs.image_tag }}.tar.gz"
+      - name: Upload worker image
+        uses: actions/upload-artifact@v4
+        with:
+          name: opsengine-image-keep-temporal-worker-${{ needs.meta.outputs.image_tag }}
+          path: dist/ci-artifacts/images/
+          if-no-files-found: error
+          retention-days: 14
 
+  build-provider-mock:
+    needs: meta
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+        with:
+          driver: docker
       - name: Build provider-mock
         run: |
           docker build -f backend/services/provider-mock/Dockerfile \
-            -t "keep-provider-mock:${{ steps.meta.outputs.image_tag }}" \
+            -t "keep-provider-mock:${{ needs.meta.outputs.image_tag }}" \
             -t keep-provider-mock:latest \
             backend/services/provider-mock
+      - name: Save mock image
+        run: |
+          mkdir -p dist/ci-artifacts/images
+          docker save "keep-provider-mock:${{ needs.meta.outputs.image_tag }}" \
+            | gzip -1 > "dist/ci-artifacts/images/keep-provider-mock__${{ needs.meta.outputs.image_tag }}.tar.gz"
+      - name: Upload mock image
+        uses: actions/upload-artifact@v4
+        with:
+          name: opsengine-image-keep-provider-mock-${{ needs.meta.outputs.image_tag }}
+          path: dist/ci-artifacts/images/
+          if-no-files-found: error
+          retention-days: 14
+
+  publish-artifacts:
+    needs:
+      - meta
+      - build-backend
+      - build-frontend
+      - build-temporal-worker
+      - build-provider-mock
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download image artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: opsengine-image-*-${{ needs.meta.outputs.image_tag }}
+          path: dist/ci-artifacts/images
+          merge-multiple: true
 
       - name: Bump Helm chart versions and prod image tags
         run: |
           chmod +x scripts/bump_helm_charts.sh
           IMAGE_REGISTRY="" \
-          IMAGE_TAG="${{ steps.meta.outputs.image_tag }}" \
+          IMAGE_TAG="${{ needs.meta.outputs.image_tag }}" \
             ./scripts/bump_helm_charts.sh
 
-      - name: Package Helm charts and save images
+      - name: Package Helm charts
         run: |
           chmod +x scripts/package_ci_artifacts.sh
-          IMAGE_TAG="${{ steps.meta.outputs.image_tag }}" \
-          SAVE_IMAGES=1 \
+          IMAGE_TAG="${{ needs.meta.outputs.image_tag }}" \
+          SAVE_IMAGES=0 \
           GITHUB_SHA="${{ github.sha }}" \
             ./scripts/package_ci_artifacts.sh
 
       - name: Upload Docker image artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: opsengine-docker-images-${{ steps.meta.outputs.image_tag }}
+          name: opsengine-docker-images-${{ needs.meta.outputs.image_tag }}
           path: dist/ci-artifacts/images/
           if-no-files-found: error
           retention-days: 14
@@ -99,7 +200,7 @@ jobs:
       - name: Upload Helm chart artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: opsengine-helm-charts-${{ steps.meta.outputs.image_tag }}
+          name: opsengine-helm-charts-${{ needs.meta.outputs.image_tag }}
           path: |
             dist/ci-artifacts/charts/
             dist/ci-artifacts/manifest.txt
@@ -111,13 +212,13 @@ jobs:
           {
             echo "## CI artifacts"
             echo ""
-            echo "- Image tag: \`${{ steps.meta.outputs.image_tag }}\`"
-            echo "- Docker images: artifact \`opsengine-docker-images-${{ steps.meta.outputs.image_tag }}\`"
-            echo "- Helm charts: artifact \`opsengine-helm-charts-${{ steps.meta.outputs.image_tag }}\`"
+            echo "- Image tag: \`${{ needs.meta.outputs.image_tag }}\`"
+            echo "- Combined images: \`opsengine-docker-images-${{ needs.meta.outputs.image_tag }}\`"
+            echo "- Helm charts: \`opsengine-helm-charts-${{ needs.meta.outputs.image_tag }}\`"
             echo ""
             echo "Download from this run, then:"
             echo "\`\`\`bash"
-            echo "gunzip -c keep-backend__${{ steps.meta.outputs.image_tag }}.tar.gz | docker load"
+            echo "gunzip -c keep-backend__${{ needs.meta.outputs.image_tag }}.tar.gz | docker load"
             echo "helm upgrade --install temporal-worker ./temporal-worker-*.tgz"
             echo "\`\`\`"
           } >> "$GITHUB_STEP_SUMMARY"

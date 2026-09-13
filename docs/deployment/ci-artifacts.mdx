@@ -6,9 +6,9 @@ description: "GitHub Actions builds Docker images and Helm charts, then uploads 
 
 Every push to `main` or `develop` (and manual **workflow_dispatch**) runs [Publish images and Helm charts](https://github.com/Prad-v/opsengine/actions/workflows/publish-k8s-images.yml). That workflow:
 
-1. Precompiles Alpine `grpcio` wheels
-2. Builds `keep-backend`, `keep-frontend`, `keep-temporal-worker`, and `keep-provider-mock`
-3. Bumps Helm chart patch versions and prod image tags
+1. Precompiles Alpine `grpcio` wheels and builds `keep-backend` (one job)
+2. Builds `keep-frontend`, `keep-temporal-worker`, and `keep-provider-mock` in parallel
+3. Bumps Helm chart patch versions and prod image tags after all images succeed
 4. Packages the charts with `helm package`
 5. Saves the images as gzipped tarballs
 6. Uploads both as **GitHub Actions artifacts**
