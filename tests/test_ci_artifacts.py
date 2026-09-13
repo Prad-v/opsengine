@@ -29,6 +29,7 @@ def test_publish_workflow_uploads_github_artifacts():
     assert "IMAGE_TAG=sha-${GITHUB_SHA:0:7}" in text
     assert "needs: meta" not in text
     assert "needs.meta" not in text
+    assert "runs-on: ubuntu-24.04" in text
 
 
 def test_package_script_covers_charts_and_images():

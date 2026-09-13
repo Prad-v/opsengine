@@ -13,7 +13,7 @@ concurrency:
 
 jobs:
   helm-charts:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
       - name: Checkout
@@ -24,7 +24,7 @@ jobs:
           docker compose -f tests/docker-compose-ci-artifacts.yml up --abort-on-container-exit --exit-code-from ci-artifacts-test
 
   alpine-wheels:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
       - name: Checkout
@@ -33,7 +33,7 @@ jobs:
         run: docker compose -f tests/docker-compose-alpine-wheels.yml up --abort-on-container-exit --exit-code-from alpine-wheels-test
 
   provider-mock:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
       - name: Checkout

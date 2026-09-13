@@ -14,7 +14,7 @@ Every push to `main` or `develop` (and manual **workflow_dispatch**) runs [Publi
 6. Saves the images as gzipped tarballs
 7. Uploads both as **GitHub Actions artifacts**
 
-A second **CI** workflow always runs the Dockerized Helm, Alpine-wheel, and provider-mock tests.
+A second **CI** workflow always runs the Dockerized Helm, Alpine-wheel, and provider-mock tests. Publish, CI, and Test docs use `ubuntu-24.04` so they do not depend on a single `ubuntu-latest` runner pool.
 
 ## Artifact names
 
