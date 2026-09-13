@@ -37,76 +37,41 @@ jobs:
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
+        with:
+          driver: docker
 
       - name: Precompile Alpine grpcio wheels
-        uses: docker/build-push-action@v6
-        with:
-          context: .
-          file: ./docker/Dockerfile.api.alpine-wheels
-          push: false
-          load: true
-          tags: keep-api-alpine-wheels:py313
-          cache-from: type=gha,scope=alpine-native-wheels
-          cache-to: type=gha,scope=alpine-native-wheels,mode=max
+        run: docker build -f docker/Dockerfile.api.alpine-wheels -t keep-api-alpine-wheels:py313 .
 
       - name: Build Keep API
-        uses: docker/build-push-action@v6
-        with:
-          context: .
-          file: docker/Dockerfile.api
-          push: false
-          load: true
-          tags: |
-            keep-backend:${{ steps.meta.outputs.image_tag }}
-            keep-backend:latest
-          build-args: |
-            ALPINE_WHEELS_IMAGE=alpine-wheels
-          build-contexts: |
-            alpine-wheels=docker-image://keep-api-alpine-wheels:py313
-          cache-from: type=gha,scope=keep-backend
-          cache-to: type=gha,mode=max,scope=keep-backend
+        run: |
+          docker build -f docker/Dockerfile.api \
+            --build-arg ALPINE_WHEELS_IMAGE=keep-api-alpine-wheels:py313 \
+            -t "keep-backend:${{ steps.meta.outputs.image_tag }}" \
+            -t keep-backend:latest .
 
       - name: Build Keep UI
-        uses: docker/build-push-action@v6
-        with:
-          context: ./keep-ui
-          file: docker/Dockerfile.ui
-          push: false
-          load: true
-          tags: |
-            keep-frontend:${{ steps.meta.outputs.image_tag }}
-            keep-frontend:latest
-          build-args: |
-            NODE_MAX_OLD_SPACE_SIZE=4096
-            NPM_CI=0
-          cache-from: type=gha,scope=keep-frontend
-          cache-to: type=gha,mode=max,scope=keep-frontend
+        run: |
+          docker build -f docker/Dockerfile.ui \
+            --build-arg NODE_MAX_OLD_SPACE_SIZE=4096 \
+            --build-arg NPM_CI=0 \
+            -t "keep-frontend:${{ steps.meta.outputs.image_tag }}" \
+            -t keep-frontend:latest \
+            keep-ui
 
       - name: Build temporal-worker
-        uses: docker/build-push-action@v6
-        with:
-          context: ./backend/services/temporal-worker
-          file: backend/services/temporal-worker/Dockerfile
-          push: false
-          load: true
-          tags: |
-            keep-temporal-worker:${{ steps.meta.outputs.image_tag }}
-            keep-temporal-worker:latest
-          cache-from: type=gha,scope=keep-temporal-worker
-          cache-to: type=gha,mode=max,scope=keep-temporal-worker
+        run: |
+          docker build -f backend/services/temporal-worker/Dockerfile \
+            -t "keep-temporal-worker:${{ steps.meta.outputs.image_tag }}" \
+            -t keep-temporal-worker:latest \
+            backend/services/temporal-worker
 
       - name: Build provider-mock
-        uses: docker/build-push-action@v6
-        with:
-          context: ./backend/services/provider-mock
-          file: backend/services/provider-mock/Dockerfile
-          push: false
-          load: true
-          tags: |
-            keep-provider-mock:${{ steps.meta.outputs.image_tag }}
-            keep-provider-mock:latest
-          cache-from: type=gha,scope=keep-provider-mock
-          cache-to: type=gha,mode=max,scope=keep-provider-mock
+        run: |
+          docker build -f backend/services/provider-mock/Dockerfile \
+            -t "keep-provider-mock:${{ steps.meta.outputs.image_tag }}" \
+            -t keep-provider-mock:latest \
+            backend/services/provider-mock
 
       - name: Bump Helm chart versions and prod image tags
         run: |

@@ -24,5 +24,7 @@ services:
         grep -q "opsengine-helm-charts-" .github/workflows/publish-k8s-images.yml
         grep -q "package_ci_artifacts.sh" .github/workflows/publish-k8s-images.yml
         grep -q "SAVE_IMAGES=1" .github/workflows/publish-k8s-images.yml
+        grep -q "ALPINE_WHEELS_IMAGE=keep-api-alpine-wheels:py313" .github/workflows/publish-k8s-images.yml
+        grep -q "docker build -f docker/Dockerfile.api" .github/workflows/publish-k8s-images.yml
         grep -q "docker save" scripts/package_ci_artifacts.sh
         echo "ci artifacts ok"

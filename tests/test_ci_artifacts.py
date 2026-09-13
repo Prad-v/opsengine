@@ -19,11 +19,10 @@ def test_publish_workflow_uploads_github_artifacts():
     assert "opsengine-helm-charts-" in text
     assert "package_ci_artifacts.sh" in text
     assert "SAVE_IMAGES=1" in text
-    assert "push: false" in text
-    assert "load: true" in text
     assert "NPM_CI=0" in text
-    assert "ALPINE_WHEELS_IMAGE=alpine-wheels" in text
-    assert "alpine-wheels=docker-image://keep-api-alpine-wheels:py313" in text
+    assert "ALPINE_WHEELS_IMAGE=keep-api-alpine-wheels:py313" in text
+    assert "docker build -f docker/Dockerfile.api" in text
+    assert "docker build -f docker/Dockerfile.ui" in text
 
 
 def test_package_script_covers_charts_and_images():
