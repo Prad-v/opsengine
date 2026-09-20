@@ -2,100 +2,110 @@
 title: "Maintenance Windows"
 ---
 
-Keep's Maintenance Windows feature provides a critical mechanism for managing alert noise during scheduled maintenance periods or other planned events. By defining Maintenance Window rules, users can suppress alerts that are irrelevant during these times, ensuring that only actionable alerts reach the operations team.
-
+Keep's Maintenance Windows suppress expected alerts during planned work so operators are not paged for noise. New rules **keep matching alerts in the feed as `suppressed`**. Hiding alerts from the feed (not persisting them) is an explicit choice.
 
 <Frame width="100" height="200">
   <img height="10" src="/images/maintenance.png" />
 </Frame>
 
+## How it works
 
-## Introduction
+1. Create a rule with a CEL filter, start time, and duration.
+2. While the rule is **enabled** and **now** is between start and end, incoming alerts are evaluated against the CEL query.
+3. Matching alerts are either:
+   - **Show in feed as suppressed** (default): saved with status `suppressed` (or `maintenance` when recover strategy is on). Workflows and incident correlation are skipped.
+   - **Hide from feed**: dropped before save. No alert row, no workflow, no incident.
+4. Alerts whose status is in **Do not suppress these statuses** (default: `resolved`, `acknowledged`) always continue so incidents can close.
+5. When several rules match, the highest **priority** wins (then lowest id).
 
-In dynamic IT environments, it's common to have periods where certain alerts are expected and should not trigger incident responses. Keep's Maintenance Windows feature allows users to define specific rules that temporarily suppress alerts based on various conditions, such as time windows or alert attributes. This helps prevent unnecessary alert fatigue and ensures that teams can focus on critical issues.
+Resolved and acknowledged alerts bypass the window on purpose. A resolve event during maintenance still closes the related incident.
 
-## How It Works
-
-1. **Maintenance Window Rule Definition**: Users define Maintenance Window rules specifying the conditions under which alerts should be suppressed.
-2. **Condition Specification**: A CEL (Common Expression Language) query is associated with each Maintenance Window rule to define the conditions for suppression.
-3. **Time Window Configuration**: Maintenance Window rules can be set for specific start and end times, or based on a relative duration.
-4. **Alert Suppression**: During the active period of a Maintenance Window rule, any alerts matching the defined conditions are either suppressed and **not shown in alerts feed** or shown in the feed in suppressed status (**this is configurable**).
-
-## Practical Example
-
-Suppose your team schedules a database upgrade that could trigger numerous non-critical alerts. You can create a Maintenance Window rule that suppresses alerts from the database service during the upgrade window. This ensures that your operations team isn't overwhelmed by non-actionable alerts, allowing them to focus on more critical issues.
-
-## Core Concepts
-
-- **Maintenance Window Rules**: Configurations that define when and which alerts should be suppressed based on time windows and conditions.
-- **CEL Query**: A query language used to specify the conditions under which alerts should be suppressed. For example, a CEL query might suppress alerts where the source is a specific service during a maintenance window.
-- **Time Window**: The specific start and end times or relative duration during which the Maintenance Window rule is active.
-- **Alert Suppression**: The process of ignoring alerts that match the Maintenance Window rule's conditions during the specified time window.
-
-## Status-Based Filtering in Maintenance Windows
-
-In Keep, certain alert statuses are automatically ignored by Maintenance Window rules. Specifically, alerts with the statuses RESOLVED and ACKNOWLEDGED are not suppressed by Maintenance Window rules. This is intentional to ensure that resolving alerts can still be processed and appropriately close or update active incidents.
-
-### Why Are Some Statuses Ignored?
-
-    •	RESOLVED Alerts: These alerts indicate that an issue has been resolved. By allowing these alerts to bypass Maintenance Window rules, Keep ensures that any active incidents related to the alert can be properly closed, maintaining the integrity of the alert lifecycle.
-    
-    •	ACKNOWLEDGED Alerts: These alerts have been acknowledged by an operator, signaling that they are being addressed. Ignoring these alerts in Maintenance Windows ensures that operators can track the progress of incidents and take necessary actions without interference.
-
-By excluding these statuses from Maintenance Window suppression, Keep allows for the continuous and accurate management of alerts, even during Maintenance Window periods, ensuring that resolution processes are not disrupted.
-
-## Creating a Maintenance Window Rule
-
-To create a Maintenance Window rule:
+## Create a rule
 
 <Frame width="100" height="200">
   <img height="10" src="/images/maintenance-window-creation.png" />
 </Frame>
 
-1. **Define the Maintenance Window Name and Description**: Provide a name and optional description for the Maintenance Window rule to easily identify its purpose.
-2. **Specify the CEL Query**: Use CEL to define the conditions under which alerts should be suppressed (e.g., `source == "database"`).
-3. **Set the Time Window**: Choose a specific start and end time, or define a relative duration for the Maintenance Window.
-4. **Enable the Rule**: Decide whether the rule should be active immediately or scheduled for future use.
+1. **Name / description** — shown in audit logs.
+2. **CEL filter** (required) — which alerts match. Use `true` to match all. Shortcuts in the form insert common queries (`source`, `service`, `code`).
+3. **Do not suppress these statuses** — exclusions. Leave Resolved and Acknowledged selected unless you intentionally want those silenced too.
+4. **Start at / End after** — the form shows the computed end time in your browser timezone. Duration is stored in seconds; editing infers minutes, hours, or days.
+5. **Priority** — higher number wins when rules overlap.
+6. **Alert handling**
+   - **Show in feed as suppressed** (default, recommended)
+   - **Hide from feed (do not persist)** — matching alerts are not saved
+7. **Enabled** — disabled rules never match, even inside the time range.
 
-## Best Practices
+The form previews how many alerts from the last 24 hours would match the CEL query.
 
-- **Plan Maintenance Windows in Advance**: Schedule Maintenance Window periods in advance for known maintenance windows to prevent unnecessary alerts.
-- **Use Specific Conditions**: Define precise CEL queries to ensure only the intended alerts are suppressed.
-- **Review and Update Maintenance Windows**: Regularly review active Maintenance Window rules to ensure they are still relevant and adjust them as necessary.
+You can also create a window from **Noise Reduction → Service Topology**: click a node, choose a reason (node down, RMA, firmware/driver upgrade, thermal/cooling, planned capacity work, or Other) and duration, then **Put node in maintenance**. Keep writes the same Maintenance Windows rule with a CEL filter scoped to that node (`labels.host`, `labels.rack`, `labels.gpu_id`, and so on). The node is color-coded on the map while the window is active.
 
+If an [approval policy](/overview/approvals) matches `create_maintenance` or `node_maintenance`, Keep returns **202** and the window is not active until an approver accepts it in **Approvals**.
+
+## Lifecycle
+
+Each rule has a status:
+
+| Status | Meaning |
+|---|---|
+| **Upcoming** | Enabled, start time is in the future |
+| **Active** | Enabled and now is inside the window |
+| **Expired** | End time has passed |
+| **Disabled** | Enabled is off (including after **End now**) |
+
+On an active rule you can:
+
+- **End now** — disable the rule and set end time to now
+- **Extend +30m** — push the end time forward 30 minutes (and re-enable if it had expired)
+
+A window is expired when **end time has passed OR the rule is disabled**. Either condition is enough.
+
+## CEL examples
+
+```cel
+source == "prometheus"
+service == "gpu-node-03"
+code == "GPU_XID_79"
+source.contains("kibana")
+true
+labels.host == "gpu-node-a03" || service == "gpu-node-a03"
+labels.gpu_id == "gpu-node-a03-gpu0"
+labels.rack == "rack-12"
+```
+
+If an alert has a single source, Keep treats `source` as a string (`source == "prometheus"`). Multiple sources stay a list; use `source.exists(s, s == "prometheus")`.
 
 ## Strategies
 
-In order to handle the alerts during Maintenance Windows, Keep provides some Strategies to handle how these alerts are treated:
+### Default (`MAINTENANCE_WINDOW_STRATEGY=default`)
 
-### 1. Default
+Matching alerts that use **Show in feed as suppressed** are stored as `suppressed`. They stay that way when the window ends.
 
-The default behaviour of Maintenance Windows is to **Suppressed** alerts that match the defined conditions.
+### Recover previous status (`MAINTENANCE_WINDOW_STRATEGY=recover_previous_status`)
 
-### 2. Recover status
+Requires **Show in feed as suppressed**. Matching alerts are stored as `maintenance` and workflows/incidents are skipped. A watcher (every `KEEP_WATCHER_LAPSED_TIME` seconds, default 60) restores the previous status when the window expires or is disabled, then runs workflows and correlation as if the alert just arrived.
 
-This strategy relies on the following premise:
-<Tip>
-   An alert received inside the Maintenance Window must be inhibited and once the Maintenance Window is over, the alert must recover its previous flow.
-</Tip>
+Setting `MAINTENANCE_WINDOW_STRATEGY=recover_previous_status` starts the watcher automatically. You do not need a separate `MAINTENANCE_WINDOWS=true` flag for recover to run.
 
-The following actions will therefore be taken with a new alert:
-- When an alert is received, it will be checked against the Maintenance Window rules.
-- If the alert matches any Maintenance Window rule, its status will be set to **Maintenance**.
-- Workflows and Incidents handling are skipped.
+## Environment variables
 
-Every WATCHER_LAPSED_TIME seconds, the watcher will check whether there is any active Maintenance Window for every alert with a Maintenance status.
-If so, the following actions will be taken:
-- The alert will swap its status, and previous status.
-- Workflows, Incidents handling, Pusher and Presets notifications will be launched in the same way as a new alert.
+| Env var | Purpose | Default |
+|---|---|---|
+| `KEEP_MAINTENANCE_WINDOWS_ENABLED` | Apply rules on ingest | `true` |
+| `MAINTENANCE_WINDOW_STRATEGY` | `default` or `recover_previous_status` | `default` |
+| `KEEP_WATCHER_LAPSED_TIME` | Recover poll interval (seconds) | `60` |
+| `WATCHER` | Start the watcher for other jobs | `false` |
+| `MAINTENANCE_WINDOWS` | Also start the watcher (legacy) | `false` |
 
-#### 2.1 What is an expired Maintenance Window?
+## Best practices
 
-For a maintenance window to be considered expired, the following conditions must be met:
-- The **End Time** must be earlier than the current time.
-- The **Enabled** flag must be set to **False**.
+- Prefer **Show in feed as suppressed** so you keep a record of what fired during the window.
+- Keep CEL specific (`service == "gpu-node-03"` rather than `true`).
+- Do not clear Resolved/Acknowledged exclusions unless you intend to block incident close.
+- Use **End now** when work finishes early instead of deleting the rule if you still want the audit trail.
 
-#### 2.2 What are the specific conditions to use the Recover Status Strategy?
-- Set **MAINTENANCE_WINDOW_STRATEGY** environment variable to **recover_previous_status**.
-- "Alerts will show in suppressed status" option must be set to **True** in the Maintenance Window rule configuration.
-- **Enabled** flag must be set to **True** in the Maintenance Window rule configuration.
+## Troubleshooting
+
+- **Incidents never close during a window** — restore Resolved (and usually Acknowledged) in **Do not suppress these statuses**.
+- **Alerts stuck in `maintenance`** — recover strategy is on but the watcher is not running. Set `MAINTENANCE_WINDOW_STRATEGY=recover_previous_status` (the API starts the watcher) or set `WATCHER=true`.
+- **Nothing was silenced** — check lifecycle is **Active**, the rule is enabled, and CEL matches (use the preview count).

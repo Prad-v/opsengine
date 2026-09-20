@@ -1,4 +1,5 @@
 import {
+  Badge,
   Button,
   Icon,
   Table,
@@ -10,7 +11,6 @@ import {
 } from "@tremor/react";
 import {
   DisplayColumnDef,
-  ExpandedState,
   createColumnHelper,
   flexRender,
   getCoreRowModel,
@@ -21,9 +21,13 @@ import { toast } from "react-toastify";
 import { MaintenanceRule } from "./model";
 import { IoCheckmark } from "react-icons/io5";
 import { HiMiniXMark } from "react-icons/hi2";
-import { useState } from "react";
-import { useApi } from "@/shared/lib/hooks/useApi";
 import { showErrorToast } from "@/shared/ui";
+import { useMaintenanceRules } from "@/utils/hooks/useMaintenanceRules";
+import {
+  parseMaintenanceDate,
+  remainingLabel,
+  ruleLifecycle,
+} from "./lib/maintenanceRuleUtils";
 
 const columnHelper = createColumnHelper<MaintenanceRule>();
 
@@ -32,42 +36,113 @@ interface Props {
   editCallback: (rule: MaintenanceRule) => void;
 }
 
+const lifecycleColor: Record<string, "green" | "blue" | "gray" | "red"> = {
+  active: "green",
+  upcoming: "blue",
+  expired: "gray",
+  disabled: "red",
+};
+
 export default function MaintenanceRulesTable({
   maintenanceRules,
   editCallback,
 }: Props) {
-  const api = useApi();
+  const { deleteRule, endNow, extend } = useMaintenanceRules();
 
-  const [expanded, setExpanded] = useState<ExpandedState>({});
+  const formatDate = (value?: Date | string) => {
+    const parsed = parseMaintenanceDate(value ?? null);
+    return parsed ? parsed.toLocaleString() : "N/A";
+  };
 
   const columns = [
     columnHelper.display({
-      id: "delete",
+      id: "actions",
       header: "",
-      cell: (context) => (
-        <div className={"space-x-1 flex flex-row items-center justify-center"}>
-          <Button
-            color="orange"
-            size="xs"
-            variant="secondary"
-            icon={MdModeEdit}
-            onClick={(e: any) => {
-              e.preventDefault();
-              editCallback(context.row.original!);
-            }}
-          />
-          <Button
-            color="red"
-            size="xs"
-            variant="secondary"
-            icon={MdRemoveCircle}
-            onClick={(e: any) => {
-              e.preventDefault();
-              deleteMaintenanceRule(context.row.original.id!);
-            }}
-          />
-        </div>
-      ),
+      cell: (context) => {
+        const rule = context.row.original;
+        const status = ruleLifecycle(rule);
+        return (
+          <div className="space-x-1 flex flex-row items-center justify-center">
+            <Button
+              color="orange"
+              size="xs"
+              variant="secondary"
+              icon={MdModeEdit}
+              tooltip="Edit"
+              onClick={(e: any) => {
+                e.preventDefault();
+                e.stopPropagation();
+                editCallback(rule);
+              }}
+            />
+            {status === "active" ? (
+              <>
+                <Button
+                  color="gray"
+                  size="xs"
+                  variant="secondary"
+                  onClick={async (e: any) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    if (
+                      !confirm("End this maintenance window now?")
+                    ) {
+                      return;
+                    }
+                    try {
+                      await endNow(rule.id!);
+                      toast.success("Maintenance window ended");
+                    } catch (error) {
+                      showErrorToast(error, "Failed to end maintenance window");
+                    }
+                  }}
+                >
+                  End now
+                </Button>
+                <Button
+                  color="gray"
+                  size="xs"
+                  variant="secondary"
+                  onClick={async (e: any) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    try {
+                      await extend(rule.id!, 1800);
+                      toast.success("Extended by 30 minutes");
+                    } catch (error) {
+                      showErrorToast(error, "Failed to extend maintenance window");
+                    }
+                  }}
+                >
+                  +30m
+                </Button>
+              </>
+            ) : null}
+            <Button
+              color="red"
+              size="xs"
+              variant="secondary"
+              icon={MdRemoveCircle}
+              tooltip="Delete"
+              onClick={async (e: any) => {
+                e.preventDefault();
+                e.stopPropagation();
+                if (
+                  !confirm("Are you sure you want to delete this maintenance rule?")
+                ) {
+                  return;
+                }
+                try {
+                  await deleteRule(rule.id!);
+                  toast.success("Maintenance rule deleted successfully");
+                } catch (error) {
+                  showErrorToast(error, "Failed to delete maintenance rule");
+                }
+              }}
+            />
+          </div>
+        );
+      },
     }),
     columnHelper.display({
       id: "name",
@@ -75,28 +150,48 @@ export default function MaintenanceRulesTable({
       cell: ({ row }) => row.original.name,
     }),
     columnHelper.display({
-      id: "description",
-      header: "Description",
-      cell: (context) => context.row.original.description,
+      id: "CEL",
+      header: "CEL",
+      cell: (context) => (
+        <span className="font-mono text-xs">{context.row.original.cel_query}</span>
+      ),
     }),
     columnHelper.display({
       id: "start_time",
-      header: "Start Time",
-      cell: (context) =>
-        new Date(context.row.original.start_time + "Z").toLocaleString(),
-    }),
-    columnHelper.display({
-      id: "CEL",
-      header: "CEL",
-      cell: (context) => context.row.original.cel_query,
+      header: "Starts",
+      cell: (context) => formatDate(context.row.original.start_time),
     }),
     columnHelper.display({
       id: "end_time",
-      header: "End Time",
+      header: "Ends",
+      cell: (context) => formatDate(context.row.original.end_time),
+    }),
+    columnHelper.display({
+      id: "mode",
+      header: "Mode",
       cell: (context) =>
-        context.row.original.end_time
-          ? new Date(context.row.original.end_time + "Z").toLocaleString()
-          : "N/A",
+        context.row.original.suppress ? "Suppressed" : "Hidden",
+    }),
+    columnHelper.display({
+      id: "lifecycle",
+      header: "Status",
+      cell: (context) => {
+        const status = ruleLifecycle(context.row.original);
+        const remaining =
+          status === "active"
+            ? remainingLabel(context.row.original.end_time)
+            : null;
+        return (
+          <div className="flex items-center gap-2">
+            <Badge color={lifecycleColor[status]} size="xs">
+              {status}
+            </Badge>
+            {remaining ? (
+              <span className="text-xs text-tremor-content">{remaining}</span>
+            ) : null}
+          </div>
+        );
+      },
     }),
     columnHelper.display({
       id: "enabled",
@@ -117,23 +212,8 @@ export default function MaintenanceRulesTable({
     getRowId: (row) => row.id.toString(),
     columns,
     data: maintenanceRules,
-    state: { expanded },
     getCoreRowModel: getCoreRowModel(),
-    onExpandedChange: setExpanded,
   });
-
-  const deleteMaintenanceRule = (maintenanceRuleId: number) => {
-    if (confirm("Are you sure you want to delete this maintenance rule?")) {
-      api
-        .delete(`/maintenance/${maintenanceRuleId}`)
-        .then(() => {
-          toast.success("Maintenance rule deleted successfully");
-        })
-        .catch((error: any) => {
-          showErrorToast(error, "Failed to delete maintenance rule");
-        });
-    }
-  };
 
   return (
     <Table>
@@ -159,47 +239,16 @@ export default function MaintenanceRulesTable({
       </TableHead>
       <TableBody>
         {table.getRowModel().rows.map((row) => (
-          <>
-            <TableRow
-              className="even:bg-tremor-background-muted even:dark:bg-dark-tremor-background-muted hover:bg-slate-100"
-              key={row.id}
-              onClick={() => row.toggleExpanded()}
-            >
-              {row.getVisibleCells().map((cell) => (
-                <TableCell key={cell.id}>
-                  {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                </TableCell>
-              ))}
-            </TableRow>
-            {row.getIsExpanded() && (
-              <TableRow className="pl-2.5">
-                <TableCell colSpan={columns.length}>
-                  <div className="flex space-x-2 divide-x">
-                    <div className="flex items-center space-x-2">
-                      <span className="font-bold">Created By:</span>
-                      <span>{row.original.created_by}</span>
-                    </div>
-                    {row.original.updated_at && (
-                      <>
-                        <div className="flex items-center space-x-2 pl-2.5">
-                          <span className="font-bold">Updated At:</span>
-                          <span>
-                            {new Date(
-                              row.original.updated_at + "Z"
-                            ).toLocaleString()}
-                          </span>
-                        </div>
-                        <div className="flex items-center space-x-2 pl-2.5">
-                          <span className="font-bold">Enabled:</span>
-                          <span>{row.original.enabled ? "Yes" : "No"}</span>
-                        </div>
-                      </>
-                    )}
-                  </div>
-                </TableCell>
-              </TableRow>
-            )}
-          </>
+          <TableRow
+            className="even:bg-tremor-background-muted even:dark:bg-dark-tremor-background-muted hover:bg-slate-100"
+            key={row.id}
+          >
+            {row.getVisibleCells().map((cell) => (
+              <TableCell key={cell.id}>
+                {flexRender(cell.column.columnDef.cell, cell.getContext())}
+              </TableCell>
+            ))}
+          </TableRow>
         ))}
       </TableBody>
     </Table>

@@ -6,6 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import JSONResponse
 from sqlmodel import Session
 
+from keep.api.bl.approval_bl import ApprovalBl, pending_response
 from keep.api.bl.enrichments_bl import EnrichmentsBl
 from keep.api.core.db import get_session
 from keep.api.models.db.enrichment_event import EnrichmentEventWithLogs
@@ -132,6 +133,19 @@ def delete_rule(
     session: Session = Depends(get_session),
 ):
     logger.info("Deleting a mapping rule", extra={"rule_id": rule_id})
+    bl = ApprovalBl(authenticated_entity.tenant_id, session)
+    gate = bl.gate(
+        action_type="delete_resource",
+        requested_by=authenticated_entity.email,
+        title=f"Delete mapping rule {rule_id}",
+        payload={"resource_type": "mapping", "resource_id": str(rule_id)},
+        resource_type="mapping",
+        resource_id=str(rule_id),
+        callback={"kind": "keep_action"},
+        idempotency_key=f"delete:mapping:{rule_id}",
+    )
+    if gate.pending:
+        return pending_response(gate.request)
     rule = (
         session.query(MappingRule)
         .filter(MappingRule.id == rule_id)

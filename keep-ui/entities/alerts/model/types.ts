@@ -57,6 +57,8 @@ export interface AlertDto {
   ticket_url: string;
   ticket_status?: string;
   playbook_url?: string;
+  code?: string;
+  labels?: Record<string, string>;
   providerId?: string;
   group?: boolean;
   note?: string;
@@ -99,6 +101,7 @@ export const AlertKnownKeys = [
   "event_id",
   "ticket_url",
   "playbook_url",
+  "code",
   "ack_status",
   "deleted",
   "assignee",

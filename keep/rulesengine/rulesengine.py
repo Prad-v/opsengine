@@ -26,6 +26,7 @@ from keep.api.core.dependencies import get_pusher_client
 from keep.api.models.alert import AlertDto, AlertSeverity, AlertStatus
 from keep.api.models.db.alert import Incident
 from keep.api.models.db.rule import Rule
+from keep.api.bl.alert_catalog_bl import AlertCatalogBl
 from keep.api.models.incident import IncidentDto
 from keep.api.utils.cel_utils import preprocess_cel_expression
 from keep.api.utils.enrichment_helpers import convert_db_alerts_to_dto_alerts
@@ -199,6 +200,25 @@ class RulesEngine:
                             ).resolve_incident_if_require(incident, handle_workflow_event=False)
 
                             incident_dto = IncidentDto.from_db_incident(incident)
+                            try:
+                                incident_dto = AlertCatalogBl(
+                                    self.tenant_id, session
+                                ).apply_to_incident(
+                                    incident_dto,
+                                    alerts=[event],
+                                    persist=True,
+                                    trigger=(
+                                        "created" if send_created_event else "updated"
+                                    ),
+                                )
+                            except Exception:
+                                self.logger.exception(
+                                    "Failed to apply alert catalog codes to incident",
+                                    extra={
+                                        "incident_id": str(incident_id),
+                                        "tenant_id": self.tenant_id,
+                                    },
+                                )
                             if send_created_event:
                                 RulesEngine.send_workflow_event(
                                     self.tenant_id, session, incident_dto, "created"

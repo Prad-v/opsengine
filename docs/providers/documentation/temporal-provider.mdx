@@ -102,11 +102,12 @@ Use your gRPC namespace endpoint, namespace id + account id, and an API key (or 
 workflow:
   id: incident-to-temporal
   name: Start Temporal remediation on incident
-  description: Starts a Temporal workflow whenever a Keep incident is created.
+  description: Starts a Temporal workflow when a Keep incident carries a reserved alert code.
   triggers:
     - type: incident
       events:
         - created
+      cel: code != ""
   actions:
     - name: start-temporal-remediation
       provider:
@@ -119,6 +120,7 @@ workflow:
           workflow_id: "incident-{{ incident.id }}"
           arg:
             incident_id: "{{ incident.id }}"
+            code: "{{ incident.code }}"
             name: "{{ incident.name }}"
             severity: "{{ incident.severity }}"
 ```

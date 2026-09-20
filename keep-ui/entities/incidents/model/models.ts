@@ -67,6 +67,8 @@ export interface IncidentDto {
   merged_at: Date;
   fingerprint: string;
   enrichments: { [key: string]: any };
+  code?: string;
+  codes?: string[];
   incident_type?: string;
   incident_application?: string;
   resolve_on: "all_resolved" | "first" | "last" | "never";

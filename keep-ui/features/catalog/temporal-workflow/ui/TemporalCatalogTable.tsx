@@ -20,6 +20,7 @@ interface TemporalCatalogTableProps {
   isLoading?: boolean;
   error?: unknown;
   emptyMessage?: ReactNode;
+  onView?: (entry: TemporalCatalogEntry) => void;
   renderActions?: (entry: TemporalCatalogEntry) => ReactNode;
 }
 
@@ -28,6 +29,7 @@ export function TemporalCatalogTable({
   isLoading,
   error,
   emptyMessage,
+  onView,
   renderActions,
 }: TemporalCatalogTableProps) {
   if (isLoading) {
@@ -60,62 +62,72 @@ export function TemporalCatalogTable({
   }
 
   return (
-    <Table>
-      <TableHead>
-        <TableRow>
-          <TableHeaderCell>Name</TableHeaderCell>
-          <TableHeaderCell>Key</TableHeaderCell>
-          <TableHeaderCell>Type</TableHeaderCell>
-          <TableHeaderCell>Task queue</TableHeaderCell>
-          <TableHeaderCell>Provider</TableHeaderCell>
-          {renderActions ? <TableHeaderCell>Actions</TableHeaderCell> : null}
-        </TableRow>
-      </TableHead>
-      <TableBody>
-        {catalog.map((entry) => (
-          <TableRow key={entry.id}>
-            <TableCell>
-              <div className="flex flex-col">
-                <span className="font-medium">{entry.name}</span>
-                {entry.description ? (
-                  <span className="text-xs text-tremor-content">
-                    {entry.description}
-                  </span>
-                ) : null}
-                {entry.disabled ? (
-                  <Badge color="gray" size="xs" className="mt-1 w-fit">
-                    Disabled
-                  </Badge>
-                ) : null}
-              </div>
-            </TableCell>
-            <TableCell>
-              <code className="text-xs">{entry.catalog_key}</code>
-            </TableCell>
-            <TableCell>
-              <Badge color="indigo">{entry.workflow_type}</Badge>
-            </TableCell>
-            <TableCell>{entry.task_queue}</TableCell>
-            <TableCell>
-              <div className="flex items-center gap-2">
-                <DynamicImageProviderIcon
-                  providerType="temporal"
-                  width={20}
-                  height={20}
-                />
-                <span>{entry.provider_name || entry.provider_id}</span>
-              </div>
-            </TableCell>
-            {renderActions ? (
+    <div className="overflow-x-auto">
+      <Table>
+        <TableHead>
+          <TableRow>
+            <TableHeaderCell>Name</TableHeaderCell>
+            <TableHeaderCell>Key</TableHeaderCell>
+            <TableHeaderCell>Type</TableHeaderCell>
+            {renderActions ? <TableHeaderCell>Actions</TableHeaderCell> : null}
+            <TableHeaderCell>Task queue</TableHeaderCell>
+            <TableHeaderCell>Provider</TableHeaderCell>
+          </TableRow>
+        </TableHead>
+        <TableBody>
+          {catalog.map((entry) => (
+            <TableRow
+              key={entry.id}
+              className={onView ? "cursor-pointer hover:bg-tremor-background-muted" : undefined}
+              onClick={onView ? () => onView(entry) : undefined}
+              data-testid={`temporal-catalog-row-${entry.catalog_key}`}
+            >
               <TableCell>
-                <div className="flex flex-wrap gap-2">
-                  {renderActions(entry)}
+                <div className="flex flex-col">
+                  <span className="font-medium">{entry.name}</span>
+                  {entry.description ? (
+                    <span className="text-xs text-tremor-content">
+                      {entry.description}
+                    </span>
+                  ) : null}
+                  {entry.disabled ? (
+                    <Badge color="gray" size="xs" className="mt-1 w-fit">
+                      Disabled
+                    </Badge>
+                  ) : null}
                 </div>
               </TableCell>
-            ) : null}
-          </TableRow>
-        ))}
-      </TableBody>
-    </Table>
+              <TableCell>
+                <code className="text-xs">{entry.catalog_key}</code>
+              </TableCell>
+              <TableCell>
+                <Badge color="indigo">{entry.workflow_type}</Badge>
+              </TableCell>
+              {renderActions ? (
+                <TableCell>
+                  <div
+                    className="flex flex-wrap gap-2"
+                    onClick={(event) => event.stopPropagation()}
+                  >
+                    {renderActions(entry)}
+                  </div>
+                </TableCell>
+              ) : null}
+              <TableCell>{entry.task_queue}</TableCell>
+              <TableCell>
+                <div className="flex items-center gap-2">
+                  <DynamicImageProviderIcon
+                    providerType="temporal"
+                    width={20}
+                    height={20}
+                  />
+                  <span>{entry.provider_name || entry.provider_id}</span>
+                </div>
+              </TableCell>
+            </TableRow>
+          ))}
+        </TableBody>
+      </Table>
+    </div>
   );
 }

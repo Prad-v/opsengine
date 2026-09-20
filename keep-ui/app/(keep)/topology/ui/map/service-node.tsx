@@ -5,7 +5,7 @@ import { ServiceNodeType, TopologyService } from "../../model/models";
 import { Badge } from "@tremor/react";
 import { getColorForUUID } from "@/app/(keep)/topology/lib/badge-colors";
 import { clsx } from "clsx";
-import { DynamicImageProviderIcon } from "@/components/ui";
+import { TopologyCategoryIcon } from "./topologyNodeIcons";
 
 const THRESHOLD = 5;
 
@@ -66,6 +66,25 @@ function ServiceDetailsTooltip({ data }: { data: TopologyService }) {
           <span>{data.manufacturer}</span>
         </div>
       )}
+      {data.category && (
+        <div>
+          <p className="text-gray-500">Category</p>
+          <span>{data.category}</span>
+        </div>
+      )}
+      {data.inMaintenance && (
+        <div>
+          <p className="text-amber-700 font-medium">In maintenance</p>
+          <span>Alerts for this node are suppressed</span>
+        </div>
+      )}
+      {data.pendingMaintenance && !data.inMaintenance && (
+        <div>
+          <p className="text-orange-700 font-medium">Pending maintenance</p>
+          <span>Waiting for approval before alerts are suppressed</span>
+        </div>
+      )}
+      <p className="text-gray-400">Click for incidents and maintenance</p>
     </div>
   );
 }
@@ -99,11 +118,13 @@ export function ServiceNode({ data, selected }: NodeProps<ServiceNodeType>) {
     setIsTooltipReady(true);
   }, [showDetails]);
 
-  const handleIncidentClick = () => {
+  const handleIncidentClick = (event: React.MouseEvent) => {
+    event.stopPropagation();
     router.push(`/incidents?services=${encodeURIComponent(data.display_name)}`);
   };
 
-  const handleAlertClick = () => {
+  const handleAlertClick = (event: React.MouseEvent) => {
+    event.stopPropagation();
     const cel = `service=="${data.display_name}"`;
     router.push(`/alerts/feed?cel=${encodeURIComponent(cel)}`);
   };
@@ -112,30 +133,47 @@ export function ServiceNode({ data, selected }: NodeProps<ServiceNodeType>) {
   const alertsCount = data.alerts ?? 0;
   const badgeColor =
     incidentsCount < THRESHOLD ? "bg-orange-500" : "bg-red-500";
+  const inMaintenance = Boolean(data.inMaintenance);
+  const pendingMaintenance =
+    Boolean(data.pendingMaintenance) && !inMaintenance;
 
   return (
     <>
       <div
         className={clsx(
-          "flex flex-col gap-1 bg-white p-4 border-2 border-gray-200 rounded-xl shadow-lg relative transition-colors",
-          selected && "border-tremor-brand"
+          "flex flex-col gap-1 p-4 border-2 rounded-xl shadow-lg relative transition-colors cursor-pointer min-w-[10rem]",
+          inMaintenance
+            ? "bg-amber-50 border-amber-400 border-dashed"
+            : pendingMaintenance
+              ? "bg-orange-50 border-orange-300 border-dashed"
+              : "bg-white border-gray-200",
+          selected && !inMaintenance && !pendingMaintenance && "border-tremor-brand",
+          selected && inMaintenance && "border-amber-600"
         )}
         onMouseEnter={() => setShowDetails(true)}
         onMouseLeave={() => setShowDetails(false)}
       >
-        {data.category && (
-          <div className="absolute top-2 right-2 text-gray-400">
-            <DynamicImageProviderIcon
-              className="inline-block"
-              alt={data.category}
-              height={24}
-              width={24}
-              title={data.category}
-              src={`/icons/${data.category.toLowerCase()}-icon.png`}
-            />
-          </div>
-        )}
-        <strong className="text-lg">{data.display_name || data.service}</strong>
+        {inMaintenance ? (
+          <span className="absolute -top-2 left-2 px-1.5 py-0.5 text-[9px] leading-none font-semibold uppercase tracking-wide rounded bg-amber-400 text-amber-950">
+            Maint
+          </span>
+        ) : pendingMaintenance ? (
+          <span className="absolute -top-2 left-2 px-1.5 py-0.5 text-[9px] leading-none font-semibold uppercase tracking-wide rounded bg-orange-200 text-orange-950">
+            Pending
+          </span>
+        ) : null}
+        <div className="flex items-center gap-2">
+          <TopologyCategoryIcon
+            category={data.category}
+            className={clsx(
+              "h-6 w-6",
+              inMaintenance ? "text-amber-700" : "text-gray-600"
+            )}
+          />
+          <strong className="text-lg">
+            {data.display_name || data.service}
+          </strong>
+        </div>
         {incidentsCount > 0 ? (
           <span
             className={`absolute top-[-17px] right-[-20px] mt-2 mr-2 px-2 py-1 text-white text-[7px] leading-[7px] font-bold rounded-full ${badgeColor} hover:cursor-pointer`}

@@ -15,6 +15,7 @@ import "react-toastify/dist/ReactToastify.css";
 import { PostHogPageView } from "@/shared/ui/PostHogPageView";
 import { WorkflowModalProvider } from "@/features/workflows/manual-run-workflow";
 import { ForcePasswordChangeGate } from "@/components/auth/ForcePasswordChangeGate";
+import { OnboardingRedirect } from "@/features/onboarding/ui/OnboardingRedirect";
 import { MuiProvider } from "@/shared/ui/mui";
 
 // If loading a variable font, you don't need to specify the font weight
@@ -46,6 +47,7 @@ export default async function RootLayout({ children }: RootLayoutProps) {
                     <PostHogPageView />
                     <Navbar />
                     <ForcePasswordChangeGate />
+                    <OnboardingRedirect />
                     {/* https://discord.com/channels/752553802359505017/1068089513253019688/1117731746922893333 */}
                     <main className="page-container flex flex-col col-start-3 overflow-auto">
                       {/* Add the banner here, before the navbar */}

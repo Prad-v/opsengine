@@ -54,6 +54,16 @@ def test_local_values_disable_incluster_ui():
     assert "keep-frontend" not in text
     assert "ingress:" in text
     assert "enabled: false" in text
+    assert "AUTH_TYPE" in text
+    assert "DB" in text
+    assert "KEEP_JWT_SECRET" in text
+    assert "KEEP_DEFAULT_USERNAME" in text
+    assert "KEEP_FORCE_RESET_DEFAULT_PASSWORD" in text
+    assert "KEEP_EVENT_WORKERS" in text
+    assert "DATABASE_POOL_SIZE" in text
+    assert "resources:" in text
+    assert "--workers" in text
+    assert '"2"' in text
 
 
 def test_prod_values_use_published_images_and_incluster_ui():
@@ -78,5 +88,14 @@ def test_kind_maps_api_and_websocket_host_ports():
 def test_k8s_ui_points_at_kind_api():
     text = K8S_UI.read_text()
     assert "http://localhost:8080" in text
+    assert "http://localhost:3000" in text
+    assert "http://localhost:8099" in text
+    assert "http://localhost:8233" in text
     assert "npm run dev" in text
     assert "DEV_NAMESPACE" in text
+    assert "port-forward" in text
+    assert "keep-backend" in text
+    assert "API_URL=http://localhost:8080" in text
+    assert "AUTH_TYPE=DB" in text
+    assert "AUTH_SECRET=k8s-dev-nextauth-secret" in text
+    assert "AUTH_DEBUG=false" in text

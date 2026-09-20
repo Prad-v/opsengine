@@ -52,7 +52,17 @@ Free host ports **8080**, **6001**, **8099**, and **8233** for local-dev (stop `
 make k8s-start
 ```
 
-That deploys the cluster, then leaves `npm run dev` in the foreground. Open http://localhost:3000. Ctrl+C stops the UI only; the kind cluster stays up.
+That deploys the cluster, port-forwards the API and websocket if needed, then leaves `npm run dev` in the foreground. Ctrl+C stops the UI only; the kind cluster stays up.
+
+| App | URL |
+| --- | --- |
+| Keep UI | http://localhost:3000 (sign in `admin` / `admin`) |
+| Keep API | http://localhost:8080 |
+| API health | http://localhost:8080/healthcheck |
+| API docs | http://localhost:8080/docs |
+| Websocket | http://localhost:6001 |
+| Provider mock | http://localhost:8099 |
+| Temporal UI | http://localhost:8233 |
 
 Rebuild backend/worker/mock with no cache:
 
@@ -129,8 +139,9 @@ After pods are Ready and the host UI is up:
 
 1. Open http://localhost:8099 → **Grafana** → **Register**
 2. **Temporal** → **Register Temporal**
-3. Grafana → **GPU: rule + temp/mem**
-4. Confirm on the incident in Keep (http://localhost:3000) and in Temporal UI (`RemediateNvidiaGpu`)
+3. Keep → **Service Topology** (region / datacenter / row / rack / GPU; `make k8s-e2e` seeds it)
+4. Grafana → **GPU: rule + temp/mem**
+5. Confirm on the incident in Keep (http://localhost:3000) and in Temporal UI (`RemediateNvidiaGpu`)
 
 Or run the scripted e2e (no Compose workers):
 
@@ -138,7 +149,18 @@ Or run the scripted e2e (no Compose workers):
 make k8s-e2e
 ```
 
-See [GPU remediate demo](/overview/demo-mock-nvidia-gpu-remediate).
+## Event ingest load (toward 1M/day)
+
+```bash
+make k8s-load                 # 2000 events, concurrency 20
+COUNT=10000 make k8s-load     # larger burst
+```
+
+See [Scale to 1M events](/deployment/scale-1m-events-architecture). A literal 1M run will take hours and can fill the 5Gi MySQL PVC — use a burst and extrapolate (~700 events/min average).
+
+Kind local-dev uses **2 gunicorn workers**, `KEEP_EVENT_WORKERS=8`, and CPU/memory limits so digest threads do not starve the host UI.
+
+See [GPU remediate demo](/overview/demo-mock-nvidia-gpu-remediate) and [NVIDIA GPU topology](/overview/nvidia-gpu-topology).
 
 ## Troubleshooting
 
@@ -146,6 +168,7 @@ See [GPU remediate demo](/overview/demo-mock-nvidia-gpu-remediate).
 | --- | --- |
 | `kind get clusters` is empty but Docker Desktop still lists old contexts | Stale kubeconfig. `kubectl config delete-context kind-<name>` (and matching cluster/user). |
 | Host UI cannot reach the API | `curl http://localhost:8080/healthcheck` and `kubectl -n keep get svc keep-backend`. Recreate the cluster if NodePort 30080 was added after the cluster existed. |
+| Host UI is slow / first page 10–17s | `npm run dev` compiles each route once. After that, slowness is usually digest load or a stale NextAuth cookie (`JWTSessionError: no matching decryption secret`). Sign out, clear `localhost:3000` cookies, restart `make k8s-ui`. Auth debug is off unless `AUTH_DEBUG=true`. |
 | Keep UI not on http://localhost after `make k8s-prod` | `kubectl -n ingress-nginx get pods` and `kubectl -n keep-prod get ingress` |
 | Provider mock / Temporal UI unreachable | kind extraPortMappings require NodePorts `30099` and `30233` |
 | Worker cannot remediate GPU | `kubectl -n keep logs deploy/temporal-worker` — `GPU_MOCK_URL` must be `http://provider-mock:8099` |
@@ -158,3 +181,4 @@ See [GPU remediate demo](/overview/demo-mock-nvidia-gpu-remediate).
 - [Kubernetes installation](/deployment/kubernetes/installation)
 - [Provider mock](/development/provider-mock)
 - [GPU remediate demo](/overview/demo-mock-nvidia-gpu-remediate)
+- [NVIDIA GPU topology](/overview/nvidia-gpu-topology)

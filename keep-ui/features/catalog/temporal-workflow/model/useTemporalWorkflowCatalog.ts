@@ -57,8 +57,9 @@ export function useTemporalWorkflowCatalog() {
 
   const deleteEntry = useCallback(
     async (id: number) => {
-      await api.delete(`/temporal-workflows/${id}`);
+      const result = await api.delete(`/temporal-workflows/${id}`);
       await mutate();
+      return result;
     },
     [api, mutate]
   );

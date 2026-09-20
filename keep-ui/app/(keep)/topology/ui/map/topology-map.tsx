@@ -61,7 +61,10 @@ import { getNodesAndEdgesFromTopologyData } from "@/app/(keep)/topology/ui/map/g
 import { useIncidents } from "@/utils/hooks/useIncidents";
 import { EdgeBase, Connection } from "@xyflow/system";
 import { AddEditNodeSidePanel } from "./AddEditNodeSidePanel";
+import { TopologyNodeDrawer } from "./TopologyNodeDrawer";
 import { useApi } from "@/shared/lib/hooks/useApi";
+import { useMaintenanceRules } from "@/utils/hooks/useMaintenanceRules";
+import { useApprovals } from "@/features/approvals";
 import {
   DropdownMenu,
   EmptyStateCard,
@@ -139,6 +142,7 @@ export function TopologyMap({
   }, [initialSelectedApplicationIds, setSelectedApplicationIds]);
 
   const [isSidePanelOpen, setIsSidePanelOpen] = useState<boolean>(false);
+  const [drawerNodeId, setDrawerNodeId] = useState<string | null>(null);
 
   const applicationMap = useMemo(() => {
     const map = new Map<string, TopologyApplication>();
@@ -452,9 +456,28 @@ export function TopologyMap({
 
   const previousNodesIds = useRef<Set<string>>(new Set());
 
-  const { data: allIncidents } = useIncidents({});
+  const { data: allIncidents } = useIncidents({
+    candidate: false,
+    limit: 200,
+    cel: "is_candidate == false",
+  });
   const { useLastAlerts } = useAlerts();
   const { data: allAlerts } = useLastAlerts(undefined);
+  const { data: maintenanceRules } = useMaintenanceRules();
+  const { requests: pendingApprovals } = useApprovals({
+    status: "pending",
+    actionType: "node_maintenance",
+  });
+
+  const drawerService = useMemo(() => {
+    if (!drawerNodeId || !topologyData) {
+      return null;
+    }
+    return (
+      topologyData.find((service) => service.id.toString() === drawerNodeId) ??
+      null
+    );
+  }, [drawerNodeId, topologyData]);
 
   useEffect(
     function createAndSetLayoutedNodesAndEdges() {
@@ -467,7 +490,9 @@ export function TopologyMap({
         applicationMap,
         allIncidents?.items ?? [],
         allAlerts ?? [],
-        mutateTopologyData
+        mutateTopologyData,
+        maintenanceRules ?? [],
+        pendingApprovals ?? []
       );
 
       const newNodes = Array.from(nodeMap.values());
@@ -498,7 +523,14 @@ export function TopologyMap({
       setNodes(layoutedElements.nodes);
       setEdges(layoutedElements.edges);
     },
-    [topologyData, applicationMap, allIncidents, mutateTopologyData]
+    [
+      topologyData,
+      applicationMap,
+      allIncidents,
+      allAlerts,
+      mutateTopologyData,
+      maintenanceRules,
+    ]
   );
 
   useEffect(
@@ -664,6 +696,12 @@ export function TopologyMap({
               zoomOnDoubleClick={true}
               onEdgeMouseEnter={(_event, edge) => onEdgeHover("enter", edge)}
               onEdgeMouseLeave={(_event, edge) => onEdgeHover("leave", edge)}
+              onNodeClick={(_event, node) => {
+                if (node.type === "service") {
+                  setDrawerNodeId(node.id);
+                }
+              }}
+              onPaneClick={() => setDrawerNodeId(null)}
               nodeTypes={{
                 service: ServiceNode,
                 application: ApplicationNode,
@@ -721,6 +759,13 @@ export function TopologyMap({
         handleClose={() => {
           setIsSidePanelOpen(false);
         }}
+      />
+      <TopologyNodeDrawer
+        isOpen={Boolean(drawerService)}
+        onClose={() => setDrawerNodeId(null)}
+        service={drawerService}
+        incidents={allIncidents?.items ?? []}
+        alerts={allAlerts ?? []}
       />
     </>
   );

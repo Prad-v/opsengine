@@ -35,6 +35,14 @@ Keep auto-generates:
 
 Registered workflows are stored in Keep (not on the Temporal provider config).
 
+## View, edit, or delete
+
+On **Catalog → Temporal workflow**:
+
+- **View** — open a read-only drawer with type, queue, provider, input mapping, and status. Click a row or the **View** button.
+- **Edit** — update name, description, workflow type, task queue, provider, input mapping, or disabled flag. The catalog key stays stable.
+- **Delete** — remove the catalog entry (may require approval if an approval policy matches). Linked Temporal runs on incidents are not cancelled.
+
 ## Use catalog entries in the Keep workflow builder
 
 Registered Temporal catalog workflows appear under **Add step → Temporal catalog**
@@ -84,3 +92,5 @@ Keep starts the Temporal workflow and enriches the incident with linked run meta
 
 - [Temporal provider](/providers/documentation/temporal-provider) — connection settings
 - [Workflow automation](/overview/workflow-automation) — Keep YAML workflows that can also call Temporal
+- [Alert codes](/overview/alert-code-catalog) — reserved `labels.code` to attach Keep workflows as runbooks
+- [Approvals](/overview/approvals) — Temporal HITL via `wait_for_approval` and `request_keep_approval`

@@ -14,13 +14,24 @@ import {
 import { IncidentDto } from "@/entities/incidents/model";
 import { KeyedMutator } from "swr";
 import { AlertDto } from "@/entities/alerts/model";
+import { MaintenanceRule } from "@/app/(keep)/maintenance/model";
+import {
+  alertMatchesTopologyService,
+  incidentMatchesTopologyService,
+  isActiveIncidentStatus,
+} from "@/app/(keep)/topology/ui/map/topologyAlertMatch";
+import { findActiveMaintenanceRule } from "@/app/(keep)/topology/ui/map/topologyMaintenance";
+import type { ApprovalRequest } from "@/features/approvals";
+import { findPendingNodeMaintenance } from "@/app/(keep)/topology/ui/map/topologyMaintenance";
 
 export function getNodesAndEdgesFromTopologyData(
   topologyData: TopologyService[],
   applicationsMap: Map<string, TopologyApplication>,
   allIncidents: IncidentDto[],
   allAlerts: AlertDto[],
-  topologyMutator: KeyedMutator<TopologyService[]>
+  topologyMutator: KeyedMutator<TopologyService[]>,
+  maintenanceRules: MaintenanceRule[] = [],
+  pendingApprovals: ApprovalRequest[] = []
 ) {
   const nodeMap = new Map<string, TopologyNode>();
   const edgeMap = new Map<string, Edge>();
@@ -29,8 +40,8 @@ export function getNodesAndEdgesFromTopologyData(
   for (const service of topologyData) {
     const numIncidentsToService = allIncidents.filter(
       (incident) =>
-        incident.services.includes(service.display_name) ||
-        incident.services.includes(service.service)
+        isActiveIncidentStatus(incident.status) &&
+        incidentMatchesTopologyService(incident, service, allAlerts)
     );
     const node: ServiceNodeType = {
       id: service.id.toString(),
@@ -38,8 +49,15 @@ export function getNodesAndEdgesFromTopologyData(
       data: {
         ...service,
         incidents: numIncidentsToService.length,
-        alerts: allAlerts.filter((alert) => alert.service === service.service)
-          .length,
+        alerts: allAlerts.filter((alert) =>
+          alertMatchesTopologyService(alert, service)
+        ).length,
+        inMaintenance: Boolean(
+          findActiveMaintenanceRule(maintenanceRules, service.service)
+        ),
+        pendingMaintenance: Boolean(
+          findPendingNodeMaintenance(pendingApprovals, service.service)
+        ),
         topologyMutator,
       },
       position: { x: 0, y: 0 }, // Dagre will handle the actual positioning

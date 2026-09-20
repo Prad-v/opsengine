@@ -10,9 +10,11 @@ With a robust and user-friendly interface, Keep allows users to gain deep insigh
   <img height="10" src="/images/alert_table_1.png" />
 </Frame>
 
+Alerts carry a reserved **`code`** (`labels.code` / `alert.code`) so runbooks and workflows attach by identity, not by free-form name. See [Alert codes](/overview/alert-code-catalog).
+
 Everything related with Alert Management can be customized:
 
-1. **Alert table** - view and manage the alerts.
+1. **Alert table** - view and manage the alerts. **Code** is a default column (`labels.code` / `alert.code`). The alert details sidebar shows **Code** after Source.
 2. **Search Bar** - use CEL to filter alerts which can be saved as "Customized Presets".
 3. **Facets** - slice and dice alerts.
 4. **Columns and Time** - customize columns and theme for your preset.

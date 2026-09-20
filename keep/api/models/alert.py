@@ -97,6 +97,9 @@ class AlertDto(BaseModel):
     url: AnyHttpUrl | None = None
     imageUrl: AnyHttpUrl | None = None
     labels: dict | None = {}
+    # Reserved stable identifier for runbooks / catalog / workflow matching.
+    # Always mirrored to labels.code by normalize_alert_code().
+    code: str | None = None
     fingerprint: str | None = (
         None  # The fingerprint of the alert (used for alert de-duplication)
     )
@@ -322,7 +325,9 @@ class AlertDto(BaseModel):
                     "severity": "critical",
                     "pushed": True,
                     "url": "https://www.keephq.dev?alertId=1234",
+                    "code": "POD_MEMORY",
                     "labels": {
+                        "code": "POD_MEMORY",
                         "pod": "api-service-production",
                         "region": "us-east-1",
                         "cpu": "88",

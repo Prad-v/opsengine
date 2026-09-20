@@ -27,6 +27,7 @@ import { HiMiniXMark } from "react-icons/hi2";
 import { useState } from "react";
 import { useApi } from "@/shared/lib/hooks/useApi";
 import { showErrorToast } from "@/shared/ui";
+import { isApprovalPending } from "@/features/approvals";
 import { useConfig } from "@/utils/hooks/useConfig";
 import { useRouter } from "next/navigation";
 import RunExtractionModal from "./run-extraction-modal";
@@ -193,9 +194,13 @@ export default function ExtractionsTable({ extractions, editCallback }: Props) {
     if (confirm("Are you sure you want to delete this rule?")) {
       api
         .delete(`/extraction/${extractionId}`)
-        .then(() => {
+        .then((result) => {
           mutate();
-          toast.success("Extraction deleted successfully");
+          toast.success(
+            isApprovalPending(result)
+              ? "Delete submitted for approval"
+              : "Extraction deleted successfully"
+          );
         })
         .catch((error: any) => {
           showErrorToast(error, "Failed to delete extraction rule");

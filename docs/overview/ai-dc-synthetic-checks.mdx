@@ -1,0 +1,99 @@
+---
+title: "AI datacenter synthetic checks"
+sidebarTitle: "AI DC synthetics"
+description: "NVIDIA and AMD inference/training canaries seeded into Catalog → Synthetic checks."
+---
+
+## Why synthetics next to DCGM
+
+[NVIDIA GPU Grafana alerts](/overview/demo-mock-nvidia-gpu-remediate) tell you the **hardware** is sick (temp, XID, ECC, NVLink CRC). Synthetic checks tell you the **path still works** for users and jobs: gateway ready, golden prompt, NCCL/RCCL fabric, scheduler submit, checkpoint I/O.
+
+Keep still only runs **http / tcp / dns** probers. The AI datacenter pack is a set of HTTP (and one TCP) checks against [provider-mock](/development/provider-mock) endpoints that stand in for DCGM, NVML, ROCm, Triton/vLLM, NCCL/RCCL, and the training scheduler. No GPUs required locally.
+
+## Seed the pack
+
+`make start` seeds the checks after mock-temporal is registered (`AUTO_SETUP_AI_DC_SYNTHETICS=1`). Re-run:
+
+```bash
+make register-ai-dc-synthetic-checks
+```
+
+Targets default to `http://host.docker.internal:8099` so the `keep-synth` worker can reach the mock. Override with `SYNTH_TARGET_BASE_URL`.
+
+Open **Catalog → Synthetic checks**. Fail a probe from mock UI → **Synthetic checks** tab (http://localhost:8099), then **Run now** or wait for the Temporal schedule.
+
+## NVIDIA stack
+
+| Check key | What it proves | Reserved `code` |
+| --- | --- | --- |
+| `dc-control-plane` | TCP to the mock control-plane port | `SYNTH_DC_CONTROL_PLANE` |
+| `nvidia-dcgm` | DCGM exporter scrape contains `DCGM_FI_DEV_GPU_TEMP` | `SYNTH_NVIDIA_DCGM` |
+| `nvidia-nvml` | NVML / `nvidia-smi` device count is 8 | `SYNTH_NVIDIA_NVML` |
+| `nvidia-inference-health` | Inference gateway `/health` | `SYNTH_NVIDIA_INFERENCE_GATEWAY` |
+| `nvidia-inference-ready` | Triton `/v2/health/ready` | `SYNTH_NVIDIA_INFERENCE_READY` |
+| `nvidia-inference-golden` | POST `/v1/chat/completions` returns `SYNTH_OK` within 2s | `SYNTH_NVIDIA_INFERENCE_GOLDEN` |
+| `nvidia-nccl` | 8-GPU NCCL allreduce canary | `SYNTH_NVIDIA_NCCL` |
+
+Labels match the GPU topology (`region`, `datacenter`, `row`, `rack`, `host`, `service=gpu-inference` or `gpu-training`).
+
+## AMD stack
+
+| Check key | What it proves | Reserved `code` |
+| --- | --- | --- |
+| `amd-rocm` | `rocm-smi` device count is 8 | `SYNTH_AMD_ROCM` |
+| `amd-inference-health` | ROCm serving `/health` | `SYNTH_AMD_INFERENCE_GATEWAY` |
+| `amd-inference-golden` | Golden prompt on the AMD path | `SYNTH_AMD_INFERENCE_GOLDEN` |
+| `amd-rccl` | 8-GPU RCCL allreduce canary | `SYNTH_AMD_RCCL` |
+
+## Training jobs
+
+These run on a longer interval (3–5 minutes) so they do not steal a production partition in a real cluster. Against the mock they are cheap HTTP canaries.
+
+| Check key | What it proves | Reserved `code` |
+| --- | --- | --- |
+| `training-submit` | 1-GPU canary job reaches `Running` | `SYNTH_TRAINING_SUBMIT` |
+| `training-checkpoint` | Checkpoint write/read on object storage | `SYNTH_CHECKPOINT_IO` |
+| `storage-health` | S3/MinIO gateway | `SYNTH_STORAGE` |
+| `netbox-dcim` | DCIM API used for GPU inventory | `SYNTH_DCIM` |
+
+## Force a failure
+
+1. Mock UI → **Synthetic checks** → **Fail this probe**
+2. Keep → Catalog → Synthetic checks → **Run now**
+3. Alerts Feed shows `source=synthetic-checks` and `labels.code=SYNTH_*`
+
+Reset flags with **Reset fail flags** on the same tab (`POST /api/synth/reset`).
+
+## Workflow
+
+[`examples/workflows/ai-dc-synthetic-firing.yml`](https://github.com/Prad-v/opsengine/blob/develop/examples/workflows/ai-dc-synthetic-firing.yml) matches `labels.code.startsWith("SYNTH_")`.
+
+## Mock probe API
+
+| Method | Path | Role |
+| --- | --- | --- |
+| `GET` | `/api/synth` | Catalog + fail flags + recent hits |
+| `POST` | `/api/synth/fail` | `{ probe_id, failed }` |
+| `POST` | `/api/synth/reset` | Clear fail flags |
+| `GET` | `/api/synth/nvidia/dcgm/metrics` | Prometheus-style DCGM text |
+| `GET` | `/api/synth/nvidia/nvml` | Device count |
+| `GET` | `/api/synth/nvidia/inference/health` | Gateway |
+| `GET` | `/api/synth/nvidia/inference/v2/health/ready` | Model ready |
+| `POST` | `/api/synth/nvidia/inference/v1/chat/completions` | Golden prompt |
+| `GET` | `/api/synth/nvidia/nccl/allreduce` | NCCL canary |
+| `GET` | `/api/synth/amd/rocm` | ROCm device count |
+| `GET` | `/api/synth/amd/inference/health` | AMD gateway |
+| `POST` | `/api/synth/amd/inference/v1/chat/completions` | AMD golden prompt |
+| `GET` | `/api/synth/amd/rccl/allreduce` | RCCL canary |
+| `POST` | `/api/synth/training/submit` | Job submit |
+| `POST` | `/api/synth/training/checkpoint` | Checkpoint I/O |
+| `GET` | `/api/synth/storage/health` | Object store |
+| `GET` | `/api/synth/netbox/health` | DCIM |
+
+## Related
+
+- [Synthetic checks](/overview/synthetic-checks) — http / tcp / dns probers, Temporal schedules
+- [NVIDIA GPU topology](/overview/nvidia-gpu-topology)
+- [GPU remediate demo](/overview/demo-mock-nvidia-gpu-remediate)
+- [Alert codes](/overview/alert-code-catalog)
+- [Provider mock](/development/provider-mock)

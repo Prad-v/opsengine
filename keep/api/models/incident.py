@@ -93,6 +93,9 @@ class IncidentDto(IncidentDtoIn):
     merged_at: datetime.datetime | None
 
     enrichments: dict | None = {}
+    # Unique reserved alert codes from member alerts (labels.code).
+    code: str | None = None
+    codes: list[str] | None = None
     incident_type: str | None
     incident_application: str | None
 
@@ -215,6 +218,8 @@ class IncidentDto(IncidentDtoIn):
             rule_id=rule.id if rule else None,
             rule_name=rule.name if rule else None,
             rule_is_deleted=rule.is_deleted if rule else None,
+            code=(db_incident.enrichments or {}).get("code"),
+            codes=(db_incident.enrichments or {}).get("codes"),
         )
 
         # This field is required for getting alerts when required

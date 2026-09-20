@@ -1,0 +1,127 @@
+---
+title: "NVIDIA GPU Service Topology"
+sidebarTitle: "NVIDIA GPU topology"
+description: "Region / datacenter / row / rack / GPU map for the AI datacenter demo, aligned with mock Grafana alerts."
+---
+
+Keep Service Topology is a service graph. The NVIDIA GPU demo seeds that graph as a **physical datacenter layout** so alerts light up the path from region down to the GPU.
+
+```
+us-west-2
+  └── ai-dc-1
+        ├── row-a
+        │     ├── rack-11 → gpu-node-a01 → GPU 0 / GPU 1
+        │     └── rack-12 → gpu-node-a03 → GPU 0 / GPU 1   ← default demo host
+        └── row-b
+              └── rack-21 → gpu-node-b01 → GPU 0 / GPU 1
+gpu-inference  ──CUDA──►  each GPU
+```
+
+`make start` (and `make demo-nvidia-gpu`) creates this map automatically. Refresh **Noise Reduction → Service Topology** and filter the **NVIDIA GPU Inference** application.
+
+## How to load it
+
+| Method | When to use |
+| --- | --- |
+| `make start` / `make demo-nvidia-gpu` | Local hybrid — REST seed, idempotent, does **not** wipe other topology |
+| `make register-nvidia-gpu-topology` | Re-run only the seed |
+| Mock UI → **Service Topology** | Push NVIDIA map (REST merge), export/import YAML |
+| Mock UI → **Configure Keep with NetBox** | Seed Compose NetBox (`:8000`) with the same inventory, install the `netbox` provider, pull (replaces that provider's nodes) |
+| Topology map → **Import** `examples/topologies/nvidia-gpu-datacenter.yml` | Empty map (Import **replaces** the tenant's topology) |
+
+YAML import wipes existing topology for the tenant. Prefer the REST seed while iterating.
+
+## Alert labels (aligned with node `service` names)
+
+Every NVIDIA GPU Grafana mock alert includes:
+
+| Label | Example | Topology node |
+| --- | --- | --- |
+| `service` | `gpu-inference` | Logical inference service |
+| `region` | `us-west-2` | Region |
+| `datacenter` | `ai-dc-1` | Datacenter |
+| `row` | `row-a` | Row |
+| `rack` | `rack-12` | Rack |
+| `host` | `gpu-node-a03` | GPU node |
+| `gpu` | `0` | Device index |
+| `gpu_id` | `gpu-node-a03-gpu0` | GPU node |
+
+The topology map badges a node when `alert.service` **or** any of those location labels matches the node's `service` name. Firing `gpu_temp` therefore highlights **gpu-inference**, **gpu-node-a03-gpu0**, **gpu-node-a03**, **rack-12**, **row-a**, **ai-dc-1**, and **us-west-2**. Incidents match the same way (affected services, location enrichments, and linked alerts), so a GPU incident also lights up the host and rack.
+
+## Node details, maintenance, and icons
+
+Click a node on **Noise Reduction → Service Topology** to open a side panel.
+
+| In the panel | Behavior |
+| --- | --- |
+| **Active incidents** | Firing and acknowledged incidents for this node |
+| **Historical incidents** | Resolved and merged incidents |
+| **Put node in maintenance** | Creates a [Maintenance Windows](/overview/maintenance-windows) rule (`suppress`, 1h / 4h / 8h / 24h) |
+| **Reason** | Node down, RMA, firmware/driver upgrade, thermal/cooling, planned capacity work, or Other |
+| **End now** | Disables the window when work finishes early |
+
+The **Applications** tab **Edit** button updates that application in place (`PUT /topology/applications/{id}`). It does not create a second copy. `make start` / **Push NVIDIA map to Keep** also upserts **NVIDIA GPU Inference** by name and removes duplicate rows left over from older seeds.
+
+The rule appears on **Noise Reduction → Maintenance Windows**. CEL is scoped to the node type, for example `labels.host == "gpu-node-a03"` for a host and `labels.gpu_id == "gpu-node-a03-gpu0"` for a GPU. Matching alerts are suppressed; resolved and acknowledged events still pass so incidents can close.
+
+Nodes in an **active** window are drawn with an amber dashed border, a **Maint** badge, and a matching icon tint. Category icons (region, datacenter, row, rack, host, GPU, service) sit next to the node name.
+
+The demo pair (`gpu_temp` + `gpu_mem`) stays on `gpu-node-a03` / `rack-12` so correlation still groups them into one GPU incident. Other scenarios fan out across racks so the map is more interesting:
+
+| Scenario | Host | Row / rack | GPU |
+| --- | --- | --- | --- |
+| `gpu_temp`, `gpu_mem`, `gpu_unavailable` | `gpu-node-a03` | row-a / rack-12 | 0 |
+| `gpu_xid` | `gpu-node-a03` | row-a / rack-12 | 1 |
+| `gpu_ecc` | `gpu-node-a01` | row-a / rack-11 | 0 |
+| `gpu_throttle` | `gpu-node-a01` | row-a / rack-11 | 1 |
+| `gpu_nvlink` | `gpu-node-b01` | row-b / rack-21 | 0 |
+| `gpu_power` | `gpu-node-b01` | row-b / rack-21 | 1 |
+
+## Mock UI
+
+Open [http://localhost:8099](http://localhost:8099) → **Service Topology**.
+
+| Action | Keep API | Effect |
+| --- | --- | --- |
+| **Push NVIDIA map to Keep** | `POST /topology/service` + `/dependency` + `/applications` | Merge; does not wipe other nodes |
+| **Refresh Keep status** | `GET /topology` + `/topology/applications` | Shows service/application counts |
+| **Export mock YAML** | mock `GET /api/topology/export` | Downloads NVIDIA datacenter YAML |
+| **Export Keep YAML** | `GET /topology/export` | Downloads current tenant YAML into the editor |
+| **Import YAML into Keep** | `POST /topology/import` | **Replaces** the tenant topology |
+| **Refresh NetBox status** | mock `GET /api/netbox/status` | Compose NetBox reachability (`:8000`) |
+| **Seed NVIDIA DCIM** | mock `POST /api/netbox/seed` | Idempotent region/row/rack/GPU/IPAM in NetBox |
+| **Configure Keep with NetBox** | Keep `POST /providers/install` + `/topology/pull` | Install `netbox` provider; pull **replaces** that provider's nodes |
+| Choose file | — | Loads YAML/JSON into the editor |
+
+Mock proxy endpoints (provider-mock `:8099`):
+
+| Endpoint | Role |
+| --- | --- |
+| `GET /api/topology` | Inventory + Keep spec + `yaml_text` |
+| `GET /api/topology/export` | Download NVIDIA YAML |
+| `POST /api/topology/push` | Seed Keep via REST (merge) |
+| `GET /api/topology/keep` | Read Keep topology summary |
+| `GET /api/topology/keep/export` | Proxy Keep YAML export |
+| `POST /api/topology/keep/import` | `{ keep_api_url, keep_api_key, yaml }` full replace |
+| `GET /api/netbox/status` | Compose NetBox health + planned inventory |
+| `POST /api/netbox/seed` | Create NVIDIA DCIM/IPAM objects (idempotent) |
+| `POST /api/netbox/configure-keep` | Seed + install Keep `netbox` provider + pull |
+
+## APIs
+
+| Endpoint | Role |
+| --- | --- |
+| `GET /api/gpu/topology` (provider-mock :8099) | Same as `GET /api/topology` |
+| `POST /api/gpu/push-topology` | Alias of `POST /api/topology/push` |
+| Keep `POST /topology/import` | Full replace from a YAML file |
+| Keep `GET /topology/export` | Current tenant YAML |
+
+## Related
+
+- [Service Topology](/overview/servicetopology)
+- [Maintenance Windows](/overview/maintenance-windows) — put a rack/host/GPU in maintenance from the node slider
+- [Approvals](/overview/approvals) — optional second-person gate for node maintenance
+- [NetBox provider](/providers/documentation/netbox-provider) — Compose NetBox at `:8000`; mock UI **Configure Keep with NetBox** pulls the same hierarchy from DCIM
+- [Demo: NVIDIA GPU → Temporal remediate](/overview/demo-mock-nvidia-gpu-remediate)
+- [AI datacenter synthetic checks](/overview/ai-dc-synthetic-checks)
+- [Provider mock](/development/provider-mock)

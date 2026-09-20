@@ -75,7 +75,7 @@ POST /alerts/event[/{provider}]
                 ▼
          process_event()
                 │
-   format_alert → enrich → maintenance → dedupe
+   format_alert → enrich → maintenance (suppress or drop) → dedupe
                 │
                 ▼
          Alert / LastAlert (Postgres)
@@ -100,7 +100,7 @@ Local default (`Makefile`): Postgres + Redis may be available, but **`REDIS=fals
 |-------|---------|--------|
 | `basic_processing` | Events, topology, incidents | Wired when `REDIS=true` |
 | `workflows` | Keep workflow execution | Defined; Redis enqueue **unfinished** |
-| `maintenance` | Watcher / maintenance recovery | Wired |
+| `maintenance` | Watcher / maintenance recovery. Starts when `WATCHER=true`, `MAINTENANCE_WINDOWS=true`, or `MAINTENANCE_WINDOW_STRATEGY=recover_previous_status`. | Wired |
 
 There is **no Celery**. Async work uses **ARQ + Redis**.
 
@@ -265,10 +265,30 @@ Use these gates before calling the target “done”:
 - Compose: `docker-compose-with-arq.yml`, `docker-compose.deps.yml`, `docker-compose.temporal.yml`
 - Stress harness: [STRESS.md](https://github.com/keephq/keep/blob/main/STRESS.md)
 
+## Local kind validation
+
+On a 6-CPU / 10GB kind node (`make k8s-start`), measure HTTP accept vs digest:
+
+```bash
+make k8s-load                  # default COUNT=2000
+COUNT=1000000 make k8s-load    # literal 1M events — hours, fills MySQL
+```
+
+Script: `scripts/load_k8s_events.py`. Unit tests: `tests/test_load_k8s_events.py`.
+
+**2026-09-13 baseline (4 gunicorn workers, pool 5, no limits):** 2,000 events accepted in **1.1s** (~1,750 HTTP events/s) but digest was still running minutes later. `/incidents` went from ~15ms to **1.2s**, `/preset/.../alerts` **5.2s**, `/alerts/query` **3.3s**.
+
+**After kind overlay (2 gunicorn workers, `KEEP_EVENT_WORKERS=8`, DB pool 15+15, CPU/memory limits):** another 2,000 events accepted in **1.3s**; digest persisted ~2,000 alerts in **46s** (~43/s, **2,580/min**). `/incidents` **55ms**, `/alerts/query` **89ms** after digest. HTTP accept and digest both exceed the 700 events/min daily-average gate.
+
+**Kind resource overlay (`helm/keep-values-kind.yaml`):** 2 gunicorn workers, `KEEP_EVENT_WORKERS=8`, DB pool 15+15, CPU/memory requests+limits on API, MySQL, websocket, Temporal, worker, and provider-mock.
+
+Do **not** run `COUNT=1000000` on the 5Gi kind PVC — persist a burst (2k–10k) and extrapolate. Average 1M/day is ~700 events/min; HTTP accept already exceeds that. Digest + correlation + UI list latency are the gates.
+
 ## Status
 
 | Item | Status |
 |------|--------|
 | Feature work (Temporal catalog, workers, demos) | In progress — complete first |
-| Phase 0 config runbook | Documented here; not production-validated for 1M/day |
-| Phase 1–4 implementation | Backlog — revisit after functionality is complete |
+| Phase 0 config runbook | Kind overlay applied; Redis/ARQ still off on local-dev |
+| Local kind burst (2k events) | After overlay: digest ~2,580/min; list APIs &lt;100ms. HTTP accept already far above 700/min |
+| Phase 1–4 implementation | Backlog — Redis workflow offload + correlation scale |

@@ -72,8 +72,8 @@ class Webhook(Role):
 
 
 class WorkflowRunner(Role):
-    SCOPES = ["write:workflows", "execute:workflows"]
-    DESCRIPTION = "Run workflows using API keys"
+    SCOPES = ["write:workflows", "execute:workflows", "write:approvals"]
+    DESCRIPTION = "Run workflows using API keys and create approval requests"
 
 
 def get_role_by_role_name(role_name: str) -> list[str]:

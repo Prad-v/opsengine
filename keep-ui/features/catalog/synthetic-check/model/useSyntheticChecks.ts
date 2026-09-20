@@ -52,8 +52,9 @@ export function useSyntheticChecks() {
 
   const deleteCheck = useCallback(
     async (id: number) => {
-      await api.delete(`/synthetic-checks/${id}`);
+      const result = await api.delete(`/synthetic-checks/${id}`);
       await mutate();
+      return result;
     },
     [api, mutate]
   );

@@ -9,6 +9,7 @@ import {
 } from "@tremor/react";
 import { Drawer } from "@/shared/ui/Drawer";
 import { showErrorToast, showSuccessToast } from "@/shared/ui";
+import { isApprovalPending } from "@/features/approvals";
 import { useTemporalWorkflowCatalog } from "../model/useTemporalWorkflowCatalog";
 import type {
   TemporalCatalogEntry,
@@ -16,6 +17,7 @@ import type {
 } from "../model/types";
 import { TemporalCatalogTable } from "./TemporalCatalogTable";
 import { TemporalWorkflowForm } from "./TemporalWorkflowForm";
+import { TemporalWorkflowViewDrawer } from "./TemporalWorkflowViewDrawer";
 
 export function TemporalWorkflowCatalogPage() {
   const {
@@ -27,22 +29,35 @@ export function TemporalWorkflowCatalogPage() {
     updateEntry,
     deleteEntry,
   } = useTemporalWorkflowCatalog();
-  const [isDrawerOpen, setIsDrawerOpen] = useState(false);
+  const [isFormOpen, setIsFormOpen] = useState(false);
   const [editing, setEditing] = useState<TemporalCatalogEntry | null>(null);
+  const [viewing, setViewing] = useState<TemporalCatalogEntry | null>(null);
 
   const openCreate = () => {
+    setViewing(null);
     setEditing(null);
-    setIsDrawerOpen(true);
+    setIsFormOpen(true);
+  };
+
+  const openView = (entry: TemporalCatalogEntry) => {
+    setIsFormOpen(false);
+    setEditing(null);
+    setViewing(entry);
   };
 
   const openEdit = (entry: TemporalCatalogEntry) => {
+    setViewing(null);
     setEditing(entry);
-    setIsDrawerOpen(true);
+    setIsFormOpen(true);
   };
 
-  const closeDrawer = () => {
-    setIsDrawerOpen(false);
+  const closeForm = () => {
+    setIsFormOpen(false);
     setEditing(null);
+  };
+
+  const closeView = () => {
+    setViewing(null);
   };
 
   const handleSubmit = async (body: TemporalCatalogEntryInput) => {
@@ -54,7 +69,7 @@ export function TemporalWorkflowCatalogPage() {
         await createEntry(body);
         showSuccessToast("Temporal workflow registered");
       }
-      closeDrawer();
+      closeForm();
     } catch (err) {
       showErrorToast(err, "Failed to save Temporal workflow");
       throw err;
@@ -70,8 +85,18 @@ export function TemporalWorkflowCatalogPage() {
       return;
     }
     try {
-      await deleteEntry(entry.id);
-      showSuccessToast("Temporal workflow deleted");
+      const result = await deleteEntry(entry.id);
+      showSuccessToast(
+        isApprovalPending(result)
+          ? "Delete submitted for approval"
+          : "Temporal workflow deleted"
+      );
+      if (viewing?.id === entry.id) {
+        closeView();
+      }
+      if (editing?.id === entry.id) {
+        closeForm();
+      }
     } catch (err) {
       showErrorToast(err, "Failed to delete Temporal workflow");
     }
@@ -109,16 +134,37 @@ export function TemporalWorkflowCatalogPage() {
               provider connected under Providers first.
             </>
           }
+          onView={openView}
           renderActions={(entry) => (
             <>
-              <Button size="xs" variant="secondary" onClick={() => openEdit(entry)}>
+              <Button
+                size="xs"
+                variant="secondary"
+                onClick={(event) => {
+                  event.stopPropagation();
+                  openView(entry);
+                }}
+              >
+                View
+              </Button>
+              <Button
+                size="xs"
+                variant="secondary"
+                onClick={(event) => {
+                  event.stopPropagation();
+                  openEdit(entry);
+                }}
+              >
                 Edit
               </Button>
               <Button
                 size="xs"
                 variant="secondary"
                 color="red"
-                onClick={() => handleDelete(entry)}
+                onClick={(event) => {
+                  event.stopPropagation();
+                  handleDelete(entry);
+                }}
               >
                 Delete
               </Button>
@@ -127,7 +173,15 @@ export function TemporalWorkflowCatalogPage() {
         />
       </Card>
 
-      <Drawer isOpen={isDrawerOpen} onClose={closeDrawer}>
+      <TemporalWorkflowViewDrawer
+        entry={viewing}
+        isOpen={!!viewing}
+        onClose={closeView}
+        onEdit={openEdit}
+        onDelete={handleDelete}
+      />
+
+      <Drawer isOpen={isFormOpen} onClose={closeForm}>
         <div className="p-2">
           <Title className="mb-4">
             {editing ? "Edit Temporal workflow" : "Register Temporal workflow"}
@@ -135,7 +189,7 @@ export function TemporalWorkflowCatalogPage() {
           <TemporalWorkflowForm
             initial={editing}
             onSubmit={handleSubmit}
-            onCancel={closeDrawer}
+            onCancel={closeForm}
           />
         </div>
       </Drawer>

@@ -12,6 +12,7 @@ Prove the AI datacenter remediation path:
 2. Keep correlates them into a **GPU** incident  
 3. Keep workflow starts Temporal **`RemediateNvidiaGpu`**  
 4. Temporal remediates the **mock NVIDIA GPU server**  
+   - Optional: set `wait_for_approval: true` on the Temporal input so Keep **Approvals** must accept before reset  
    - **Success** → resolves the Keep incident  
    - **Failure** → posts a mock ops email (incident stays open)
 
@@ -22,7 +23,9 @@ Prove the AI datacenter remediation path:
 - Starts provider-mock (`:8099`) and the Temporal worker (`RemediateNvidiaGpu`)
 - Registers **mock-grafana** + **mock-temporal** into Keep (best-effort)
 - Registers **Remediate NVIDIA GPU** in the Temporal catalog
+- Registers reserved **NVIDIA_GPU_*** codes under Catalog → Alert codes
 - Uploads `examples/workflows/mock-nvidia-gpu-remediate.yml`
+- Seeds **Service Topology** (region / datacenter / row / rack / GPU)
 
 To re-run only the GPU demo setup after Keep is up:
 
@@ -36,8 +39,9 @@ Disable auto-setup: `AUTO_SETUP_NVIDIA_GPU_DEMO=0 make start`
 
 1. Mock UI → **Grafana** → **Register**  
 2. Mock UI → **Temporal** → **Register Temporal**  
-3. Success path: Grafana → **GPU: rule + temp/mem**  
-4. Failure path: **NVIDIA GPU server** tab → enable **Force fail**, then re-fire GPU alerts  
+3. Keep → **Service Topology** — filter **NVIDIA GPU Inference** (seeded by `make start`)  
+4. Success path: Grafana → **GPU: rule + temp/mem**  
+5. Failure path: **NVIDIA GPU server** tab → enable **Force fail**, then re-fire GPU alerts  
 
 ## What to check
 
@@ -48,19 +52,23 @@ Disable auto-setup: `AUTO_SETUP_NVIDIA_GPU_DEMO=0 make start`
 | **Incident → Overview** | `gpu_remediation=started` | Same |
 | **Mock → NVIDIA GPU server** | Remediations show **ok** | Remediations show **fail** |
 | **Mock → Failure emails** | Empty (or prior) | New email to `ops@ai-dc.local` |
+| **Keep → Service Topology** | `gpu-inference` + `gpu-node-a03` / `rack-12` / `row-a` badge | Same path, incident stays open |
 | **Temporal UI** http://localhost:8233 | Workflow `RemediateNvidiaGpu` completed | Completed with `ok=false` |
 
 ## Workflow file
 
 [`examples/workflows/mock-nvidia-gpu-remediate.yml`](https://github.com/keephq/keep/blob/main/examples/workflows/mock-nvidia-gpu-remediate.yml)
 
-- Trigger: incident `created` / `updated`  
-- Guard: incident name contains `GPU` and enrichment `gpu_remediation` not set  
+- Triggers: alert CEL `labels.code.startsWith("NVIDIA_GPU")` **or** incident `created` / `updated` with the same code filter  
+- Guard: enrichment `gpu_remediation` not set  
 - Action: Temporal `start_workflow` → `RemediateNvidiaGpu` / `keep-ops`  
+- Mock payloads set reserved `labels.code` (`NVIDIA_GPU_THERMAL`, `NVIDIA_GPU_MEMORY`, …). Register those codes under [Catalog → Alert codes](/overview/alert-code-catalog) to attach a runbook or auto-run this workflow.  
 - Temporal activities call provider-mock `/gpu/server/remediate`, then Keep `/incidents/{id}/status` or `/gpu/emails`
 
 ## Related
 
 - [Provider mock](/development/provider-mock)  
+- [NVIDIA GPU Service Topology](/overview/nvidia-gpu-topology)  
+- [AI datacenter synthetic checks](/overview/ai-dc-synthetic-checks)  
 - [Temporal worker](/overview/temporal-worker-list-and-zip)  
 - [Demo: Mock Grafana → Temporal ListAndZip](/overview/demo-mock-grafana-list-and-zip)  

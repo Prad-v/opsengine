@@ -28,21 +28,22 @@ make stop
 
 `make start` will:
 1. Install local deps if missing (`poetry` + `npm`)
-2. Start `docker-compose.deps.yml` + `docker-compose.temporal.yml` (Postgres `:5432`, Redis `:6379`, Soketi `:6001`, Temporal `:7233` / UI `:8233`) and the **provider-mock** UI (`:8099`)
+2. Start `docker-compose.deps.yml` + `docker-compose.temporal.yml` (Postgres `:5432`, Redis `:6379`, Soketi `:6001`, Temporal `:7233` / UI `:8233`), the **provider-mock** UI (`:8099`), and **NetBox** (`:8000`)
 3. Run `poetry run keep api` on `:8080`
 4. Run `npm run dev` in `keep-ui` on `:3000`
 
-> **UI note:** Incidents (`/incidents`) and Alerts Feed (`/alerts/feed`) use Material UI. See [Material UI](/development/material-ui).
+> **UI note:** Incidents (`/incidents`), Alerts Feed (`/alerts/feed`), and Alert lifecycle (`/onboarding`) use Material UI. See [Material UI](/development/material-ui).
 
 | Process | Where it runs | URL / port |
 | --- | --- | --- |
-| UI | Host (npm) | http://localhost:3000 |
+| UI | Host (npm) | http://localhost:3000 — **Alert lifecycle** (`/onboarding`) is always in the sidebar |
 | API | Host (poetry) | http://localhost:8080 |
 | Postgres | Docker | `localhost:5432` (`keepuser` / `keeppassword`, db `keepdb`) |
 | Redis | Docker | `localhost:6379` |
 | Soketi | Docker | `localhost:6001` |
 | Temporal | Docker | gRPC `localhost:7233`, UI http://localhost:8233 (`default` namespace) |
 | Provider mock | Docker | http://localhost:8099 (Grafana/Mimir/VM + NVIDIA GPU alerts) |
+| NetBox | Docker | http://localhost:8000 (`admin` / `admin`; first boot 1–2 minutes) |
 
 Useful split terminals (optional; `make start` already covers this):
 
@@ -53,9 +54,11 @@ make frontend    # Next.js UI
 make stop        # stop API, UI, and Docker deps
 ```
 
+Open http://localhost:3000. **Alert lifecycle** (`/onboarding`) lists every reserved-code path and lets you **View**, **Edit**, **Pause**, or **Delete** a row. **Onboard lifecycle** starts the wizard (providers → this alert code → correlation → workflow → notification). If no alert source is installed yet, Incidents may open this page first. See [Alert lifecycle](/overview/onboarding).
+
 ### Provider mock (Grafana / Mimir / VictoriaMetrics)
 
-`make start` (and `make deps`) starts the provider-mock UI automatically at [http://localhost:8099](http://localhost:8099). Use it to register mock Grafana / Mimir / VictoriaMetrics providers and fire webhook events (including the **NVIDIA GPU / AI datacenter** pack). Full guide: [Provider mock](/development/provider-mock).
+`make start` (and `make deps`) starts the provider-mock UI automatically at [http://localhost:8099](http://localhost:8099) and NetBox at [http://localhost:8000](http://localhost:8000). Use the mock to register Grafana / Mimir / VictoriaMetrics and fire webhook events (including the **NVIDIA GPU / AI datacenter** pack). On the **Service Topology** tab, **Configure Keep with NetBox** seeds the same datacenter inventory into NetBox and installs Keep’s `netbox` provider. Full guide: [Provider mock](/development/provider-mock).
 
 To restart only the mock:
 
@@ -63,7 +66,7 @@ To restart only the mock:
 make mock-providers
 ```
 
-Grafana includes a **payments** correlation demo and an **NVIDIA GPU / AI datacenter** pack (DCGM-style H100 alerts). `make start` auto-wires the remediation loop (Temporal → mock GPU server → resolve or email). See [GPU remediate demo](/overview/demo-mock-nvidia-gpu-remediate). Re-run with `make demo-nvidia-gpu` if needed.
+Grafana includes a **payments** correlation demo and an **NVIDIA GPU / AI datacenter** pack (DCGM-style H100 alerts). `make start` auto-wires the remediation loop (Temporal → mock GPU server → resolve or email) and seeds **Catalog → Synthetic checks** with NVIDIA/AMD inference and training canaries. See [GPU remediate demo](/overview/demo-mock-nvidia-gpu-remediate) and [AI DC synthetics](/overview/ai-dc-synthetic-checks). Re-run with `make demo-nvidia-gpu` if needed.
 
 > Do not run `make start` and `make up` at the same time — both claim port `8080`. The Providers page may then show a different Keep API than the one the mock registered into.
 

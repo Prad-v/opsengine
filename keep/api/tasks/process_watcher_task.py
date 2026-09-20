@@ -5,6 +5,7 @@ from filelock import FileLock, Timeout
 import redis
 from keep.api.bl.maintenance_windows_bl import MaintenanceWindowsBl
 from keep.api.bl.dismissal_expiry_bl import DismissalExpiryBl
+from keep.api.bl.approval_bl import ApprovalBl
 from keep.api.consts import REDIS, WATCHER_LAPSED_TIME
 
 logger = logging.getLogger(__name__)
@@ -32,6 +33,12 @@ async def async_process_watcher(*args):
                 DismissalExpiryBl.check_dismissal_expiry,
                 logger
             )
+
+            await loop.run_in_executor(
+                ctx.get("pool"),
+                ApprovalBl.expire_all_tenants,
+                logger,
+            )
             
         except Exception as e:
             logger.error("Error in watcher process: %s", e, exc_info=True)
@@ -56,6 +63,11 @@ async def async_process_watcher(*args):
                         None,
                         DismissalExpiryBl.check_dismissal_expiry,
                         logger
+                    )
+                    await loop.run_in_executor(
+                        None,
+                        ApprovalBl.expire_all_tenants,
+                        logger,
                     )
                     
                     logger.info(f"Sleeping for {WATCHER_LAPSED_TIME} seconds before next run.")

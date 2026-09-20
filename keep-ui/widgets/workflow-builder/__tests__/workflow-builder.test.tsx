@@ -204,6 +204,7 @@ const mockConfig: InternalConfig = {
   ALERT_SIDEBAR_FIELDS: [
     "service",
     "source",
+    "code",
     "description",
     "fingerprint",
     "url",

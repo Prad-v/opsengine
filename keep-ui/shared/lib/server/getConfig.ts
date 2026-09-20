@@ -6,6 +6,7 @@ import {
   NO_AUTH,
   SINGLE_TENANT,
 } from "@/utils/authenticationType";
+import { DEFAULT_ALERT_SIDEBAR_FIELDS } from "@/features/alerts/alert-detail-sidebar/lib/alertSidebarFieldLogic";
 
 export function getConfig(): InternalConfig {
   let authType = process.env.AUTH_TYPE;
@@ -36,20 +37,9 @@ export function getConfig(): InternalConfig {
 
   // Parse alert sidebar fields from environment variable
   // Default includes all standard fields
-  const defaultAlertSidebarFields = [
-    "service",
-    "source",
-    "description",
-    "message",
-    "fingerprint",
-    "url",
-    "incidents",
-    "timeline",
-    "relatedServices",
-  ];
   const alertSidebarFields = process.env.ALERT_SIDEBAR_FIELDS
     ? process.env.ALERT_SIDEBAR_FIELDS.split(",").map((field) => field.trim())
-    : defaultAlertSidebarFields;
+    : [...DEFAULT_ALERT_SIDEBAR_FIELDS];
 
   return {
     AUTH_TYPE: authType,
@@ -98,6 +88,16 @@ export function getConfig(): InternalConfig {
       process.env.HIDE_NAVBAR_MAINTENANCE_WINDOW?.toLowerCase() === "true",
     HIDE_NAVBAR_AI_PLUGINS:
       process.env.HIDE_NAVBAR_AI_PLUGINS?.toLowerCase() === "true",
+    HIDE_NAVBAR_TEMPORAL_WORKFLOWS:
+      process.env.HIDE_NAVBAR_TEMPORAL_WORKFLOWS?.toLowerCase() === "true",
+    HIDE_NAVBAR_SYNTHETIC_CHECKS:
+      process.env.HIDE_NAVBAR_SYNTHETIC_CHECKS?.toLowerCase() === "true",
+    HIDE_NAVBAR_ALERT_CODES:
+      process.env.HIDE_NAVBAR_ALERT_CODES?.toLowerCase() === "true",
+    HIDE_NAVBAR_APPROVALS:
+      process.env.HIDE_NAVBAR_APPROVALS?.toLowerCase() === "true",
+    HIDE_NAVBAR_APPROVAL_POLICIES:
+      process.env.HIDE_NAVBAR_APPROVAL_POLICIES?.toLowerCase() === "true",
     // Ticketing integration
     KEEP_TICKETING_ENABLED:
       process.env.KEEP_TICKETING_ENABLED?.toLowerCase() === "true",

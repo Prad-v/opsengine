@@ -1,0 +1,140 @@
+---
+title: "Approvals"
+sidebarTitle: "Approvals"
+description: "Opt-in second-person approval for maintenance, workflow runs, deletes, Temporal HITL, and external systems."
+---
+
+Keep has a single **approval engine**. Matching policies create a pending request instead of executing immediately. Approvers decide in **Approvals**; Keep then runs the original action, signals Temporal, or POSTs a webhook.
+
+Without a matching policy, behavior is unchanged: the action runs immediately.
+
+```
+UI / API / YAML / Temporal
+        │
+        ▼
+  ApprovalBl.gate ── no policy ──► execute now
+        │
+        │ match or force
+        ▼
+  ApprovalRequest (pending)
+        │
+        ▼
+  Approvals inbox ── approve ──► callback
+                     Keep action | Temporal signal | webhook
+```
+
+Keep YAML workflows cannot pause mid-run (they are not durable). Temporal workflows can wait on a signal. Keep is the system of record for the **decision**; Temporal and other engines wait.
+
+## HTTP contract
+
+Gated Keep mutations return:
+
+- **200** and the created/deleted resource when no policy matches
+- **202** `{ status: "pending", request_id, approval }` when a policy matches (or YAML `require_approval` / catalog `auto_run_on: approval` forces a request)
+
+There is no skip-approval header.
+
+## Policies
+
+**Catalog → Approval policies** (`/catalog/approval-policies`).
+
+| Field | Purpose |
+| --- | --- |
+| **Name** | Shown in the inbox |
+| **Action type** | `create_maintenance`, `node_maintenance`, `run_workflow`, `delete_resource`, `temporal_signal`, `webhook`, `custom` |
+| **Resource type** | Optional extra filter (`workflow`, `maintenance`, `provider`, `alert_catalog`, ...) |
+| **Match when (CEL)** | Visual filter builder (same AND-within-group / OR-between-groups pattern as Correlations). Fields include `duration_seconds`, `category`, `service`, `resource_type`, …. Empty conditions match all of that action type |
+| **Approver roles / emails** | Who may decide (admin always can, except self-approve) |
+| **Allow self-approve** | Default off |
+| **Timeout seconds** | Pending requests expire (watcher marks `expired`) |
+| **Priority** | Highest matching enabled policy wins |
+
+Build filters in the UI (e.g. `duration_seconds > 14400` **OR** `category = gpu`). Equivalent stored CEL:
+
+- `duration_seconds > 14400`
+- `category == "gpu"`
+- `resource_type == "workflow"`
+
+## Inbox
+
+**Approvals** (`/approvals`) lists pending requests. Approve, reject, or cancel (requester or admin). Live updates use the same Pusher tenant channel (`approval-update`).
+
+Self-approve is blocked unless the policy sets **Allow self-approve**.
+
+## What can require approval
+
+### Create a maintenance window
+
+`POST /maintenance` is gated as `create_maintenance`. On approve, Keep inserts the same `MaintenanceWindowRule`.
+
+### Put a topology node in maintenance
+
+The topology drawer sends `topology_service_id` / `topology_category` / `topology_reason`. That is gated as `node_maintenance` (same executor: create the CEL rule). The map shows a **Pending** chip until the rule exists.
+
+### Run a workflow when auto-run is off
+
+Alert catalog **Auto-run on = Propose run for approval** (`auto_run_on: approval`) creates a `run_workflow` request instead of enqueueing.
+
+Manual **Run** is also gated when a `run_workflow` policy matches, or when YAML has `require_approval: true`. YAML `permissions` still control who may **request** the run.
+
+### Delete resources
+
+`delete_resource` can gate workflows, maintenance rules, providers, alert catalog, Temporal catalog, correlation rules, mapping, extraction, and synthetic checks. Approve calls the existing delete function (it does not replay the caller's HTTP request).
+
+Alerts, incidents, users, and API keys are not gated in this release.
+
+### Temporal HITL
+
+The Temporal worker activity `request_keep_approval` POSTs `/approvals` with `callback.kind = temporal_signal`. `RemediateNvidiaGpu` waits when `wait_for_approval: true` (default **false**, so the existing GPU demo is unchanged). Approve/reject signals `approve` with `{ approved, decided_by, comment }`.
+
+### Keep YAML and external systems
+
+```yaml
+actions:
+  - name: request-gpu-reset
+    provider:
+      type: keep
+      with:
+        request_approval:
+          title: "Reset GPU {{ alert.labels.host }}"
+          action_type: custom
+          callback:
+            kind: keep_action
+            workflow_id: mock-nvidia-gpu-remediate
+```
+
+The Keep workflow **ends** after creating the request. Continuation is the callback (`keep_action` enqueues another workflow, `temporal_signal`, or `webhook`).
+
+External systems can `POST /approvals` with a webhook callback:
+
+```json
+{
+  "action_type": "custom",
+  "title": "Open change window on rack-a3",
+  "callback": { "kind": "webhook", "url": "https://other-system/hooks/keep-approval" }
+}
+```
+
+## API
+
+```
+GET    /approvals
+POST   /approvals
+GET    /approvals/{id}
+POST   /approvals/{id}/approve
+POST   /approvals/{id}/reject
+POST   /approvals/{id}/cancel
+GET    /approvals/policies
+POST   /approvals/policies
+PUT    /approvals/policies/{id}
+DELETE /approvals/policies/{id}
+```
+
+Scopes: `read:approvals` (inbox, including NOC), `write:approvals` (policies and external create). Decide uses inbox read plus policy allowlists; admin can always decide except self-approve.
+
+## Troubleshooting
+
+- Action still runs immediately → no enabled policy matched `action_type` / CEL
+- 403 on approve → requester cannot self-approve, or role/email is not on the policy
+- Temporal never continues → callback missing `workflow_id` / `run_id`, or no Temporal provider installed
+- Duplicate pending rows → same `idempotency_key` returns the existing pending request

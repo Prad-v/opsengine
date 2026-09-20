@@ -1,5 +1,16 @@
-{/* This snippet is automatically generated using scripts/docs_render_provider_snippets.py 
+{/* This snippet is automatically generated using scripts/docs_render_provider_snippets.py
 Do not edit it manually, as it will be overwritten */}
+
+## Authentication
+This provider requires authentication.
+- **netbox_url**: NetBox base URL (required to pull DCIM topology) (required: False, sensitive: False)
+- **api_token**: NetBox API token with DCIM/IPAM read permissions (required: False, sensitive: True)
+- **verify_ssl**: Verify TLS certificates when calling the NetBox API (required: False, sensitive: False)
+- **gpu_name_pattern**: Regex matching GPU inventory items and modules (required: False, sensitive: False)
+
+Certain scopes may be required to perform specific actions or queries via the provider. Below is a summary of relevant scopes and their use cases:
+- **dcim_read**: Read DCIM and IPAM via the NetBox API (required to sync topology).  ([Documentation](https://netboxlabs.com/docs/netbox/en/stable/integrations/rest-api/))
+
 
 
 ## In workflows
@@ -7,3 +18,9 @@ Do not edit it manually, as it will be overwritten */}
 This provider can't be used as a "step" or "action" in workflows. If you want to use it, please let us know by creating an issue in the [GitHub repository](https://github.com/keephq/keep/issues).
 
 
+
+
+## Topology
+This provider pulls [topology](/overview/servicetopology) to Keep. It could be used in [correlations](/overview/correlation-topology)
+and [mapping](/overview/enrichment/mapping#mapping-with-topology-data), and as a context
+for [alerts](/alerts/sidebar#7-alert-topology-view) and [incidents](/overview#17-incident-topology).

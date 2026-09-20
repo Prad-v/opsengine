@@ -39,6 +39,9 @@ export interface InternalConfig {
   HIDE_NAVBAR_AI_PLUGINS: boolean;
   HIDE_NAVBAR_TEMPORAL_WORKFLOWS: boolean;
   HIDE_NAVBAR_SYNTHETIC_CHECKS: boolean;
+  HIDE_NAVBAR_ALERT_CODES: boolean;
+  HIDE_NAVBAR_APPROVALS: boolean;
+  HIDE_NAVBAR_APPROVAL_POLICIES: boolean;
   // Add ticketing options to the incident view, defaults to false
   KEEP_TICKETING_ENABLED: boolean;
   KEEP_WF_LIST_EXTENDED_INFO: boolean;

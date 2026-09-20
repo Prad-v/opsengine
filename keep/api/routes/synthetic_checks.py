@@ -9,6 +9,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.exc import IntegrityError, NoResultFound
 from sqlmodel import Session, select
 
+from keep.api.bl.approval_bl import ApprovalBl, pending_response
 from keep.api.core.db import get_session
 from keep.api.models.db.provider import Provider
 from keep.api.models.db.synthetic_check import (
@@ -310,6 +311,19 @@ def delete_synthetic_check(
 ):
     tenant_id = authenticated_entity.tenant_id
     entry = _get_entry(session, tenant_id, entry_id)
+    bl = ApprovalBl(tenant_id, session)
+    gate = bl.gate(
+        action_type="delete_resource",
+        requested_by=authenticated_entity.email,
+        title=f"Delete synthetic check {entry.check_key}",
+        payload={"resource_type": "synthetic_check", "resource_id": str(entry_id)},
+        resource_type="synthetic_check",
+        resource_id=str(entry_id),
+        callback={"kind": "keep_action"},
+        idempotency_key=f"delete:synthetic_check:{entry_id}",
+    )
+    if gate.pending:
+        return pending_response(gate.request)
     try:
         provider = _get_temporal_provider(
             tenant_id, entry.temporal_provider_id, session

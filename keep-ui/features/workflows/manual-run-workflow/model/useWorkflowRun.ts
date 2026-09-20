@@ -3,7 +3,8 @@ import { useRouter } from "next/navigation";
 import { useProviders } from "../../../../utils/hooks/useProviders";
 import { Workflow } from "@/shared/api/workflows";
 import { useApi } from "@/shared/lib/hooks/useApi";
-import { showErrorToast } from "@/shared/ui";
+import { showErrorToast, showSuccessToast } from "@/shared/ui";
+import { isApprovalPending } from "@/features/approvals";
 import { isProviderInstalled } from "@/shared/lib/provider-utils";
 import { useWorkflowExecutionsRevalidation } from "@/entities/workflow-executions/model/useWorkflowExecutionsRevalidation";
 import { parseWorkflowYamlToJSON } from "@/entities/workflows/lib/yaml-utils";
@@ -191,8 +192,16 @@ export const useWorkflowRun = (workflow: Workflow) => {
       const result = await api.post(`/workflows/${workflow.id}/run`, payload);
       revalidateForWorkflow(workflow.id);
 
+      if (isApprovalPending(result)) {
+        showSuccessToast("Workflow run submitted for approval");
+        router.push("/approvals");
+        return;
+      }
+
       const { workflow_execution_id } = result;
-      router.push(`/workflows/${workflow.id}/runs/${workflow_execution_id}`);
+      if (workflow_execution_id) {
+        router.push(`/workflows/${workflow.id}/runs/${workflow_execution_id}`);
+      }
     } catch (error) {
       showErrorToast(error, undefined, {
         messagePrefix: "Failed to start workflow",

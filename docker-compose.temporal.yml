@@ -6,7 +6,7 @@
 # Frontend (gRPC): localhost:7233
 # Web UI:          http://localhost:8233
 # Namespace:       default
-# Worker queues:   keep-ops (ListAndZipDirectory), keep-synth (Probe*)
+# Worker queues:   keep-ops (ListAndZipDirectory, RemediateNvidiaGpu), keep-synth (Probe* + AI DC canaries)
 #
 # Keep provider config (host apps): address=localhost:7233, namespace=default, tls=false
 # Keep provider config (in-compose backend): address=temporal:7233
@@ -54,6 +54,13 @@ services:
       TEMPORAL_TASK_QUEUE: keep-ops
       TEMPORAL_WORKER_ROOT: /data
       LOG_LEVEL: INFO
+      # Hybrid make start: Keep API + provider-mock on the host network.
+      KEEP_API_URL: ${KEEP_API_URL:-http://host.docker.internal:8080}
+      KEEP_API_KEY: ${KEEP_API_KEY:-keepappkey}
+      GPU_MOCK_URL: ${GPU_MOCK_URL:-http://host.docker.internal:8099}
+      GPU_ALERT_EMAIL_TO: ${GPU_ALERT_EMAIL_TO:-ops@ai-dc.local}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     volumes:
       - temporal-worker-data:/data
     restart: unless-stopped

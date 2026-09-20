@@ -4,6 +4,7 @@ import { showErrorToast } from "@/shared/ui";
 import { Definition } from "@/entities/workflows/model/types";
 import { useCallback } from "react";
 import { KeepApiError } from "@/shared/api/KeepApiError";
+import { isApprovalPending } from "@/features/approvals";
 import { getBodyFromStringOrDefinitionOrObject } from "../lib/yaml-utils";
 import { useWorkflowRevalidation } from "./useWorkflowRevalidation";
 
@@ -153,7 +154,11 @@ export function useWorkflowActions(): UseWorkflowActionsReturn {
         return false;
       }
       try {
-        await api.delete(`/workflows/${workflowId}`);
+        const result = await api.delete(`/workflows/${workflowId}`);
+        if (isApprovalPending(result)) {
+          showSuccessToast("Delete submitted for approval");
+          return true;
+        }
         showSuccessToast("Workflow deleted successfully");
         revalidateWorkflow(workflowId);
         return true;

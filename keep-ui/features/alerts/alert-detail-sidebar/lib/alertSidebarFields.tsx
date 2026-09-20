@@ -9,62 +9,21 @@ import { Button } from "@tremor/react";
 import { ClipboardDocumentIcon } from "@heroicons/react/24/outline";
 import { QuestionMarkCircleIcon } from "@heroicons/react/20/solid";
 import { Tooltip } from "@/shared/ui";
+import {
+  AlertSidebarFieldName,
+  formatFieldName,
+  getAlertCode,
+  getNestedValue,
+} from "./alertSidebarFieldLogic";
 
-/**
- * Get a nested value from an object using dot notation path
- * Supports paths like "labels.alertname" or "annotations.description"
- * Also supports array indices like "incident_dto.0.assignee"
- */
-function getNestedValue(obj: any, path: string): any {
-  if (!obj || !path) return undefined;
-
-  const keys = path.split(".");
-  let value = obj;
-
-  for (const key of keys) {
-    if (value === null || value === undefined) {
-      return undefined;
-    }
-
-    // Handle array index access
-    const arrayMatch = key.match(/^(\w+)\[(\d+)\]$/);
-    if (arrayMatch) {
-      const [, arrayKey, index] = arrayMatch;
-      value = value[arrayKey]?.[parseInt(index, 10)];
-    } else {
-      value = value[key];
-    }
-  }
-
-  return value;
-}
-
-/**
- * Format a field name for display (convert snake_case or camelCase to Title Case)
- */
-function formatFieldName(fieldPath: string): string {
-  // Take the last part of the path for the label
-  const parts = fieldPath.split(".");
-  const lastPart = parts[parts.length - 1];
-
-  // Convert snake_case or camelCase to spaces
-  return lastPart
-    .replace(/([A-Z])/g, " $1")
-    .replace(/_/g, " ")
-    .replace(/^\w/, (c) => c.toUpperCase())
-    .trim();
-}
-
-export type AlertSidebarFieldName =
-  | "service"
-  | "source"
-  | "description"
-  | "message"
-  | "fingerprint"
-  | "url"
-  | "incidents"
-  | "timeline"
-  | "relatedServices";
+export type { AlertSidebarFieldName };
+export {
+  DEFAULT_ALERT_SIDEBAR_FIELDS,
+  getAlertCode,
+  getCustomFields,
+  getEnabledFields,
+  mergeDefaultSidebarFields,
+} from "./alertSidebarFieldLogic";
 
 export interface AlertSidebarFieldRendererProps {
   alert: AlertDto;
@@ -111,6 +70,18 @@ export const alertSidebarFieldsConfig: Record<
           className="inline-block w-6 h-6 mr-2"
         />
         <span>{providerName}</span>
+      </p>
+    ),
+  },
+  code: {
+    name: "code",
+    shouldRender: (alert) => !!getAlertCode(alert),
+    render: ({ alert }) => (
+      <p>
+        <FieldHeader>Code</FieldHeader>
+        <Badge size="sm" color="gray">
+          <span className="font-mono text-xs">{getAlertCode(alert)}</span>
+        </Badge>
       </p>
     ),
   },
@@ -236,23 +207,6 @@ export const alertSidebarFieldsConfig: Record<
     render: () => null, // This is rendered separately in the component
   },
 };
-
-export function getEnabledFields(
-  configuredFields: string[]
-): AlertSidebarFieldName[] {
-  return configuredFields.filter((field) =>
-    Object.keys(alertSidebarFieldsConfig).includes(field)
-  ) as AlertSidebarFieldName[];
-}
-
-/**
- * Get all custom fields that are not in the predefined field list
- */
-export function getCustomFields(configuredFields: string[]): string[] {
-  return configuredFields.filter(
-    (field) => !Object.keys(alertSidebarFieldsConfig).includes(field)
-  );
-}
 
 /**
  * Render a custom field from the alert object using dot notation path

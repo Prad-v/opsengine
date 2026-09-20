@@ -1,0 +1,112 @@
+---
+title: "Alert codes"
+sidebarTitle: "Alert codes"
+description: "Reserved labels.code standardizes alerts so runbooks and Keep workflows attach by identity, not by name."
+---
+
+## Why a reserved `code`
+
+Alert **name** and **description** are free-form and change across sources. They are a poor join key for runbooks and automation.
+
+Keep reserves **`labels.code`** (mirrored as first-class `alert.code`) as the stable identifier:
+
+- Same problem from Grafana, Prometheus, or a webhook uses the same code
+- Catalog, CEL, and correlation all key off that code
+- A Keep workflow can run for the **alert**, the correlated **incident**, or both
+
+Convention: `UPPER_SNAKE`, source-agnostic, e.g. `NVIDIA_GPU_THERMAL`, `HIGH_CPU`, `HTTP_5XX`.
+
+Keep **does not invent** a code from the title. Sources, mapping/extraction, or the catalog populate it.
+
+**Alerts → Feed** shows **Code** as a default column (after Name). Opening a row shows the same value on the details sidebar (after Source), from `alert.code` or `labels.code`. Empty cells mean the source did not send `labels.code`.
+
+## How ingest normalizes `code`
+
+On every alert Keep:
+
+1. Reads `labels.code` or top-level `code`
+2. Slugifies to `UPPER_SNAKE` (splits camelCase)
+3. Writes both `alert.code` and `alert.labels.code`
+
+Mapping rules that set a top-level `code` column are copied into `labels.code` after mapping.
+
+## Alert catalog
+
+**Catalog → Alert codes** (`/catalog/alert-codes`) is the registry.
+
+| Field | Purpose |
+| --- | --- |
+| **Code** | Join key (`NVIDIA_GPU_THERMAL`) |
+| **Name / description** | Human catalog text. Use **AI** next to Description to expand your draft with Settings → AI |
+| **Runbook URL** | Copied onto matching alerts as `playbook_url` |
+| **Keep workflow** | Optional YAML workflow to auto-run |
+| **Auto-run on** | `none` / `alert` / `incident` / `both` / `approval` |
+
+When an alert arrives with that code:
+
+- Catalog metadata and `playbook_url` are enriched
+- If auto-run includes **alert**, Keep enqueues the linked workflow
+- When alerts correlate into an incident, Keep copies `code` / `codes` onto the incident
+- If auto-run includes **incident**, Keep enqueues the same workflow for the incident (once per code)
+- If auto-run is **approval**, Keep creates a pending [approval](/overview/approvals) instead of enqueueing. Approve in **Approvals** to run the workflow.
+
+Auto-run and CEL on the same workflow are deduped for the same alert/incident.
+
+### Enhance description with AI
+
+On **Register / Edit alert code**, click **AI** next to Description. Keep uses the same OpenAI (or compatible) configuration as **Settings → AI** (API key, model, Base URL, Organization ID).
+
+The model rewrites your draft into 2–4 operational sentences (when the code fires, impact, runbook / automation). It keeps the reserved code unchanged.
+
+Configure the key first under [Settings → AI](/overview/ai-workflow-assistant). The button stays disabled until AI is configured and you have entered a code, name, or draft.
+
+## Workflows: alert or incident
+
+```yaml
+triggers:
+  - type: alert
+    cel: has(labels.code) && labels.code == "NVIDIA_GPU_THERMAL"
+  - type: incident
+    events:
+      - created
+      - updated
+    cel: code == "NVIDIA_GPU_THERMAL"
+```
+
+Incident triggers now accept optional **CEL** against the incident payload (`code`, `codes`, `name`, enrichments).
+
+Templates can use either context:
+
+```yaml
+code: "{{ alert.labels.code or incident.code }}"
+```
+
+Example: [`examples/workflows/alert-code-console.yml`](https://github.com/keephq/keep/blob/main/examples/workflows/alert-code-console.yml).
+
+The NVIDIA GPU demo uses `labels.code.startsWith("NVIDIA_GPU")` and the payments ListAndZip demo uses `HIGH_CPU` / `HIGH_MEMORY` — neither matches free-form incident names. See [GPU remediate demo](/overview/demo-mock-nvidia-gpu-remediate) and [ListAndZip demo](/overview/demo-mock-grafana-list-and-zip).
+
+## How sources should send `code`
+
+1. **Native label** — add `code=NVIDIA_GPU_THERMAL` on the Grafana / Prometheus / Datadog rule
+2. **Mapping / extraction** — CSV or regex from `name` / `alertname` → `code` when you cannot change the source
+3. **Mocks** — provider-mock always sets `labels.code` (Grafana payments: `HIGH_CPU` / `HIGH_MEMORY`; GPU: `NVIDIA_GPU_*`; Mimir: `DISK_SPACE_LOW`; VictoriaMetrics: `HIGH_MEMORY`; synthetic checks: `SYNTH_*`)
+
+## API
+
+| Method | Path | Purpose |
+| --- | --- | --- |
+| `GET` | `/alert-catalog` | List codes |
+| `POST` | `/alert-catalog` | Register |
+| `POST` | `/alert-catalog/enhance-description` | Enhance description via Settings → AI |
+| `PUT` | `/alert-catalog/{id}` | Update |
+| `DELETE` | `/alert-catalog/{id}` | Delete |
+
+## Related
+
+- [Workflow triggers](/workflows/syntax/triggers)
+- [Mapping](/overview/enrichment/mapping)
+- [Alert lifecycle](/overview/onboarding)
+- [Temporal workflow catalog](/overview/temporal-workflow-catalog)
+- [Provider mock](/development/provider-mock)
+- [AI assistant](/overview/ai-workflow-assistant) — Settings → AI used to enhance catalog descriptions
+- [AI datacenter synthetic checks](/overview/ai-dc-synthetic-checks)

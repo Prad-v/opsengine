@@ -1,0 +1,21 @@
+workflow:
+  id: ai-dc-synthetic-firing
+  name: AI DC synthetic check firing
+  description: >
+    Enriches firing synthetic-check alerts whose reserved labels.code starts
+    with SYNTH_ (NVIDIA/AMD inference, training, fabric, storage).
+  triggers:
+    - type: alert
+      cel: has(labels.code) && labels.code.startsWith("SYNTH_") && status == "firing"
+  actions:
+    - name: enrich-ai-dc-synth
+      provider:
+        type: mock
+        with:
+          enrich_alert:
+            - key: synth_handled
+              value: "true"
+            - key: synth_code
+              value: "{{ alert.labels.code }}"
+            - key: synth_workload
+              value: "{{ alert.labels.workload }}"

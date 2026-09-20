@@ -33,6 +33,7 @@
       "pages": [
         "overview/introduction",
         "overview/playground",
+        "overview/onboarding",
         "overview/usecases",
         {
           "group": "Key Concepts",
@@ -73,11 +74,15 @@
         "overview/enrichment/extraction",
         "overview/enrichment/mapping",
         "overview/maintenance-windows",
+        "overview/approvals",
         "overview/servicetopology",
+        "overview/nvidia-gpu-topology",
         "overview/workflow-automation",
+        "overview/alert-code-catalog",
         "overview/temporal-workflow-catalog",
         "overview/temporal-worker-list-and-zip",
         "overview/synthetic-checks",
+        "overview/ai-dc-synthetic-checks",
         "overview/demo-mock-grafana-list-and-zip",
         "overview/demo-mock-nvidia-gpu-remediate"
       ]

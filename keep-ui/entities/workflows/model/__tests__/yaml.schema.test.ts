@@ -97,6 +97,24 @@ describe("YamlWorkflowDefinitionSchema", () => {
     ).not.toThrow();
   });
 
+  it("accepts require_approval next to permissions", () => {
+    const workflow = {
+      workflow: {
+        id: "needs-approval",
+        require_approval: true,
+        permissions: ["admin"],
+        triggers: [{ type: "manual" }],
+        steps: [
+          {
+            name: "step",
+            provider: { type: "mock", config: "mock-config", with: {} },
+          },
+        ],
+      },
+    };
+    expect(() => YamlWorkflowDefinitionSchema.parse(workflow)).not.toThrow();
+  });
+
   it("should fail validation when required fields are missing", () => {
     const invalidWorkflow = {
       workflow: {
@@ -426,6 +444,7 @@ describe("getYamlWorkflowDefinitionSchema", () => {
           {
             type: "incident",
             events: ["created"],
+            cel: 'code == "NVIDIA_GPU_THERMAL"',
           },
         ],
       },

@@ -68,6 +68,49 @@ def test_probe_http_timeout():
     assert result["error"]
 
 
+def test_probe_http_json_body_and_max_duration():
+    mock_response = MagicMock()
+    mock_response.status_code = 200
+    mock_response.text = '{"choices":[{"message":{"content":"SYNTH_OK"}}]}'
+    mock_client = MagicMock()
+    mock_client.__enter__.return_value = mock_client
+    mock_client.request.return_value = mock_response
+
+    with patch("app.probers.http.httpx.Client", return_value=mock_client):
+        result = probe_http(
+            "http://mock/v1/chat/completions",
+            {
+                "method": "POST",
+                "body": {"messages": [{"role": "user", "content": "ping"}]},
+                "fail_if_body_not_matches_regexp": "SYNTH_OK",
+                "max_duration_seconds": 5,
+            },
+        )
+
+    assert result["success"] is True
+    kwargs = mock_client.request.call_args.kwargs
+    assert kwargs["json"]["messages"][0]["content"] == "ping"
+
+
+def test_probe_http_max_duration_fails():
+    mock_response = MagicMock()
+    mock_response.status_code = 200
+    mock_response.text = "ok"
+    mock_client = MagicMock()
+    mock_client.__enter__.return_value = mock_client
+    mock_client.request.return_value = mock_response
+
+    with patch("app.probers.http.httpx.Client", return_value=mock_client):
+        with patch("app.probers.http.time.perf_counter", side_effect=[0.0, 3.0]):
+            result = probe_http(
+                "http://mock/health",
+                {"valid_status_codes": [200], "max_duration_seconds": 1},
+            )
+
+    assert result["success"] is False
+    assert "max_duration_seconds" in (result["error"] or "")
+
+
 def test_probe_tcp_success():
     mock_sock = MagicMock()
     mock_sock.__enter__.return_value = mock_sock

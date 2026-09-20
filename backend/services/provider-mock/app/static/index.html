@@ -90,6 +90,7 @@
 
     .tabs {
       display: flex;
+      flex-wrap: wrap;
       gap: 8px;
       margin-bottom: 18px;
     }
@@ -317,6 +318,30 @@
       line-height: 1.45;
       margin: 0 0 14px;
     }
+
+    .tree {
+      list-style: none;
+      margin: 0;
+      padding: 0 0 0 14px;
+      font-family: var(--mono);
+      font-size: 0.78rem;
+      line-height: 1.55;
+      color: var(--text);
+    }
+    .tree .tree { border-left: 1px solid var(--line); margin-left: 6px; }
+    .tree li { padding: 1px 0; }
+    .tree .kind {
+      color: var(--muted);
+      margin-right: 6px;
+      font-size: 0.68rem;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+    input[type="file"] {
+      width: auto;
+      padding: 6px;
+      max-width: 220px;
+    }
     .hint a { color: var(--info); }
     .view { display: none; }
     .view.active { display: block; }
@@ -365,6 +390,9 @@
 
     <nav class="tabs" role="tablist">
       <button type="button" class="tab active" data-tab="alerts">Alert sources</button>
+      <button type="button" class="tab" data-tab="topology">Service Topology</button>
+      <button type="button" class="tab" data-tab="gpu">NVIDIA GPU server</button>
+      <button type="button" class="tab" data-tab="synth">Synthetic checks</button>
       <button type="button" class="tab" data-tab="temporal">Temporal</button>
     </nav>
 
@@ -390,25 +418,49 @@
       <section class="cards" id="cards"></section>
 
       <section class="panel" id="grafanaScenarioPanel" style="display:none">
-        <h2>Grafana correlation demo</h2>
+        <h2>Grafana correlation demos</h2>
         <p class="hint">
-          Two payloads share <code>labels.service=payments-api</code> and
-          <code>labels.cluster=mock-prod</code>. Create the Keep correlation rule
-          (threshold=2, group by <code>labels.service</code>), then send both alerts
-          to open one incident. In the Correlations UI, set filter
-          <code>source = grafana</code>.
+          <strong>Payments:</strong> payloads A/B set reserved
+          <code>labels.code=HIGH_CPU</code> /
+          <code>HIGH_MEMORY</code> and share
+          <code>labels.service=payments-api</code>
+          (threshold=2, group by <code>labels.service</code>;
+          correlation CEL matches those codes).
+          <br/>
+          <strong>NVIDIA GPU (AI DC):</strong> DCGM-style alerts set
+          <code>labels.code</code> <code>NVIDIA_GPU_*</code> plus
+          <code>region</code> / <code>datacenter</code> / <code>row</code> /
+          <code>rack</code> / <code>host</code> / <code>gpu_id</code>
+          (threshold=2, group by <code>labels.host</code>).
+          Filter Correlations with <code>source = grafana</code>.
+          Push the matching map from the <strong>Service Topology</strong> tab
+          (or Import <code>examples/topologies/nvidia-gpu-datacenter.yml</code>).
         </p>
-        <div class="row" style="grid-template-columns: 1fr 1fr auto auto; margin-bottom:12px">
+        <div class="row" style="grid-template-columns: 1fr 1fr; margin-bottom:12px">
           <div>
             <label for="grafanaScenario">Payload</label>
             <select id="grafanaScenario">
-              <option value="cpu">A — MockHighCPU (warning)</option>
-              <option value="memory">B — MockHighMemory (critical)</option>
+              <optgroup label="Payments">
+                <option value="cpu">A — HIGH_CPU (MockHighCPU, warning)</option>
+                <option value="memory">B — HIGH_MEMORY (MockHighMemory, critical)</option>
+              </optgroup>
+              <optgroup label="NVIDIA GPU / AI datacenter">
+                <option value="gpu_temp">GPU — High temperature (critical)</option>
+                <option value="gpu_mem">GPU — High memory utilization (warning)</option>
+                <option value="gpu_xid">GPU — XID error (critical)</option>
+                <option value="gpu_ecc">GPU — Uncorrectable ECC (critical)</option>
+                <option value="gpu_throttle">GPU — Thermal throttle (warning)</option>
+                <option value="gpu_nvlink">GPU — NVLink error (critical)</option>
+                <option value="gpu_power">GPU — Power limit (warning)</option>
+                <option value="gpu_unavailable">GPU — Unavailable / lost (critical)</option>
+              </optgroup>
             </select>
           </div>
           <div style="display:flex;align-items:end;gap:8px;flex-wrap:wrap">
             <button type="button" id="loadGrafanaScenario">Load payload</button>
-            <button type="button" class="primary" id="sendBothGrafana">Create rule + send both</button>
+            <button type="button" class="primary" id="sendBothGrafana">Payments: rule + send both</button>
+            <button type="button" class="primary" id="sendGpuGrafana">GPU: rule + temp/mem</button>
+            <button type="button" id="sendAllGpuGrafana">GPU: rule + all alerts</button>
           </div>
         </div>
         <div class="meta" id="grafanaScenarioMeta"></div>
@@ -458,6 +510,70 @@
       </section>
     </div>
 
+    <div id="view-topology" class="view">
+      <section class="panel">
+        <h2>NVIDIA GPU Service Topology</h2>
+        <p class="hint">
+          Region / datacenter / row / rack / GPU inventory used by mock alerts.
+          <strong>Push NVIDIA map</strong> creates missing Keep nodes via
+          <code>POST /topology/service</code> (merge).
+          <strong>Import YAML into Keep</strong> calls
+          <code>POST /topology/import</code> and <em>replaces</em> the tenant map.
+          Export downloads Keep-compatible YAML.
+        </p>
+        <div class="actions" style="margin-bottom:14px">
+          <button type="button" class="primary" id="topoPush">Push NVIDIA map to Keep</button>
+          <button type="button" id="topoRefreshKeep">Refresh Keep status</button>
+          <button type="button" id="topoLoadMock">Load mock YAML</button>
+          <button type="button" id="topoExportMock">Export mock YAML</button>
+          <button type="button" id="topoExportKeep">Export Keep YAML</button>
+          <button type="button" id="topoImportKeep">Import YAML into Keep</button>
+          <label style="align-self:center;margin:0">
+            Choose file
+            <input id="topoFile" type="file" accept=".yml,.yaml,.json,text/yaml,application/json" />
+          </label>
+        </div>
+        <div class="meta" id="topoKeepStatus">Keep topology: not loaded yet.</div>
+      </section>
+      <section class="panel">
+        <h2>NetBox DCIM</h2>
+        <p class="hint">
+          Docker Compose NetBox (<code>:8000</code>, admin / admin) is seeded with
+          the same region / datacenter / row / rack / GPU / fabric map.
+          <strong>Configure Keep with NetBox</strong> installs the Keep
+          <code>netbox</code> provider and <code>POST /topology/pull</code>
+          (replaces nodes owned by that provider).
+        </p>
+        <div class="grid-config two" style="margin-bottom:12px">
+          <div>
+            <label for="netboxUrl">NetBox URL (mock → NetBox)</label>
+            <input id="netboxUrl" placeholder="http://netbox:8080" />
+          </div>
+          <div>
+            <label for="keepNetboxUrl">NetBox URL (Keep → NetBox)</label>
+            <input id="keepNetboxUrl" placeholder="http://localhost:8000" />
+          </div>
+        </div>
+        <div class="actions" style="margin-bottom:10px">
+          <button type="button" id="netboxRefresh">Refresh NetBox status</button>
+          <button type="button" id="netboxSeed">Seed NVIDIA DCIM</button>
+          <button type="button" class="primary" id="netboxConfigureKeep">Configure Keep with NetBox</button>
+        </div>
+        <div class="meta" id="netboxStatus">NetBox: not checked yet.</div>
+      </section>
+      <section class="split">
+        <div class="panel">
+          <h2>Inventory</h2>
+          <div id="topoTree" class="meta">Loading…</div>
+        </div>
+        <div class="panel">
+          <h2>YAML (editable)</h2>
+          <textarea id="topologyYaml" class="topology-yaml" spellcheck="false" placeholder="Keep topology YAML"></textarea>
+          <div class="meta" style="margin-top:8px" id="topoYamlMeta"></div>
+        </div>
+      </section>
+    </div>
+
     <div id="view-temporal" class="view">
       <section class="panel">
         <h2>Temporal provider</h2>
@@ -500,6 +616,70 @@
       <section class="panel">
         <h2>Activity</h2>
         <div class="log" id="logTemporal"><div class="meta">No events yet.</div></div>
+      </section>
+    </div>
+
+    <div id="view-gpu" class="view">
+      <section class="panel">
+        <h2>Mock NVIDIA GPU server</h2>
+        <p class="hint">
+          Temporal <code>RemediateNvidiaGpu</code> calls
+          <code>POST /gpu/server/remediate</code> on inventory nodes
+          (default <code>gpu-node-a03</code> / row-a / rack-12).
+          Alerts carry the same region / datacenter / row / rack / GPU labels
+          as Keep Service Topology. On success the worker resolves the Keep
+          incident; on failure it posts a mock email here.
+          Toggle <strong>Force fail</strong> to exercise the email path.
+        </p>
+        <div class="row" style="grid-template-columns: 1fr auto auto; margin-bottom:12px">
+          <div class="meta" id="gpuServerMeta">Loading…</div>
+          <label class="check" style="align-self:center">
+            <input id="gpuForceFail" type="checkbox" />
+            Force fail remediations
+          </label>
+          <div style="display:flex;gap:8px;align-items:end;flex-wrap:wrap">
+            <button type="button" id="gpuRefresh">Refresh</button>
+            <button type="button" id="gpuReset">Reset server</button>
+            <button type="button" id="gpuClearEmails">Clear emails</button>
+            <button type="button" id="gpuOpenTopology">Service Topology tab</button>
+          </div>
+        </div>
+        <div class="meta" id="gpuGpus"></div>
+        <div class="meta" id="gpuTopologyMeta"></div>
+      </section>
+      <section class="split">
+        <div class="panel">
+          <h2>Remediations</h2>
+          <div class="log" id="gpuRemediations"><div class="meta">None yet.</div></div>
+        </div>
+        <div class="panel">
+          <h2>Failure emails</h2>
+          <div class="log" id="gpuEmails"><div class="meta">None yet.</div></div>
+        </div>
+      </section>
+    </div>
+
+    <div id="view-synth" class="view">
+      <section class="panel">
+        <h2>AI datacenter synthetic probes</h2>
+        <p class="hint">
+          Keep Catalog → <strong>Synthetic checks</strong> probes these HTTP/TCP
+          endpoints from the <code>keep-synth</code> worker
+          (<code>make register-ai-dc-synthetic-checks</code>).
+          NVIDIA and AMD inference/training canaries run against this mock — no GPUs required.
+          Toggle <strong>Fail</strong> on a probe; the next Temporal schedule posts a
+          <code>SYNTH_*</code> alert to Keep.
+        </p>
+        <div class="row" style="grid-template-columns: 1fr auto auto; margin-bottom:12px">
+          <div class="meta" id="synthMeta">Loading…</div>
+          <button type="button" id="synthRefresh">Refresh</button>
+          <button type="button" id="synthReset">Reset fail flags</button>
+        </div>
+        <div id="synthProbes" class="cards" style="grid-template-columns: repeat(3, minmax(0, 1fr))"></div>
+      </section>
+      <section class="panel">
+        <h2>Recent probe hits</h2>
+        <div class="log" id="synthHits"><div class="meta">None yet.</div></div>
       </section>
     </div>
   </div>
@@ -554,8 +734,190 @@
       });
       $("view-alerts").classList.toggle("active", tab === "alerts");
       $("view-temporal").classList.toggle("active", tab === "temporal");
+      $("view-gpu").classList.toggle("active", tab === "gpu");
+      $("view-synth").classList.toggle("active", tab === "synth");
+      $("view-topology").classList.toggle("active", tab === "topology");
       $("publicBaseField").style.display = tab === "alerts" ? "block" : "none";
       renderLog();
+      if (tab === "gpu") loadGpuServer().catch((e) => toast(String(e.message || e), false));
+      if (tab === "synth") loadSynth().catch((e) => toast(String(e.message || e), false));
+      if (tab === "topology") {
+        loadTopology().catch((e) => toast(String(e.message || e), false));
+        refreshNetboxStatus().catch(() => {});
+      }
+    }
+
+    function keepQuery() {
+      const c = connection();
+      return new URLSearchParams({
+        keep_api_url: c.keep_api_url,
+        keep_api_key: c.keep_api_key,
+      }).toString();
+    }
+
+    function renderTopologyTree(data) {
+      const summary = data.summary || {};
+      const nodes = data.nodes || [];
+      const rows = {};
+      for (const n of nodes) {
+        const row = n.row || "row";
+        const rack = n.rack || "rack";
+        rows[row] = rows[row] || {};
+        rows[row][rack] = rows[row][rack] || [];
+        rows[row][rack].push(n);
+      }
+      const rowHtml = Object.keys(rows).sort().map((row) => {
+        const racks = Object.keys(rows[row]).sort().map((rack) => {
+          const hosts = rows[row][rack].map((n) => {
+            const gpus = (n.gpus || []).map((g) => `gpu${g.index}`).join(", ");
+            return `<li><span class="kind">host</span>${n.host} <span class="meta">${gpus}</span></li>`;
+          }).join("");
+          return `<li><span class="kind">rack</span>${rack}<ul class="tree">${hosts}</ul></li>`;
+        }).join("");
+        return `<li><span class="kind">row</span>${row}<ul class="tree">${racks}</ul></li>`;
+      }).join("");
+      $("topoTree").innerHTML = `
+        <div class="meta" style="margin-bottom:8px">
+          ${summary.region || ""} / ${summary.datacenter || ""} · cluster ${summary.cluster || ""} ·
+          app ${summary.application || ""}
+        </div>
+        <ul class="tree">
+          <li><span class="kind">region</span>${summary.region || "region"}
+            <ul class="tree">
+              <li><span class="kind">dc</span>${summary.datacenter || "datacenter"}
+                <ul class="tree">${rowHtml}</ul>
+              </li>
+            </ul>
+          </li>
+          <li><span class="kind">svc</span>gpu-inference</li>
+        </ul>
+      `;
+    }
+
+    async function loadTopology({ fillYaml = true } = {}) {
+      const data = await api("/api/topology");
+      state.topology = data;
+      renderTopologyTree(data);
+      if (fillYaml) {
+        $("topologyYaml").value = data.yaml_text || "";
+        $("topoYamlMeta").textContent =
+          `${(data.yaml && data.yaml.services || []).length} services · ` +
+          `${(data.yaml && data.yaml.dependencies || []).length} edges`;
+      }
+      await refreshKeepTopologyStatus().catch(() => {});
+    }
+
+    async function refreshKeepTopologyStatus() {
+      const data = await api(`/api/topology/keep?${keepQuery()}`);
+      const apps = (data.applications || []).join(", ") || "(none)";
+      const nvidia = data.has_nvidia_gpu ? "NVIDIA map present" : "NVIDIA map not found";
+      $("topoKeepStatus").textContent =
+        `Keep ${data.keep_api_url}: ${data.service_count} services, ` +
+        `${data.application_count} applications (${apps}) · ${nvidia}`;
+      return data;
+    }
+
+    async function refreshNetboxStatus() {
+      const qs = new URLSearchParams();
+      const url = $("netboxUrl").value.trim();
+      if (url) qs.set("netbox_url", url);
+      const data = await api(`/api/netbox/status?${qs}`);
+      const plan = data.plan || {};
+      const hosts = (plan.hosts || []).join(", ");
+      $("netboxStatus").textContent = data.ok
+        ? `NetBox ${data.url} is up · seed ${plan.region}/${plan.site} · hosts ${hosts}`
+        : `NetBox ${data.url || ""} unreachable (${data.status_code || "?"}). First boot can take 1–2 minutes.`;
+      return data;
+    }
+
+    function downloadYaml(filename, text) {
+      const blob = new Blob([text], { type: "application/x-yaml" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = filename;
+      a.click();
+      URL.revokeObjectURL(url);
+    }
+
+    async function loadGpuServer() {
+      const data = await api("/api/gpu/server");
+      state.gpu = data;
+      const s = data.server || {};
+      $("gpuForceFail").checked = !!data.force_fail;
+      $("gpuServerMeta").textContent =
+        `${s.host} · ${s.gpu_model} · ${s.region || ""}/${s.datacenter || ""}/${s.row || ""}/${s.rack || ""} · cluster=${s.cluster} · force_fail=${data.force_fail}`;
+      const gpus = (s.gpus || []).map((g) =>
+        `gpu${g.index} health=${g.health} temp=${g.temperature_c}C mem=${g.memory_util_pct}%` +
+        (g.xid != null ? ` xid=${g.xid}` : "")
+      ).join(" · ");
+      $("gpuGpus").textContent = gpus || "No GPUs";
+      const nodes = data.nodes || [];
+      $("gpuTopologyMeta").textContent = nodes.length
+        ? `Inventory: ${nodes.map((n) => `${n.host} (${n.row}/${n.rack}, ${ (n.gpus || []).length } GPU)`).join(" · ")}`
+        : "";
+
+      const rem = data.remediations || [];
+      $("gpuRemediations").innerHTML = rem.length
+        ? rem.map((r) => {
+            const cls = r.ok ? "ok" : "fail";
+            const when = r.ts ? new Date(r.ts * 1000).toLocaleTimeString() : "";
+            return `<div class="log-item"><div><span class="${cls}">${r.ok ? "ok" : "fail"}</span> ${when} — ${r.action} gpu=${r.gpu_index} ${r.incident_id || ""} ${r.message || r.error || ""}</div></div>`;
+          }).join("")
+        : `<div class="meta">None yet.</div>`;
+
+      const emails = data.emails || [];
+      $("gpuEmails").innerHTML = emails.length
+        ? emails.map((e) => {
+            const when = e.ts ? new Date(e.ts * 1000).toLocaleTimeString() : "";
+            return `<div class="log-item"><div>${when} — <strong>${e.subject}</strong><br/><span class="meta">to ${e.to} · ${e.incident_id || ""}</span><br/>${(e.body || "").slice(0, 280)}</div></div>`;
+          }).join("")
+          : `<div class="meta">None yet.</div>`;
+    }
+
+    async function loadSynth() {
+      const data = await api("/api/synth");
+      const probes = data.probes || [];
+      const failed = data.failed || [];
+      $("synthMeta").textContent = `${probes.length} probes · ${failed.length} forced fail`;
+      $("synthProbes").innerHTML = probes.map((p) => {
+        const path = p.path || "(TCP to mock :8099)";
+        return `<article class="card">
+          <div class="card-top">
+            <h3>${p.name}</h3>
+            <span class="meta">${p.group}</span>
+          </div>
+          <div class="desc">${p.description || ""}</div>
+          <div class="meta"><code>${p.method} ${path}</code></div>
+          <div class="meta"><code>${p.code}</code></div>
+          <label class="check">
+            <input type="checkbox" data-probe-id="${p.id}" ${p.failed ? "checked" : ""} />
+            Fail this probe
+          </label>
+        </article>`;
+      }).join("");
+      $("synthProbes").querySelectorAll("input[data-probe-id]").forEach((input) => {
+        input.addEventListener("change", async () => {
+          try {
+            await api("/api/synth/fail", {
+              method: "POST",
+              body: JSON.stringify({ probe_id: input.dataset.probeId, failed: input.checked }),
+            });
+            toast(input.checked ? `Fail ON: ${input.dataset.probeId}` : `Fail OFF: ${input.dataset.probeId}`);
+            await loadSynth();
+          } catch (err) {
+            toast(String(err.message || err), false);
+          }
+        });
+      });
+      const hits = data.hits || [];
+      $("synthHits").innerHTML = hits.length
+        ? hits.map((h) => {
+            const when = h.ts ? new Date(h.ts * 1000).toLocaleTimeString() : "";
+            const cls = h.ok ? "ok" : "fail";
+            return `<div class="log-item"><div><span class="${cls}">${h.ok ? "ok" : "fail"}</span> ${when} — ${h.probe_id}</div></div>`;
+          }).join("")
+        : `<div class="meta">None yet.</div>`;
     }
 
     function alertProviders() {
@@ -662,6 +1024,8 @@
         $("temporalUiLink").href = state.defaults.temporal_ui_url;
         $("temporalUiLink").textContent = state.defaults.temporal_ui_url;
       }
+      if (!$("netboxUrl").value) $("netboxUrl").value = state.defaults.netbox_url || "http://netbox:8080";
+      if (!$("keepNetboxUrl").value) $("keepNetboxUrl").value = state.defaults.keep_netbox_url || "http://localhost:8000";
       renderCards();
       renderTemporal();
       updateGrafanaPanel();
@@ -696,8 +1060,17 @@
       $("payload").value = JSON.stringify(data.payload, null, 2);
       if (state.selected === "grafana" && data.payload?.alerts?.[0]?.labels) {
         const labels = data.payload.alerts[0].labels;
-        $("grafanaScenarioMeta").textContent =
-          `alertname=${labels.alertname} · service=${labels.service} · host=${labels.host} · cluster=${labels.cluster} · severity=${labels.severity}`;
+        const bits = [
+          `alertname=${labels.alertname}`,
+          `service=${labels.service}`,
+          `host=${labels.host}`,
+          `cluster=${labels.cluster}`,
+          `severity=${labels.severity}`,
+        ];
+        if (labels.gpu_model) bits.push(`gpu_model=${labels.gpu_model}`);
+        if (labels.dcgm_field) bits.push(`dcgm=${labels.dcgm_field}`);
+        if (labels.vendor) bits.push(`vendor=${labels.vendor}`);
+        $("grafanaScenarioMeta").textContent = bits.join(" · ");
       }
     }
 
@@ -713,6 +1086,32 @@
         });
         const ruleAction = data.correlation_rule?.action || "skipped";
         toast(`Rule ${ruleAction}; sent ${data.events.map((e) => e.alertname).join(" + ")}`);
+        await loadEvents();
+        await loadProviders();
+      } catch (err) {
+        toast(String(err.message || err), false);
+        await loadEvents();
+      }
+    }
+
+    async function sendGpuGrafana({ sendAll = false } = {}) {
+      try {
+        const data = await api("/api/grafana/create-gpu-incident-demo", {
+          method: "POST",
+          body: JSON.stringify({
+            ...connection(),
+            status: $("status").value,
+            create_rule: true,
+            send_all_gpu: sendAll,
+          }),
+        });
+        const ruleAction = data.correlation_rule?.action || "skipped";
+        const names = data.events.map((e) => e.alertname);
+        toast(
+          sendAll
+            ? `GPU rule ${ruleAction}; sent ${names.length} NVIDIA alerts`
+            : `GPU rule ${ruleAction}; sent ${names.join(" + ")}`
+        );
         await loadEvents();
         await loadProviders();
       } catch (err) {
@@ -805,6 +1204,8 @@
       await refreshPayload();
     });
     $("sendBothGrafana").addEventListener("click", () => sendBothGrafana());
+    $("sendGpuGrafana").addEventListener("click", () => sendGpuGrafana());
+    $("sendAllGpuGrafana").addEventListener("click", () => sendGpuGrafana({ sendAll: true }));
     ["status", "alertname", "severity"].forEach((id) => {
       $(id).addEventListener("change", () => refreshPayload().catch(() => {}));
     });
@@ -815,6 +1216,160 @@
       temporal_tls: $("temporalTls").checked,
     }));
     $("temporalUnregister").addEventListener("click", () => unregister("temporal"));
+    $("gpuRefresh").addEventListener("click", () => loadGpuServer().catch((e) => toast(String(e.message || e), false)));
+    $("gpuForceFail").addEventListener("change", async () => {
+      try {
+        await api("/api/gpu/server/mode", {
+          method: "POST",
+          body: JSON.stringify({ force_fail: $("gpuForceFail").checked }),
+        });
+        toast($("gpuForceFail").checked ? "Force fail ON" : "Force fail OFF");
+        await loadGpuServer();
+      } catch (err) {
+        toast(String(err.message || err), false);
+      }
+    });
+    $("gpuReset").addEventListener("click", async () => {
+      try {
+        await api("/api/gpu/server/reset", { method: "POST", body: "{}" });
+        toast("GPU server reset");
+        await loadGpuServer();
+      } catch (err) {
+        toast(String(err.message || err), false);
+      }
+    });
+    $("gpuClearEmails").addEventListener("click", async () => {
+      try {
+        await api("/api/gpu/emails", { method: "DELETE" });
+        toast("Emails cleared");
+        await loadGpuServer();
+      } catch (err) {
+        toast(String(err.message || err), false);
+      }
+    });
+    $("gpuOpenTopology").addEventListener("click", () => setTab("topology"));
+    $("synthRefresh").addEventListener("click", () => loadSynth().catch((e) => toast(String(e.message || e), false)));
+    $("synthReset").addEventListener("click", async () => {
+      try {
+        await api("/api/synth/reset", { method: "POST", body: "{}" });
+        toast("Synthetic fail flags reset");
+        await loadSynth();
+      } catch (err) {
+        toast(String(err.message || err), false);
+      }
+    });
+    $("topoPush").addEventListener("click", async () => {
+      try {
+        const data = await api("/api/topology/push", {
+          method: "POST",
+          body: JSON.stringify(connection()),
+        });
+        const created = (data.services_created || []).length;
+        toast(`Pushed NVIDIA map (${created} new services, ${data.dependencies_created || 0} edges).`);
+        await refreshKeepTopologyStatus();
+      } catch (err) {
+        toast(String(err.message || err), false);
+      }
+    });
+    $("topoRefreshKeep").addEventListener("click", () => {
+      refreshKeepTopologyStatus()
+        .then(() => toast("Keep topology status refreshed"))
+        .catch((e) => toast(String(e.message || e), false));
+    });
+    $("topoLoadMock").addEventListener("click", () => {
+      loadTopology({ fillYaml: true })
+        .then(() => toast("Loaded mock NVIDIA YAML"))
+        .catch((e) => toast(String(e.message || e), false));
+    });
+    $("topoExportMock").addEventListener("click", () => {
+      const text = $("topologyYaml").value || (state.topology && state.topology.yaml_text) || "";
+      if (!text) {
+        toast("No YAML to export", false);
+        return;
+      }
+      downloadYaml("nvidia-gpu-datacenter.yml", text);
+      toast("Downloaded mock topology YAML");
+    });
+    $("topoExportKeep").addEventListener("click", async () => {
+      try {
+        const data = await api(`/api/topology/keep/export?${keepQuery()}`);
+        $("topologyYaml").value = data.yaml || "";
+        $("topoYamlMeta").textContent = `Keep export · ${data.bytes || 0} bytes`;
+        downloadYaml("keep-topology.yml", data.yaml || "");
+        toast("Exported Keep topology YAML");
+      } catch (err) {
+        toast(String(err.message || err), false);
+      }
+    });
+    $("topoImportKeep").addEventListener("click", async () => {
+      const yaml = $("topologyYaml").value.trim();
+      if (!yaml) {
+        toast("YAML editor is empty", false);
+        return;
+      }
+      if (!window.confirm("Import replaces the entire Keep topology for this tenant. Continue?")) {
+        return;
+      }
+      try {
+        const data = await api("/api/topology/keep/import", {
+          method: "POST",
+          body: JSON.stringify({ ...connection(), yaml }),
+        });
+        toast(`Imported ${data.services} services into Keep.`);
+        await refreshKeepTopologyStatus();
+      } catch (err) {
+        toast(String(err.message || err), false);
+      }
+    });
+    $("topoFile").addEventListener("change", async (ev) => {
+      const file = ev.target.files && ev.target.files[0];
+      if (!file) return;
+      try {
+        $("topologyYaml").value = await file.text();
+        $("topoYamlMeta").textContent = `Loaded ${file.name} (${file.size} bytes)`;
+        toast(`Loaded ${file.name} into editor`);
+      } catch (err) {
+        toast(String(err.message || err), false);
+      }
+      ev.target.value = "";
+    });
+    $("netboxRefresh").addEventListener("click", () => {
+      refreshNetboxStatus()
+        .then((data) => toast(data.ok ? "NetBox is up" : "NetBox not ready yet", data.ok))
+        .catch((e) => toast(String(e.message || e), false));
+    });
+    $("netboxSeed").addEventListener("click", async () => {
+      try {
+        const data = await api("/api/netbox/seed", {
+          method: "POST",
+          body: JSON.stringify({ netbox_url: $("netboxUrl").value.trim() }),
+        });
+        const counts = data.counts || {};
+        toast(`Seeded NetBox (${counts.hosts || 0} hosts, ${counts.gpus || 0} GPUs).`);
+        await refreshNetboxStatus();
+      } catch (err) {
+        toast(String(err.message || err), false);
+      }
+    });
+    $("netboxConfigureKeep").addEventListener("click", async () => {
+      try {
+        const data = await api("/api/netbox/configure-keep", {
+          method: "POST",
+          body: JSON.stringify({
+            ...connection(),
+            netbox_url: $("netboxUrl").value.trim(),
+            keep_netbox_url: $("keepNetboxUrl").value.trim(),
+            seed: true,
+            pull: true,
+          }),
+        });
+        toast(`Keep NetBox provider ${data.install?.action || "ready"} · id ${data.provider_id || "?"}`);
+        await refreshNetboxStatus();
+        await refreshKeepTopologyStatus();
+      } catch (err) {
+        toast(String(err.message || err), false);
+      }
+    });
 
     (async () => {
       try {

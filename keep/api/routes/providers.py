@@ -13,6 +13,7 @@ from sqlmodel import Session, select
 from sqlalchemy.exc import NoResultFound
 from starlette.datastructures import UploadFile
 
+from keep.api.bl.approval_bl import ApprovalBl, pending_response
 from keep.api.core.config import config
 from keep.api.core.db import count_alerts, get_provider_distribution, get_session
 from keep.api.core.limiter import limiter
@@ -374,6 +375,23 @@ def delete_provider(
     session: Session = Depends(get_session),
 ):
     tenant_id = authenticated_entity.tenant_id
+    bl = ApprovalBl(tenant_id, session)
+    gate = bl.gate(
+        action_type="delete_resource",
+        requested_by=authenticated_entity.email,
+        title=f"Delete provider {provider_id}",
+        payload={
+            "resource_type": "provider",
+            "resource_id": provider_id,
+            "provider_type": provider_type,
+        },
+        resource_type="provider",
+        resource_id=provider_id,
+        callback={"kind": "keep_action"},
+        idempotency_key=f"delete:provider:{provider_id}",
+    )
+    if gate.pending:
+        return pending_response(gate.request)
     try:
         ProvidersService.delete_provider(tenant_id, provider_id, session)
         return JSONResponse(status_code=200, content={"message": "deleted"})

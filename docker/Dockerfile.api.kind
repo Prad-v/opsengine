@@ -1,0 +1,9 @@
+# Fast kind/local API image: reuse a cached poetry venv (keep-backend-dev:local)
+# and overlay the current keep/ tree. Avoids Alpine grpcio compiles.
+FROM keep-backend-dev:local
+WORKDIR /app
+# Install extra wheels before COPY keep/ so source edits do not re-pip.
+RUN --mount=type=cache,target=/root/.cache/pip \
+    /venv/bin/pip install "temporalio>=1.7.0,<2"
+COPY keep /app/keep
+COPY ee /app/keep/ee

@@ -1,6 +1,6 @@
 import { Callout } from "@tremor/react";
 import { TextInput, Textarea, Button } from "@/components/ui";
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import {
   TopologyApplication,
   TopologyServiceMinimal,
@@ -45,13 +45,13 @@ export function CreateOrUpdateApplicationForm({
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<Error | null>(null);
   const [applicationName, setApplicationName] = useState(
-    action === "edit" ? application.name : ""
+    application?.name || ""
   );
   const [applicationDescription, setApplicationDescription] = useState(
-    action === "edit" ? application.description : ""
+    application?.description || ""
   );
   const [applicationRepo, setApplicationRepo] = useState(
-    action === "edit" ? application.repository : ""
+    application?.repository || ""
   );
   const applicationId = action === "edit" ? application.id : undefined;
 
@@ -59,6 +59,15 @@ export function CreateOrUpdateApplicationForm({
     TopologyServiceMinimal[]
   >(application?.services || []);
   const [errors, setErrors] = useState<FormErrors>({});
+
+  useEffect(() => {
+    setApplicationName(application?.name || "");
+    setApplicationDescription(application?.description || "");
+    setApplicationRepo(application?.repository || "");
+    setSelectedServices(application?.services || []);
+    setErrors({});
+    setError(null);
+  }, [action, application?.id]);
 
   const validateForm = (
     formValues: Omit<TopologyApplication, "id">
@@ -101,23 +110,28 @@ export function CreateOrUpdateApplicationForm({
       }
       setErrors({});
       setIsLoading(true);
-      if (action === "create") {
-        onSubmit(formValues)
+      if (action === "edit") {
+        if (!applicationId) {
+          setError(new Error("Cannot update an application without an id"));
+          setIsLoading(false);
+          return;
+        }
+        onSubmit({ ...formValues, id: applicationId })
           .catch((error) => {
             setError(error);
           })
           .finally(() => {
             setIsLoading(false);
           });
-      } else if (action === "edit") {
-        onSubmit({ ...formValues, id: applicationId! })
-          .catch((error) => {
-            setError(error);
-          })
-          .finally(() => {
-            setIsLoading(false);
-          });
+        return;
       }
+      onSubmit(formValues)
+        .catch((error) => {
+          setError(error);
+        })
+        .finally(() => {
+          setIsLoading(false);
+        });
     },
     [
       action,
@@ -192,6 +206,7 @@ export function CreateOrUpdateApplicationForm({
                     {service.name || service.service}
                   </span>
                   <Button
+                    type="button"
                     variant="light"
                     className="group"
                     onClick={() => {
@@ -227,6 +242,7 @@ export function CreateOrUpdateApplicationForm({
       <div className="flex justify-between gap-2">
         {onDelete && (
           <Button
+            type="button"
             color="red"
             size="xs"
             variant="destructive"
@@ -237,6 +253,7 @@ export function CreateOrUpdateApplicationForm({
         )}
         <div className="flex flex-1 justify-end gap-2">
           <Button
+            type="button"
             color="orange"
             size="xs"
             variant="secondary"

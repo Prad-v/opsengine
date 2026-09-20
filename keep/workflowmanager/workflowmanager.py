@@ -1,3 +1,4 @@
+import json
 import logging
 import os
 import re
@@ -11,6 +12,7 @@ from keep.api.core.config import config
 from keep.api.core.db import (
     get_enrichment,
     get_previous_alert_by_fingerprint,
+    get_workflow_by_id,
     save_workflow_results,
 )
 from keep.api.core.metrics import workflow_execution_duration
@@ -144,14 +146,13 @@ class WorkflowManager:
             # Using list comprehension instead of pandas flatten() for better performance
             # and to avoid pandas dependency
             # @tb: I removed pandas so if we'll have performance issues we can revert to pandas
-            incident_triggers = [
-                event
-                for trigger in workflow.workflow_triggers
-                if trigger["type"] == "incident"
-                for event in trigger.get("events", [])
+            matching_triggers = [
+                trigger_def
+                for trigger_def in workflow.workflow_triggers
+                if trigger_def.get("type") == "incident"
+                and trigger in trigger_def.get("events", [])
             ]
-
-            if trigger not in incident_triggers:
+            if not matching_triggers:
                 self.logger.debug(
                     "workflow does not contain trigger %s, skipping", trigger
                 )
@@ -162,18 +163,109 @@ class WorkflowManager:
                 for k, v in incident_enrichment.enrichments.items():
                     setattr(incident, k, v)
 
+            should_run = False
+            for trigger_def in matching_triggers:
+                cel = trigger_def.get("cel")
+                if not cel:
+                    should_run = True
+                    break
+                if self._evaluate_incident_cel(cel, incident, workflow_model.id, tenant_id):
+                    should_run = True
+                    break
+            if not should_run:
+                continue
+
             self.logger.info("Adding workflow to run")
-            with self.scheduler.lock:
-                self.scheduler.workflows_to_run.append(
-                    {
-                        "workflow": workflow,
-                        "workflow_id": workflow_model.id,
-                        "tenant_id": tenant_id,
-                        "triggered_by": "incident:{}".format(trigger),
-                        "event": incident,
-                    }
-                )
+            self.enqueue_workflow(
+                tenant_id=tenant_id,
+                workflow_id=workflow_model.id,
+                event=incident,
+                triggered_by="incident:{}".format(trigger),
+                workflow=workflow,
+            )
             self.logger.info("Workflow added to run")
+
+    def _evaluate_incident_cel(
+        self, cel: str, incident: IncidentDto, workflow_id: str, tenant_id: str
+    ) -> bool:
+        try:
+            compiled_ast = self.cel_environment.compile(cel)
+            program = self.cel_environment.program(compiled_ast)
+            payload = json.loads(incident.json())
+            payload["name"] = incident.name
+            # celpy cannot compare string/list to JSON null; coerce for CEL.
+            payload["code"] = payload.get("code") or ""
+            payload["codes"] = payload.get("codes") or []
+            activation = celpy.json_to_cel(payload)
+            return bool(program.evaluate(activation))
+        except Exception:
+            self.logger.exception(
+                "Error evaluating incident CEL",
+                extra={
+                    "cel": cel,
+                    "workflow_id": workflow_id,
+                    "tenant_id": tenant_id,
+                    "incident_id": str(incident.id),
+                },
+            )
+            return False
+
+    def enqueue_workflow(
+        self,
+        tenant_id: str,
+        workflow_id: str,
+        event: AlertDto | IncidentDto,
+        triggered_by: str,
+        workflow: Workflow | None = None,
+    ) -> bool:
+        """Queue a specific Keep workflow for an alert or incident. Dedupes in-flight runs."""
+        if self.scheduler is None:
+            self.logger.warning(
+                "Workflow scheduler is not running; cannot enqueue",
+                extra={"workflow_id": workflow_id, "tenant_id": tenant_id},
+            )
+            return False
+
+        event_key = getattr(event, "fingerprint", None) or str(
+            getattr(event, "id", "")
+        )
+        with self.scheduler.lock:
+            for item in self.scheduler.workflows_to_run:
+                if (
+                    item.get("workflow_id") == workflow_id
+                    and item.get("tenant_id") == tenant_id
+                ):
+                    existing = item.get("event")
+                    existing_key = getattr(existing, "fingerprint", None) or str(
+                        getattr(existing, "id", "")
+                    )
+                    if existing_key and existing_key == event_key:
+                        return False
+
+        workflow_model = None
+        if workflow is None:
+            workflow_model = get_workflow_by_id(tenant_id, workflow_id)
+            if workflow_model is None or workflow_model.is_disabled:
+                self.logger.warning(
+                    "Cannot enqueue missing or disabled workflow",
+                    extra={"workflow_id": workflow_id, "tenant_id": tenant_id},
+                )
+                return False
+            workflow = self._get_workflow_from_store(tenant_id, workflow_model)
+            if workflow is None:
+                return False
+
+        with self.scheduler.lock:
+            self.scheduler.workflows_to_run.append(
+                {
+                    "workflow": workflow,
+                    "workflow_id": workflow_id,
+                    "tenant_id": tenant_id,
+                    "triggered_by": triggered_by,
+                    "event": event,
+                }
+            )
+        return True
 
     # @tb: should I move it to cel_utils.py?
     # logging is easier here and I don't see other places who might use this >.<
@@ -583,16 +675,13 @@ class WorkflowManager:
                     )
                     if workflow_instance is None:
                         continue
-                    with self.scheduler.lock:
-                        self.scheduler.workflows_to_run.append(
-                            {
-                                "workflow": workflow_instance,
-                                "workflow_id": workflow_model.id,
-                                "tenant_id": tenant_id,
-                                "triggered_by": "alert",
-                                "event": event,
-                            }
-                        )
+                    self.enqueue_workflow(
+                        tenant_id=tenant_id,
+                        workflow_id=workflow_model.id,
+                        event=event,
+                        triggered_by="alert",
+                        workflow=workflow_instance,
+                    )
                     self.logger.info("Workflow added to run")
             self.logger.info("All workflows added to run")
 

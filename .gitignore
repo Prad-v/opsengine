@@ -128,6 +128,7 @@ celerybeat.pid
 
 # Environments
 .env
+keep-ui/.env.k8s.local
 .venv
 env/
 venv/

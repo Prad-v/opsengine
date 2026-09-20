@@ -96,6 +96,7 @@ const IncidentTriggerSchema = z
   .object({
     type: z.literal("incident"),
     events: z.array(IncidentEventEnum).min(1),
+    cel: z.string().optional(),
   })
   .strict();
 
@@ -227,6 +228,7 @@ export const YamlWorkflowDefinitionSchema = z.object({
       owners: z.array(z.string()).optional(),
       // [doe.john@example.com, doe.jane@example.com, NOC]
       permissions: z.array(z.string()).optional(),
+      require_approval: z.boolean().optional(),
       services: z.array(z.string()).optional(),
       steps: z.array(YamlStepOrActionSchema).optional(),
       actions: z.array(YamlStepOrActionSchema).optional(),
@@ -290,6 +292,7 @@ export function getYamlWorkflowDefinitionSchema(
       owners: z.array(z.string()).optional(),
       // [doe.john@example.com, doe.jane@example.com, NOC]
       permissions: z.array(z.string()).optional(),
+      require_approval: z.boolean().optional(),
       strategy: WorkflowStrategySchema.optional(),
       services: z.array(z.string()).optional(),
       "on-failure": actionSchema.partial({ id: true, name: true }).optional(),

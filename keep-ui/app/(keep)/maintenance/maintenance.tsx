@@ -1,6 +1,6 @@
 "use client";
 import { Badge, Button, Callout, Card } from "@tremor/react";
-import { useMaintenanceRules } from "utils/hooks/useMaintenanceRules";
+import { useMaintenanceRules } from "@/utils/hooks/useMaintenanceRules";
 import Loading from "@/app/(keep)/loading";
 import { MdWarning } from "react-icons/md";
 import { useState } from "react";
@@ -43,7 +43,7 @@ export default function Maintenance() {
                 noCard
                 icon={FaVolumeMute}
                 title="No maintenance rules yet"
-                description="Create a new maintenance rule using the maintenance rules wizard"
+                description="Create a maintenance rule to suppress alerts during planned work"
               />
             </div>
           )}

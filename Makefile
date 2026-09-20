@@ -70,9 +70,12 @@ export REDIS_DB ?= 0
 	backend frontend start run hybrid stop hybrid-stop \
 	mock-providers mock-providers-down mock-providers-test \
 	temporal-worker temporal-worker-down register-list-and-zip-catalog \
-	register-nvidia-gpu-catalog demo-list-and-zip demo-nvidia-gpu \
+	register-nvidia-gpu-catalog register-nvidia-gpu-alert-codes \
+	register-payments-alert-codes \
+	demo-list-and-zip demo-nvidia-gpu register-nvidia-gpu-topology \
 	synthetic-checks synthetic-checks-down register-probe-targets-catalog \
-	kind-up kind-down k8s-start k8s-start-fresh k8s-prod k8s-ui k8s-stop k8s-e2e \
+	register-ai-dc-synthetic-checks \
+	kind-up kind-down k8s-start k8s-start-fresh k8s-prod k8s-ui k8s-stop k8s-e2e k8s-load \
 	api-alpine-wheels \
 	clean clean-images
 
@@ -84,6 +87,7 @@ help: ## Show available targets
 	@echo "                         UI http://localhost:3000  API http://localhost:8080"
 	@echo "                         Temporal UI http://localhost:8233"
 	@echo "                         Provider mock http://localhost:8099 (Grafana/Mimir/VM + NVIDIA GPU)"
+	@echo "                         NetBox http://localhost:8000 (admin/admin; seed from mock Topology tab)"
 	@echo "                         Auto-setup: NVIDIA GPU remediate workflow + Temporal catalog"
 	@echo "                         Workers: keep-ops + keep-synth (synthetic checks)"
 	@echo "                         Default auth: DB (admin/admin) — change password on first login"
@@ -93,7 +97,7 @@ help: ## Show available targets
 	@echo "  make deps / make backend / make frontend"
 	@echo "                         deps = Postgres, Redis, Soketi, Temporal,"
 	@echo "                         temporal-worker (keep-ops), synthetic-checks (keep-synth),"
-	@echo "                         provider-mock (http://localhost:8099)"
+	@echo "                         provider-mock (http://localhost:8099) + NetBox (http://localhost:8000)"
 	@echo ""
 	@echo "Full Docker:"
 	@echo "  make up                Dev images + mounted source"
@@ -102,15 +106,19 @@ help: ## Show available targets
 	@echo "  make prod              Pull published keep-api / keep-ui images"
 	@echo ""
 	@echo "Provider mock (also started by make start / make deps):"
-	@echo "  make mock-providers      Restart mock UI only (http://localhost:8099)"
+	@echo "  make mock-providers      Restart mock UI + NetBox (http://localhost:8099 / :8000)"
 	@echo "  make mock-providers-test Run provider-mock tests in Docker"
 	@echo "  make temporal-worker     Build/start Temporal keep-ops worker"
 	@echo "  make register-list-and-zip-catalog  Register ListAndZipDirectory in catalog"
 	@echo "  make register-nvidia-gpu-catalog    Register RemediateNvidiaGpu in catalog"
+	@echo "  make register-nvidia-gpu-alert-codes Register NVIDIA_GPU_* reserved codes"
+	@echo "  make register-payments-alert-codes  Register HIGH_CPU / HIGH_MEMORY / DISK_SPACE_LOW"
+	@echo "  make register-nvidia-gpu-topology    Seed NVIDIA region/row/rack/GPU topology"
 	@echo "  make demo-list-and-zip    Install mock→Temporal ListAndZip e2e demo"
 	@echo "  make demo-nvidia-gpu     Re-run NVIDIA GPU remediate e2e setup (also done by make start)"
 	@echo "  make synthetic-checks    Build/start Temporal keep-synth worker"
 	@echo "  make register-probe-targets-catalog  Register ProbeTargets in catalog"
+	@echo "  make register-ai-dc-synthetic-checks Seed NVIDIA/AMD inference+training synthetics"
 	@echo ""
 	@echo "Kubernetes (kind + Helm, two namespaces):"
 	@echo "  make k8s-start         Local-dev ns 'keep': backend/worker/mock + host UI"
@@ -119,6 +127,7 @@ help: ## Show available targets
 	@echo "  make k8s-prod          Prod ns 'keep-prod': official/CI-artifact Helm images + in-cluster UI"
 	@echo "  make k8s-stop          Delete the opsengine kind cluster"
 	@echo "  make k8s-e2e           NVIDIA GPU remediations e2e against the kind deploy"
+	@echo "  make k8s-load          Burst-ingest events (COUNT=2000; COUNT=1000000 for a day)"
 	@echo "  make kind-up / kind-down   Aliases for k8s-start / k8s-stop"
 	@echo ""
 	@awk 'BEGIN {FS = ":.*## "}; /^[a-zA-Z0-9_-]+:.*?## / {printf "  %-18s %s\n", $$1, $$2}' $(MAKEFILE_LIST)
@@ -197,6 +206,7 @@ deps-up: ## Start postgres, redis, soketi, Temporal, workers, and provider-mock 
 	@echo "  temporal-worker   keep-ops queue (ListAndZipDirectory, RemediateNvidiaGpu)"
 	@echo "  synthetic-checks  keep-synth queue (ProbeTarget / ProbeTargetGroup / ProbeTargets)"
 	@echo "  Provider mock     http://localhost:8099  (Grafana/Mimir/VM + NVIDIA GPU alerts)"
+	@echo "  NetBox            http://localhost:8000  (admin/admin; seed from mock Topology tab)"
 
 deps-wait: ## Wait until dependency healthchecks pass
 	@echo "Waiting for dependency healthchecks..."
@@ -267,6 +277,7 @@ mock-providers: ## Restart provider-mock UI only (also started by make start / m
 	$(COMPOSE) $(COMPOSE_MOCK) up --build -d
 	@echo ""
 	@echo "Provider mock UI: http://localhost:8099"
+	@echo "NetBox:           http://localhost:8000  (admin/admin; first boot 1–2 min)"
 	@echo "Register a mock provider, then Send event to validate Keep ingestion."
 
 mock-providers-down: ## Stop provider mock service
@@ -292,6 +303,18 @@ register-nvidia-gpu-catalog: ## Register RemediateNvidiaGpu in Keep Temporal cat
 	@chmod +x scripts/register_temporal_nvidia_gpu_catalog.py
 	$(VENV_PYTHON) scripts/register_temporal_nvidia_gpu_catalog.py
 
+register-nvidia-gpu-alert-codes: ## Register reserved NVIDIA_GPU_* codes in the alert catalog
+	@chmod +x scripts/register_alert_codes_nvidia_gpu.py
+	$(VENV_PYTHON) scripts/register_alert_codes_nvidia_gpu.py
+
+register-payments-alert-codes: ## Register reserved HIGH_CPU / HIGH_MEMORY / DISK_SPACE_LOW codes
+	@chmod +x scripts/register_alert_codes_payments.py
+	$(VENV_PYTHON) scripts/register_alert_codes_payments.py
+
+register-nvidia-gpu-topology: ## Seed NVIDIA region/datacenter/row/rack/GPU Service Topology
+	@chmod +x scripts/register_nvidia_gpu_topology.py
+	$(VENV_PYTHON) scripts/register_nvidia_gpu_topology.py
+
 demo-list-and-zip: ## Install mock Grafana → Temporal ListAndZip e2e demo workflow
 	@chmod +x scripts/demo_mock_list_and_zip.sh
 	./scripts/demo_mock_list_and_zip.sh
@@ -312,6 +335,10 @@ synthetic-checks-down: ## Stop synthetic-checks worker (leaves Temporal server r
 register-probe-targets-catalog: ## Register ProbeTargets in Keep Temporal catalog
 	@chmod +x scripts/register_temporal_probe_targets_catalog.py
 	$(VENV_PYTHON) scripts/register_temporal_probe_targets_catalog.py
+
+register-ai-dc-synthetic-checks: ## Seed NVIDIA/AMD inference+training synthetic checks
+	@chmod +x scripts/register_ai_dc_synthetic_checks.py
+	$(VENV_PYTHON) scripts/register_ai_dc_synthetic_checks.py
 
 # ---------------------------------------------------------------------------
 # Dev: build from Dockerfile.dev.* and mount local code (hot reload)
@@ -401,6 +428,13 @@ k8s-stop: ## Delete the opsengine kind cluster
 k8s-e2e: ## Run NVIDIA GPU remediations e2e against the kind deploy
 	@chmod +x scripts/e2e_k8s_nvidia_gpu.sh
 	./scripts/e2e_k8s_nvidia_gpu.sh
+
+COUNT ?= 2000
+CONCURRENCY ?= 20
+BATCH_SIZE ?= 20
+
+k8s-load: ## Burst-ingest events against kind API (COUNT=2000; COUNT=1000000 for a full day)
+	python3 scripts/load_k8s_events.py --count $(COUNT) --concurrency $(CONCURRENCY) --batch-size $(BATCH_SIZE)
 
 kind-up: k8s-start ## Alias for k8s-start
 

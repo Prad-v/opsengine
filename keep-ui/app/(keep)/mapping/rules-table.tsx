@@ -23,6 +23,7 @@ import { useMappings } from "utils/hooks/useMappingRules";
 import { toast } from "react-toastify";
 import { useApi } from "@/shared/lib/hooks/useApi";
 import { showErrorToast } from "@/shared/ui";
+import { isApprovalPending } from "@/features/approvals";
 import { FaFileCsv, FaFileCode, FaNetworkWired } from "react-icons/fa";
 import { Fragment, useState } from "react";
 import { useRouter } from "next/navigation";
@@ -182,9 +183,13 @@ export default function RulesTable({ mappings, editCallback }: Props) {
     if (confirm("Are you sure you want to delete this rule?")) {
       api
         .delete(`/mapping/${ruleId}`)
-        .then(() => {
+        .then((result) => {
           mutate();
-          toast.success("Rule deleted successfully");
+          toast.success(
+            isApprovalPending(result)
+              ? "Delete submitted for approval"
+              : "Rule deleted successfully"
+          );
         })
         .catch((error: any) => {
           showErrorToast(error, "Failed to delete rule");

@@ -41,6 +41,7 @@ class Workflow:
         workflow_consts: typing.Dict[str, str] = {},
         workflow_debug: bool = False,
         workflow_permissions: typing.List[str] = [],
+        workflow_require_approval: bool = False,
         is_test: bool = False,
     ):
         self.workflow_id = workflow_id
@@ -67,6 +68,7 @@ class Workflow:
         self.logger = logging.getLogger(__name__)
         self.workflow_debug = workflow_debug
         self.workflow_permissions = workflow_permissions
+        self.workflow_require_approval = workflow_require_approval
 
     def run_steps(self):
         self.logger.debug(f"Running steps for workflow {self.workflow_id}")

@@ -63,13 +63,13 @@ export function ApplicationsList({
 
   const handleUpdateApplication = useCallback(
     async (updatedApplication: TopologyApplication) => {
-      setModalState(initialModalState);
-      updateApplication(updatedApplication).then(
-        () => {},
-        (error) => {
-          showErrorToast(error, "Failed to update application");
-        }
-      );
+      try {
+        await updateApplication(updatedApplication);
+        setModalState(initialModalState);
+      } catch (error) {
+        showErrorToast(error, "Failed to update application");
+        throw error;
+      }
     },
     [updateApplication]
   );
@@ -172,6 +172,7 @@ export function ApplicationsList({
       )}
       {modalState.actionType === "create" ? (
         <ApplicationModal
+          key="create-application"
           isOpen={modalState.isOpen}
           onClose={() => setModalState(initialModalState)}
           actionType={modalState.actionType}
@@ -180,6 +181,7 @@ export function ApplicationsList({
         />
       ) : (
         <ApplicationModal
+          key={modalState.application?.id ?? "edit-application"}
           isOpen={modalState.isOpen}
           onClose={() => setModalState(initialModalState)}
           actionType={modalState.actionType}

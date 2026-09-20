@@ -200,6 +200,7 @@ export function ManageSelection({
           </Button>
         </div>
         <ApplicationModal
+          key={`edit-${selectedApplication.id}`}
           isOpen={isModalOpen}
           onClose={() => setIsModalOpen(false)}
           actionType="edit"
@@ -273,6 +274,7 @@ export function ManageSelection({
           />
         )}
         <ApplicationModal
+          key="create-from-selection"
           isOpen={isModalOpen}
           onClose={() => setIsModalOpen(false)}
           actionType="create"

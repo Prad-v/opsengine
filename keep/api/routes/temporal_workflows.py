@@ -5,6 +5,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.exc import IntegrityError, NoResultFound
 from sqlmodel import Session, select
 
+from keep.api.bl.approval_bl import ApprovalBl, pending_response
 from keep.api.bl.enrichments_bl import EnrichmentsBl
 from keep.api.core.db import get_incident_by_id, get_session
 from keep.api.models.action_type import ActionType
@@ -240,6 +241,19 @@ def delete_temporal_workflow(
     session: Session = Depends(get_session),
 ):
     entry = _get_entry(session, authenticated_entity.tenant_id, entry_id)
+    bl = ApprovalBl(authenticated_entity.tenant_id, session)
+    gate = bl.gate(
+        action_type="delete_resource",
+        requested_by=authenticated_entity.email,
+        title=f"Delete Temporal catalog {entry.catalog_key}",
+        payload={"resource_type": "temporal_catalog", "resource_id": str(entry_id)},
+        resource_type="temporal_catalog",
+        resource_id=str(entry_id),
+        callback={"kind": "keep_action"},
+        idempotency_key=f"delete:temporal_catalog:{entry_id}",
+    )
+    if gate.pending:
+        return pending_response(gate.request)
     session.delete(entry)
     session.commit()
     return {"message": "Temporal workflow catalog entry deleted successfully"}

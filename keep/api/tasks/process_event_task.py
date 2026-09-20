@@ -47,6 +47,8 @@ from keep.api.models.db.alert import Alert, AlertAudit, AlertRaw
 from keep.api.models.db.incident import IncidentStatus
 from keep.api.models.incident import IncidentDto
 from keep.api.tasks.notification_cache import get_notification_cache
+from keep.api.bl.alert_catalog_bl import AlertCatalogBl
+from keep.api.utils.alert_code import normalize_alert_code
 from keep.api.utils.alert_utils import sanitize_alert
 from keep.api.utils.enrichment_helpers import (
     calculate_firing_time_since_last_resolved,
@@ -245,6 +247,7 @@ def __save_to_db(
                 )
 
             __validate_last_received(formatted_event)
+            normalize_alert_code(formatted_event)
 
             alert_args = {
                 "tenant_id": tenant_id,
@@ -290,6 +293,18 @@ def __save_to_db(
                 enrichments_bl.run_mapping_rules(formatted_event)
             except Exception:
                 logger.exception("Failed to run mapping rules")
+
+            normalize_alert_code(formatted_event)
+            try:
+                AlertCatalogBl(tenant_id, session).apply_to_alert(formatted_event)
+            except Exception:
+                logger.exception(
+                    "Failed to apply alert catalog",
+                    extra={
+                        "tenant_id": tenant_id,
+                        "fingerprint": formatted_event.fingerprint,
+                    },
+                )
 
             alert_enrichment = get_enrichment_with_session(
                 session=session,

@@ -24,25 +24,24 @@ This:
 
 - Starts/rebuilds the Temporal worker  
 - Registers **List and Zip Directory** in the catalog  
+- Registers reserved codes `HIGH_CPU` / `HIGH_MEMORY` / `DISK_SPACE_LOW`  
 - Uploads `examples/workflows/mock-grafana-list-and-zip.yml`
 
 ## Fire the demo
 
-```bash
-make mock-providers   # if not already up → http://localhost:8099
-```
+Provider mock is already up with `make start` at [http://localhost:8099](http://localhost:8099). Restart only if needed: `make mock-providers`.
 
 1. Mock UI → **Grafana** → **Register**  
 2. Mock UI → **Temporal** → **Register Temporal**  
-3. Grafana → **Create rule + send both**  
+3. Grafana → **Payments: rule + send both**
 
-Keep opens an incident (payments / mock-prod correlation).
+Keep correlates `HIGH_CPU` + `HIGH_MEMORY` into one incident (group by `labels.service`). GPU alerts use `NVIDIA_GPU_*` and a different workflow — see [GPU remediate demo](/overview/demo-mock-nvidia-gpu-remediate).
 
 ## What to check
 
 | Place | What you should see |
 | --- | --- |
-| **Incident → Timeline** | The two Grafana mock alerts (`MockHighCPU`, `MockHighMemory`) |
+| **Incident → Timeline** | The two Grafana mock alerts (`HIGH_CPU` / `HIGH_MEMORY`) |
 | **Incident → Workflows** | Keep workflow run for `Mock Grafana → Temporal ListAndZip` |
 | **Incident → Overview** | Enrichments `remediation`, `list_path`, `temporal_demo` |
 | **Temporal UI** http://localhost:8233 | Workflow `ListAndZipDirectory` on queue `keep-ops` |
@@ -54,7 +53,7 @@ Keep opens an incident (payments / mock-prod correlation).
 
 [`examples/workflows/mock-grafana-list-and-zip.yml`](https://github.com/keephq/keep/blob/main/examples/workflows/mock-grafana-list-and-zip.yml)
 
-- Trigger: `incident` created **or** updated (mock correlation often updates an open INC)  
+- Trigger: `incident` created **or** updated, CEL on reserved codes `HIGH_CPU` / `HIGH_MEMORY`  
 - Guard: `not '{{ incident.temporal_demo }}'` so Temporal starts once  
 - Action: Temporal `start_workflow` → `ListAndZipDirectory` / `keep-ops`  
 - `enrich_incident` breadcrumbs for Overview  
@@ -66,6 +65,7 @@ Instead of (or in addition to) the YAML action, use **Add step → Temporal cata
 
 ## Related
 
-- [Provider mock](/development/provider-mock)  
-- [Temporal workflow catalog](/overview/temporal-workflow-catalog)  
-- [Temporal worker](/overview/temporal-worker-list-and-zip)  
+- [Provider mock](/development/provider-mock)
+- [Alert codes](/overview/alert-code-catalog)
+- [Temporal workflow catalog](/overview/temporal-workflow-catalog)
+- [Temporal worker](/overview/temporal-worker-list-and-zip) 

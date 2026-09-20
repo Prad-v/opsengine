@@ -32,6 +32,9 @@ from keep.api.models.db.rule import *
 from keep.api.models.db.tenant import *
 from keep.api.models.db.user import *
 from keep.api.models.db.workflow import *
+from keep.api.models.db.alert_catalog import *
+from keep.api.models.db.approval import *
+from keep.api.models.db.temporal_workflow_catalog import *
 from keep.api.tasks.process_event_task import process_event
 from keep.api.utils.enrichment_helpers import convert_db_alerts_to_dto_alerts
 from keep.contextmanager.contextmanager import ContextManager
@@ -767,10 +770,11 @@ def create_window_maintenance_active(db_session):
         tenant_id: str = SINGLE_TENANT_UUID,
         name: str = "Test Maintenance Window",
         description: str = "This is a test maintenance window",
+        suppress: bool = True,
+        priority: int = 0,
     ):
         """Create a maintenance window in the database."""
         window = MaintenanceWindowRule(
-            id=str(uuid.uuid4()),
             tenant_id=tenant_id,
             name=name,
             description=description,
@@ -779,9 +783,9 @@ def create_window_maintenance_active(db_session):
             created_by="test_user",
             cel_query=cel,
             enabled=True,
-            suppress=True,
+            suppress=suppress,
+            priority=priority,
             ignore_statuses=[AlertStatus.RESOLVED.value, AlertStatus.ACKNOWLEDGED.value],
-
         )
         db_session.add(window)
         db_session.commit()

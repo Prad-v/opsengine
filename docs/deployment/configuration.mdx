@@ -345,14 +345,18 @@ These endpoints are rate-limited according to the `KEEP_LIMIT_CONCURRENCY` setti
 ### Maintenance Windows
 
 <Info>
-  The strategy enables the ability to manage how the alerts are handled
-  in case of a match with the Maintenance Windows Rules.
+  Maintenance window rules suppress matching alerts during planned work.
+  New rules keep alerts in the feed as suppressed unless you choose hide-from-feed.
+  `recover_previous_status` starts the watcher automatically so alerts do not stay in `maintenance` after the window ends.
 </Info>
 
-|             Env var              |                      Purpose                |        Required         | Default Value |               Valid options                       |
-| :------------------------------: | :-----------------------------------------: | :---------------------: | :-----------: | :-----------------------------------------------: |
-| **MAINTENANCE_WINDOW_STRATEGY**  |          Choose the strategy                |           No            |    "default"  |      "default" or "recover_previous_status"       |
-| **WATCHER_LAPSED_TIME**          | Time in seconds to execute the alert review |           No            |       60      |             Valid positive integer                |
+| Env var | Purpose | Required | Default Value | Valid options |
+|---|---|---|---|---|
+| **KEEP_MAINTENANCE_WINDOWS_ENABLED** | Apply maintenance rules when ingesting alerts | No | `true` | `true`, `false` |
+| **MAINTENANCE_WINDOW_STRATEGY** | How matching alerts are handled | No | `default` | `default`, `recover_previous_status` |
+| **KEEP_WATCHER_LAPSED_TIME** | Seconds between recover-strategy reviews | No | `60` | Positive integer |
+| **WATCHER** | Start the background watcher | No | `false` | `true`, `false` |
+| **MAINTENANCE_WINDOWS** | Also start the watcher (legacy) | No | `false` | `true`, `false` |
 
 ## Frontend Environment Variables
 
@@ -377,7 +381,7 @@ These endpoints are rate-limited according to the `KEEP_LIMIT_CONCURRENCY` setti
 | **HIDE_NAVBAR_MAINTENANCE_WINDOW** | Hides the maintenance window page from the navigation bar in the UI | No       | None          | "true"          |
 | **HIDE_NAVBAR_AI_PLUGINS**         | Hides the AI plugins page from the navigation bar in the UI         | No       | None          | "true"          |
 | **KEEP_WF_LIST_EXTENDED_INFO**     | Use a list instead a button to show the complete execution list     | No       | "true"        | "true", "false" |
-| **ALERT_SIDEBAR_FIELDS**           | Specifies a list of fields to show in the sidebar.                  | No       | service,source,description,message,fingerprint,url,incidents,timeline,relatedServices | Valid list of fields |
+| **ALERT_SIDEBAR_FIELDS**           | Specifies a list of fields to show in the sidebar.                  | No       | service,source,code,description,message,fingerprint,url,incidents,timeline,relatedServices | Valid list of fields |
 
 ### Authentication
 

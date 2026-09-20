@@ -55,6 +55,8 @@ from keep.api.routes import (
     settings,
     status,
     tags,
+    alert_catalog,
+    approvals,
     synthetic_checks,
     temporal_workflows,
     topology,
@@ -163,7 +165,11 @@ async def startup():
         except Exception:
             logger.exception("Failed to start the topology processor")
 
-    if WATCHER or (MAINTENANCE_WINDOWS and MAINTENANCE_WINDOW_ALERT_STRATEGY == "recover_previous_status"):
+    if (
+        WATCHER
+        or MAINTENANCE_WINDOWS
+        or MAINTENANCE_WINDOW_ALERT_STRATEGY == "recover_previous_status"
+    ):
         if REDIS:
             try:
                 logger.info("Starting the watcher process")
@@ -336,6 +342,16 @@ def get_app(
         synthetic_checks.router,
         prefix="/synthetic-checks",
         tags=["synthetic-checks", "catalog"],
+    )
+    app.include_router(
+        alert_catalog.router,
+        prefix="/alert-catalog",
+        tags=["alerts", "catalog"],
+    )
+    app.include_router(
+        approvals.router,
+        prefix="/approvals",
+        tags=["approvals"],
     )
     app.include_router(facets.router, prefix="/{entity_name}/facets", tags=["facets"])
     app.include_router(facets.router, prefix="/{entity_name}/facets", tags=["facets"])

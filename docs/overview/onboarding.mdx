@@ -1,0 +1,91 @@
+---
+title: "Alert lifecycle"
+sidebarTitle: "Alert lifecycle"
+description: "Table of reserved-code lifecycles with view (including correlation → incident → workflow flow), edit, pause, and delete. Onboard another with the wizard: providers, alert code, correlation, workflow, and notification."
+---
+
+**Alert lifecycle** (`/onboarding`) lists every reserved [`labels.code`](/overview/alert-code-catalog) you have wired from ingest through notification. The table is the same kind of working list as **Incidents** and **Alerts Feed**: scan the rows, then **View**, **Edit**, **Pause**, or **Delete**.
+
+Use **Onboard lifecycle** when you need a new code. That opens the repeatable wizard (providers → this alert code → correlation → workflow → notification). **Close** / **Finish** returns you to the table. Run it again for the next code (`HIGH_CPU`, then `NVIDIA_GPU_THERMAL`, and so on). It is not a one-time tenant setup.
+
+The sidebar link **Alert lifecycle** stays visible. The badge is the number of catalog rows.
+
+## The table
+
+Each row is one catalog entry, joined with its matching correlation rule and attached Keep workflow.
+
+| Column | Meaning |
+| --- | --- |
+| Code / Name | Reserved `labels.code` and display name |
+| Status | **Active** (catalog auto-run on) or **Paused** (`disabled`) |
+| Correlation | Rule whose CEL quotes this code |
+| Workflow | Attached Keep workflow name |
+| Auto-run | `none`, `alert`, `incident`, or `both` |
+| Notification | Whether this workflow has a notify action and a messaging provider |
+| Progress | How many of the five wizard steps are complete for this code |
+| Actions | View, Edit, Pause/Resume, Delete |
+
+**View** opens a read-only summary of the five steps plus a **Correlation → Incident → Workflow** flow map (same idea as topology: nodes and edges on a grid). Wired stages use solid edges and links to the rule / workflow; missing stages stay dashed. **Edit** reopens the wizard on this code. **Pause** sets the catalog entry to `disabled`, which stops catalog enrichment and auto-run (correlation and the workflow YAML stay). **Resume** clears `disabled`. **Delete** removes the catalog row and the matching correlation rule; the workflow is kept so you can reuse it.
+
+## The path (wizard)
+
+1. **Providers** — reuse an installed alert source, or connect Grafana, Prometheus, Datadog, and enable webhook ingest when the tool supports it.
+2. **Alert codes** — register **this** reserved `labels.code`, or seed a pack (payments / NVIDIA GPU) and select the code for this run.
+3. **Correlation** — create a rule that groups alerts with **this** code (default: group by `labels.host`).
+4. **Workflow** — pick a **workflow name** from the dropdown (or create `Notify on {code}`), then attach it with auto-run (alert, incident, or both).
+5. **Notification** — reuse Slack, email, or console, or install a notifier, and point **this** workflow's notify action at it.
+
+Then **Finish** (back to the table), **Open Alerts Feed**, or **Onboard another** for a new code. Providers you already installed are reused.
+
+<Tip>
+If the source does not send `labels.code`, add a [mapping](/overview/enrichment/mapping) or extraction rule after step 2. Otherwise correlation and workflows will not join on identity.
+</Tip>
+
+## Empty workspace
+
+When **no** alert source is installed yet, Keep may open `/onboarding` from Incidents so the first lifecycle has somewhere to land. The page shows an empty table until you click **Onboard lifecycle**.
+
+Local hybrid (`make start`) cannot receive remote webhooks. Use the [provider-mock](/development/provider-mock) at `http://localhost:8099` to register Grafana, or finish notifications with **console logs**.
+
+## What the wizard writes
+
+| Step | API |
+| --- | --- |
+| Providers | `POST /providers/install` (same form as **Providers**), or skip if a source is already installed |
+| Alert codes | `POST /alert-catalog` for this code |
+| Correlation | `POST /rules` with CEL `has(labels.code) && labels.code == "CODE"` |
+| Workflow | `POST /workflows/json` plus `PUT /alert-catalog/{id}` (`keep_workflow_id`, `auto_run_on: both`) |
+| Notification | Same workflow YAML with `type: slack` (or console) |
+| Pause | `PUT /alert-catalog/{id}` with `disabled: true` |
+| Delete | `DELETE /alert-catalog/{id}` and `DELETE /rules/{id}` for the matching CEL rule |
+
+Example notify workflow:
+
+```yaml
+workflow:
+  id: onboarding-notify-high-cpu
+  name: Notify on HIGH_CPU
+  triggers:
+    - type: alert
+      cel: has(labels.code) && labels.code == "HIGH_CPU" && status == "firing"
+    - type: incident
+      events:
+        - created
+      cel: code == "HIGH_CPU"
+  actions:
+    - name: notify-oncall
+      provider:
+        type: console
+        with:
+          message: "{{ alert.labels.code or incident.code }} — {{ alert.name or incident.name }}"
+```
+
+After a run, send a test event (provider-mock or **Simulate alert**). You should see `code` on the Feed row, a correlated incident, and a workflow execution. Then onboard the next code from the table.
+
+## Related
+
+- [Alert codes](/overview/alert-code-catalog)
+- [Correlation rules](/overview/correlation-rules)
+- [Workflows](/overview/workflow-automation)
+- [Push vs pull](/overview/howdoeskeepgetmyalerts)
+- [Getting started](/development/getting-started)

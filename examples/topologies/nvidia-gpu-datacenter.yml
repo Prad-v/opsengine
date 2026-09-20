@@ -1,0 +1,382 @@
+# NVIDIA GPU Service Topology (region → datacenter → row → rack → host → GPU).
+# Import from Keep UI → Service Topology → Import, or:
+#   python scripts/register_nvidia_gpu_topology.py
+# Alert labels (region/datacenter/row/rack/host/gpu_id) match these service names.
+applications:
+- id: 7c0a0a10-5e11-4b2a-9c3d-00a1dc000001
+  name: NVIDIA GPU Inference
+  description: Mock NVIDIA H100 inference cluster laid out by region / datacenter / row / rack / GPU for Keep Service Topology.
+  repository: ''
+  services:
+  - 1
+  - 2
+  - 3
+  - 4
+  - 5
+  - 6
+  - 7
+  - 8
+  - 9
+  - 10
+  - 11
+  - 12
+  - 13
+  - 14
+  - 15
+  - 16
+  - 17
+dependencies:
+- service_id: 2
+  depends_on_service_id: 1
+  protocol: located-in
+- service_id: 3
+  depends_on_service_id: 2
+  protocol: located-in
+- service_id: 4
+  depends_on_service_id: 2
+  protocol: located-in
+- service_id: 5
+  depends_on_service_id: 3
+  protocol: located-in
+- service_id: 6
+  depends_on_service_id: 3
+  protocol: located-in
+- service_id: 7
+  depends_on_service_id: 4
+  protocol: located-in
+- service_id: 8
+  depends_on_service_id: 5
+  protocol: power
+- service_id: 9
+  depends_on_service_id: 8
+  protocol: PCIe
+- service_id: 17
+  depends_on_service_id: 9
+  protocol: CUDA
+- service_id: 10
+  depends_on_service_id: 8
+  protocol: PCIe
+- service_id: 17
+  depends_on_service_id: 10
+  protocol: CUDA
+- service_id: 11
+  depends_on_service_id: 6
+  protocol: power
+- service_id: 12
+  depends_on_service_id: 11
+  protocol: PCIe
+- service_id: 17
+  depends_on_service_id: 12
+  protocol: CUDA
+- service_id: 13
+  depends_on_service_id: 11
+  protocol: PCIe
+- service_id: 17
+  depends_on_service_id: 13
+  protocol: CUDA
+- service_id: 14
+  depends_on_service_id: 7
+  protocol: power
+- service_id: 15
+  depends_on_service_id: 14
+  protocol: PCIe
+- service_id: 17
+  depends_on_service_id: 15
+  protocol: CUDA
+- service_id: 16
+  depends_on_service_id: 14
+  protocol: PCIe
+- service_id: 17
+  depends_on_service_id: 16
+  protocol: CUDA
+services:
+- id: 1
+  service: us-west-2
+  display_name: Region us-west-2
+  environment: prod
+  description: AWS-style region that hosts the AI datacenter.
+  team: AI DC Ops
+  email: ops@ai-dc.local
+  slack: '#ai-dc-alerts'
+  category: region
+  manufacturer: null
+  namespace: null
+  is_manual: true
+  tags:
+  - nvidia
+  - region
+  source_provider_id: nvidia-gpu-mock
+- id: 2
+  service: ai-dc-1
+  display_name: Datacenter ai-dc-1
+  environment: prod
+  description: AI datacenter floor for NVIDIA H100 inference.
+  team: AI DC Ops
+  email: ops@ai-dc.local
+  slack: '#ai-dc-alerts'
+  category: datacenter
+  manufacturer: NVIDIA
+  namespace: null
+  is_manual: true
+  tags:
+  - nvidia
+  - datacenter
+  source_provider_id: nvidia-gpu-mock
+- id: 3
+  service: row-a
+  display_name: Row A
+  environment: prod
+  description: Hot/cold aisle row-a in ai-dc-1.
+  team: AI DC Ops
+  email: ops@ai-dc.local
+  slack: '#ai-dc-alerts'
+  category: row
+  manufacturer: NVIDIA
+  namespace: null
+  is_manual: true
+  tags:
+  - nvidia
+  - row
+  source_provider_id: nvidia-gpu-mock
+- id: 4
+  service: row-b
+  display_name: Row B
+  environment: prod
+  description: Hot/cold aisle row-b in ai-dc-1.
+  team: AI DC Ops
+  email: ops@ai-dc.local
+  slack: '#ai-dc-alerts'
+  category: row
+  manufacturer: NVIDIA
+  namespace: null
+  is_manual: true
+  tags:
+  - nvidia
+  - row
+  source_provider_id: nvidia-gpu-mock
+- id: 5
+  service: rack-11
+  display_name: Rack 11
+  environment: prod
+  description: GPU rack rack-11 in row-a.
+  team: AI DC Ops
+  email: ops@ai-dc.local
+  slack: '#ai-dc-alerts'
+  category: rack
+  manufacturer: NVIDIA
+  namespace: null
+  is_manual: true
+  tags:
+  - nvidia
+  - rack
+  source_provider_id: nvidia-gpu-mock
+- id: 6
+  service: rack-12
+  display_name: Rack 12
+  environment: prod
+  description: GPU rack rack-12 in row-a.
+  team: AI DC Ops
+  email: ops@ai-dc.local
+  slack: '#ai-dc-alerts'
+  category: rack
+  manufacturer: NVIDIA
+  namespace: null
+  is_manual: true
+  tags:
+  - nvidia
+  - rack
+  source_provider_id: nvidia-gpu-mock
+- id: 7
+  service: rack-21
+  display_name: Rack 21
+  environment: prod
+  description: GPU rack rack-21 in row-b.
+  team: AI DC Ops
+  email: ops@ai-dc.local
+  slack: '#ai-dc-alerts'
+  category: rack
+  manufacturer: NVIDIA
+  namespace: null
+  is_manual: true
+  tags:
+  - nvidia
+  - rack
+  source_provider_id: nvidia-gpu-mock
+- id: 8
+  service: gpu-node-a01
+  display_name: gpu-node-a01
+  environment: prod
+  description: NVIDIA H100 node in ai-dc-1 / row-a / rack-11.
+  team: AI DC Ops
+  email: ops@ai-dc.local
+  slack: '#ai-dc-alerts'
+  category: host
+  manufacturer: NVIDIA
+  namespace: ml-serving
+  is_manual: true
+  tags:
+  - nvidia
+  - host
+  - rack-11
+  - row-a
+  source_provider_id: nvidia-gpu-mock
+- id: 9
+  service: gpu-node-a01-gpu0
+  display_name: GPU 0 @ gpu-node-a01
+  environment: prod
+  description: NVIDIA-H100-80GB-HBM3 index 0 (GPU-11111111-aaaa-4000-8000-000000000001) in rack-11.
+  team: AI DC Ops
+  email: ops@ai-dc.local
+  slack: '#ai-dc-alerts'
+  category: gpu
+  manufacturer: NVIDIA
+  namespace: ml-serving
+  is_manual: true
+  tags:
+  - nvidia
+  - gpu
+  - gpu-node-a01
+  - rack-11
+  source_provider_id: nvidia-gpu-mock
+- id: 10
+  service: gpu-node-a01-gpu1
+  display_name: GPU 1 @ gpu-node-a01
+  environment: prod
+  description: NVIDIA-H100-80GB-HBM3 index 1 (GPU-11111111-aaaa-4000-8000-000000000002) in rack-11.
+  team: AI DC Ops
+  email: ops@ai-dc.local
+  slack: '#ai-dc-alerts'
+  category: gpu
+  manufacturer: NVIDIA
+  namespace: ml-serving
+  is_manual: true
+  tags:
+  - nvidia
+  - gpu
+  - gpu-node-a01
+  - rack-11
+  source_provider_id: nvidia-gpu-mock
+- id: 11
+  service: gpu-node-a03
+  display_name: gpu-node-a03
+  environment: prod
+  description: NVIDIA H100 node in ai-dc-1 / row-a / rack-12.
+  team: AI DC Ops
+  email: ops@ai-dc.local
+  slack: '#ai-dc-alerts'
+  category: host
+  manufacturer: NVIDIA
+  namespace: ml-serving
+  is_manual: true
+  tags:
+  - nvidia
+  - host
+  - rack-12
+  - row-a
+  source_provider_id: nvidia-gpu-mock
+- id: 12
+  service: gpu-node-a03-gpu0
+  display_name: GPU 0 @ gpu-node-a03
+  environment: prod
+  description: NVIDIA-H100-80GB-HBM3 index 0 (GPU-a1b2c3d4-e5f6-7890) in rack-12.
+  team: AI DC Ops
+  email: ops@ai-dc.local
+  slack: '#ai-dc-alerts'
+  category: gpu
+  manufacturer: NVIDIA
+  namespace: ml-serving
+  is_manual: true
+  tags:
+  - nvidia
+  - gpu
+  - gpu-node-a03
+  - rack-12
+  source_provider_id: nvidia-gpu-mock
+- id: 13
+  service: gpu-node-a03-gpu1
+  display_name: GPU 1 @ gpu-node-a03
+  environment: prod
+  description: NVIDIA-H100-80GB-HBM3 index 1 (GPU-a1b2c3d4-e5f6-7891) in rack-12.
+  team: AI DC Ops
+  email: ops@ai-dc.local
+  slack: '#ai-dc-alerts'
+  category: gpu
+  manufacturer: NVIDIA
+  namespace: ml-serving
+  is_manual: true
+  tags:
+  - nvidia
+  - gpu
+  - gpu-node-a03
+  - rack-12
+  source_provider_id: nvidia-gpu-mock
+- id: 14
+  service: gpu-node-b01
+  display_name: gpu-node-b01
+  environment: prod
+  description: NVIDIA H100 node in ai-dc-1 / row-b / rack-21.
+  team: AI DC Ops
+  email: ops@ai-dc.local
+  slack: '#ai-dc-alerts'
+  category: host
+  manufacturer: NVIDIA
+  namespace: ml-serving
+  is_manual: true
+  tags:
+  - nvidia
+  - host
+  - rack-21
+  - row-b
+  source_provider_id: nvidia-gpu-mock
+- id: 15
+  service: gpu-node-b01-gpu0
+  display_name: GPU 0 @ gpu-node-b01
+  environment: prod
+  description: NVIDIA-H100-80GB-HBM3 index 0 (GPU-22222222-bbbb-4000-8000-000000000001) in rack-21.
+  team: AI DC Ops
+  email: ops@ai-dc.local
+  slack: '#ai-dc-alerts'
+  category: gpu
+  manufacturer: NVIDIA
+  namespace: ml-serving
+  is_manual: true
+  tags:
+  - nvidia
+  - gpu
+  - gpu-node-b01
+  - rack-21
+  source_provider_id: nvidia-gpu-mock
+- id: 16
+  service: gpu-node-b01-gpu1
+  display_name: GPU 1 @ gpu-node-b01
+  environment: prod
+  description: NVIDIA-H100-80GB-HBM3 index 1 (GPU-22222222-bbbb-4000-8000-000000000002) in rack-21.
+  team: AI DC Ops
+  email: ops@ai-dc.local
+  slack: '#ai-dc-alerts'
+  category: gpu
+  manufacturer: NVIDIA
+  namespace: ml-serving
+  is_manual: true
+  tags:
+  - nvidia
+  - gpu
+  - gpu-node-b01
+  - rack-21
+  source_provider_id: nvidia-gpu-mock
+- id: 17
+  service: gpu-inference
+  display_name: GPU Inference
+  environment: prod
+  description: Logical inference service that consumes the H100 fleet.
+  team: AI DC Ops
+  email: ops@ai-dc.local
+  slack: '#ai-dc-alerts'
+  category: service
+  manufacturer: NVIDIA
+  namespace: ml-serving
+  is_manual: true
+  tags:
+  - nvidia
+  - inference
+  source_provider_id: nvidia-gpu-mock

@@ -104,6 +104,7 @@ def notify_keep_alert(payload: dict[str, Any]) -> dict[str, Any]:
         f"latency={duration}s"
         + (f" error={error}" if error else "")
     )
+    reserved_code = str(labels.get("code") or "").strip() or None
 
     alert = {
         "name": f"Synthetic check {'passed' if success else 'failed'}: {target}",
@@ -118,6 +119,8 @@ def notify_keep_alert(payload: dict[str, Any]) -> dict[str, Any]:
         "labels": labels,
         "lastReceived": datetime.now(tz=timezone.utc).isoformat(),
     }
+    if reserved_code:
+        alert["code"] = reserved_code
 
     try:
         response = httpx.post(

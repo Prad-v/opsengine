@@ -17,6 +17,9 @@ task queue `keep-synth`.
 Failed/recovered probes post `AlertDto` events to Keep (`source: synthetic-checks`).
 Probe metrics export via OpenTelemetry (OTLP) as `probe_success` and `probe_duration_seconds`.
 
+For the NVIDIA + AMD inference/training pack seeded by `make start`, see
+[AI datacenter synthetic checks](/overview/ai-dc-synthetic-checks).
+
 ## Architecture
 
 ```
@@ -71,9 +74,12 @@ the `ProbeTargets` Temporal catalog entry (skipped until a Temporal provider is 
   "method": "GET",
   "timeout_seconds": 5,
   "valid_status_codes": [200],
-  "fail_if_body_not_matches_regexp": "ok"
+  "fail_if_body_not_matches_regexp": "ok",
+  "max_duration_seconds": 2
 }
 ```
+
+JSON `body` objects are sent as `application/json` (used by inference golden-prompt checks). `max_duration_seconds` fails the probe when latency exceeds the budget even if the status code is valid.
 
 **TCP**
 
@@ -145,7 +151,11 @@ exports OTLP metrics to Prometheus.
 - API: `keep/api/routes/synthetic_checks.py`
 - Helm: `helm/synthetic-checks/`
 - Compose: `docker-compose.temporal.yml` service `synthetic-checks`
-- Tests: `tests/test_synthetic_checks_*.py`
+- Tests: `tests/test_synthetic_checks_*.py`, `tests/test_ai_dc_synthetic_checks.py`
+
+## Related
+
+- [AI datacenter synthetic checks](/overview/ai-dc-synthetic-checks) — NVIDIA/AMD inference + training pack
 
 ## Troubleshooting
 

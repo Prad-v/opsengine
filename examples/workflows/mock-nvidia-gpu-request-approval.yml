@@ -1,0 +1,20 @@
+workflow:
+  id: mock-nvidia-gpu-request-approval
+  name: Request approval before GPU remediate
+  description: >
+    Create a Keep approval request for a GPU reset. After an operator
+    approves, Keep enqueues mock-nvidia-gpu-remediate.
+  triggers:
+    - type: manual
+  actions:
+    - name: request-gpu-reset
+      provider:
+        type: keep
+        with:
+          request_approval:
+            title: "Reset GPU {{ alert.labels.host }}"
+            action_type: custom
+            summary: "Operator must approve before Temporal remediates the GPU"
+            callback:
+              kind: keep_action
+              workflow_id: mock-nvidia-gpu-remediate

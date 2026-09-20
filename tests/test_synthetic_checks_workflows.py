@@ -63,6 +63,7 @@ def test_notify_keep_alert_posts_firing():
                         "duration_seconds": 1.2,
                         "error": "timeout",
                     },
+                    "labels": {"code": "SYNTH_NVIDIA_INFERENCE_GATEWAY", "service": "gpu-inference"},
                 }
             )
 
@@ -73,6 +74,8 @@ def test_notify_keep_alert_posts_firing():
     assert args[0] == "http://keep:8080/alerts/event"
     assert kwargs["json"]["status"] == "firing"
     assert kwargs["json"]["source"] == ["synthetic-checks"]
+    assert kwargs["json"]["code"] == "SYNTH_NVIDIA_INFERENCE_GATEWAY"
+    assert kwargs["json"]["labels"]["code"] == "SYNTH_NVIDIA_INFERENCE_GATEWAY"
 
 
 def test_notify_keep_alert_skips_without_config():

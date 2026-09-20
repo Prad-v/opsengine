@@ -647,6 +647,36 @@ class KeepProvider(BaseProvider):
                 )
         self.logger.info("Deleted all workflows")
 
+    def _request_approval(self, request_approval: dict | None):
+        from keep.api.bl.approval_bl import ApprovalBl
+
+        spec = request_approval or {}
+        if not isinstance(spec, dict):
+            raise ProviderException("request_approval must be an object")
+        title = spec.get("title") or "Approval required"
+        action_type = spec.get("action_type") or "custom"
+        bl = ApprovalBl(self.context_manager.tenant_id)
+        try:
+            request = bl.create_external_request(
+                action_type=action_type,
+                requested_by=f"workflow:{self.context_manager.workflow_id}",
+                title=title,
+                summary=spec.get("summary"),
+                resource_type=spec.get("resource_type"),
+                resource_id=spec.get("resource_id") or spec.get("workflow_id"),
+                payload=spec.get("payload") or {},
+                context=spec.get("context") or {},
+                callback=spec.get("callback") or {},
+                idempotency_key=spec.get("idempotency_key"),
+            )
+            return {
+                "status": "pending",
+                "request_id": request.id,
+                "title": request.title,
+            }
+        finally:
+            bl.close()
+
     def _notify(
         self,
         delete_all_other_workflows: bool = False,
@@ -675,6 +705,10 @@ class KeepProvider(BaseProvider):
             read_only: if True, don't modify existing alerts
             fingerprint: alert fingerprint
         """
+        request_approval = kwargs.pop("request_approval", None)
+        if request_approval:
+            return self._request_approval(request_approval)
+
         # TODO: refactor this to be two separate ProviderMethods, when wf engine will support calling provider methods
         is_workflow_action = (
             workflow_full_sync or delete_all_other_workflows or workflow_to_update_yaml

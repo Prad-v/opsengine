@@ -3,6 +3,7 @@ export const defaultColumns = [
   "status",
   "source",
   "name",
+  "code",
   "description",
   "lastReceived",
 ];

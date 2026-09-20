@@ -35,6 +35,8 @@ from keep.api.models.db.statistics import *  # pylint: disable=unused-wildcard-i
 from keep.api.models.db.tenant import *  # pylint: disable=unused-wildcard-import
 from keep.api.models.db.temporal_workflow_catalog import *  # pylint: disable=unused-wildcard-import
 from keep.api.models.db.synthetic_check import *  # pylint: disable=unused-wildcard-import
+from keep.api.models.db.alert_catalog import *  # pylint: disable=unused-wildcard-import
+from keep.api.models.db.approval import *  # pylint: disable=unused-wildcard-import
 from keep.api.models.db.workflow import *  # pylint: disable=unused-wildcard-import
 
 # This import is required to create the tables

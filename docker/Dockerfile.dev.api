@@ -9,13 +9,15 @@ WORKDIR /app
 # Creating a virtual environment and installing dependencies
 ENV PIP_DEFAULT_TIMEOUT=100 \
     PIP_DISABLE_PIP_VERSION_CHECK=1 \
-    PIP_NO_CACHE_DIR=1 \
     POETRY_VERSION=1.3.2
 
 RUN pip install "poetry==$POETRY_VERSION"
 RUN python -m venv /venv
-COPY pyproject.toml ./
-RUN . /venv/bin/activate && poetry install --no-root
+# Lockfile in this layer so poetry install is cached unless deps change.
+COPY pyproject.toml poetry.lock ./
+RUN --mount=type=cache,target=/root/.cache/pypoetry \
+    --mount=type=cache,target=/root/.cache/pip \
+    . /venv/bin/activate && poetry install --no-root
 
 COPY keep keep
 COPY ee keep/ee

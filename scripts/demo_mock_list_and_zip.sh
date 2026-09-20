@@ -36,26 +36,45 @@ curl -sf -X POST "${API_URL}/workflows?lookup_by_name=true" \
   && echo "Workflow uploaded:" && cat /tmp/keep-demo-workflow.json && echo \
   || echo "Workflow upload returned non-200 — check API logs / existing workflow id"
 
+for extra in \
+  examples/workflows/mock-mimir-disk.yml \
+  examples/workflows/mock-victoriametrics-memory.yml \
+  examples/workflows/alert-code-console.yml
+do
+  echo "==> Applying ${extra}"
+  curl -sf -X POST "${API_URL}/workflows?lookup_by_name=true" \
+    -H "x-api-key: ${API_KEY}" \
+    -F "file=@${extra}" \
+    -o /dev/null \
+    && echo "    uploaded ${extra}" \
+    || echo "    ${extra} upload skipped"
+done
+
+echo "==> Registering reserved payments alert codes (HIGH_CPU / HIGH_MEMORY / DISK_SPACE_LOW)"
+KEEP_API_URL="${API_URL}" KEEP_API_KEY="${API_KEY}" \
+  "${ROOT}/.venv/bin/python" scripts/register_alert_codes_payments.py || true
+
 cat <<EOF
 
 ============================================================
 Demo ready: Mock Grafana → Incident → Temporal ListAndZip
 ============================================================
 
-1) Start mock UI (if not running):
-     make mock-providers
+1) Open mock UI (started with make start / make deps):
      open http://localhost:8099
+     # Restart only the mock if needed: make mock-providers
 
 2) Register providers in mock UI:
      - Alert sources → Grafana → Register
      - Temporal tab → Register Temporal
 
 3) Fire the correlation demo:
-     Grafana tab → "Create rule + send both"
+     Grafana tab → "Payments: rule + send both"
      (2 alerts, shared service=payments-api → 1 incident)
+     # Or NVIDIA GPU pack: "GPU: rule + temp/mem" / "GPU: rule + all alerts"
 
 4) In Keep UI (http://localhost:3000):
-     - Incidents → open Payments degradation / INC-*
+     - Incidents → open Payments HIGH_CPU / HIGH_MEMORY / INC-*
      - Timeline: correlated Grafana alerts
      - Workflows: Keep execution + Temporal start
      - Overview enrichments: remediation, list_path, temporal_demo

@@ -17,6 +17,7 @@ class ActionType(enum.Enum):
     # the alert was escalated
     WORKFLOW_ENRICH = "alert enriched by workflow"
     MAPPING_RULE_ENRICH = "alert enriched by mapping rule"
+    ALERT_CATALOG_ENRICH = "alert enriched by alert catalog"
     EXTRACTION_RULE_ENRICH = "alert enriched by extraction rule"
     # the alert was deduplicated
     DEDUPLICATED = "alert was deduplicated"
@@ -37,6 +38,10 @@ class ActionType(enum.Enum):
     UNCOMMENT = "a comment was removed from the alert"
     MAINTENANCE = "Alert is in maintenance window"
     MAINTENANCE_EXPIRED = "Alert has been removed from maintenance window"
+    APPROVAL_REQUESTED = "Approval requested"
+    APPROVAL_GRANTED = "Approval granted"
+    APPROVAL_REJECTED = "Approval rejected"
+    APPROVAL_EXPIRED = "Approval expired"
     DISMISSAL_EXPIRED = "Alert dismissal expired"
     INCIDENT_COMMENT = "A comment was added to the incident"
     INCIDENT_ENRICH = "Incident enriched"

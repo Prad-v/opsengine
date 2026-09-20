@@ -31,6 +31,8 @@ export interface TopologyService {
   incidents?: number;
   alerts?: number;
   is_manual: boolean;
+  inMaintenance?: boolean;
+  pendingMaintenance?: boolean;
 }
 
 export interface TopologyServiceWithMutator extends TopologyService {

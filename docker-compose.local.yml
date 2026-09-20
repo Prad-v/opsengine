@@ -1,5 +1,6 @@
 # Build and run Keep from local source (production Dockerfiles).
 # Does not pull keep-api / keep-ui from the registry.
+# Requires keep-api-alpine-wheels:py313 first (make api-alpine-wheels / make local).
 services:
   keep-frontend:
     extends:
@@ -8,6 +9,8 @@ services:
     build:
       context: ./keep-ui
       dockerfile: ../docker/Dockerfile.ui
+      args:
+        NPM_CI: "0"
     image: keep-frontend:local
     pull_policy: build
     environment:
@@ -31,6 +34,8 @@ services:
       - AUTH_TYPE=NO_AUTH
       - PROMETHEUS_MULTIPROC_DIR=/tmp/prometheus
       - KEEP_METRICS=true
+      - KEEP_MAINTENANCE_WINDOWS_ENABLED=true
+      - MAINTENANCE_WINDOW_STRATEGY=default
     volumes:
       - ./state:/state
 

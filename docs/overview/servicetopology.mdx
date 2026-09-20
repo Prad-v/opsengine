@@ -58,6 +58,13 @@ The Service Topology feature in Keep provides a visual representation of your se
       <img src="https://img.logo.dev/servicenow.com?token=pk_dfXfZBoKQMGDTIgqu7LvYg" />
     }
   ></Card>
+  <Card
+    title="NetBox"
+    href="/providers/documentation/netbox-provider"
+    icon={
+      <img src="https://img.logo.dev/netbox.com?token=pk_dfXfZBoKQMGDTIgqu7LvYg" />
+    }
+  ></Card>
 </CardGroup>
 
 ## Features
@@ -93,6 +100,15 @@ Service topology integrates seamlessly with Keep's incident management features.
 - Analyze how alerts related to the incident are propagating through the system.
 - Use this information to guide remediation efforts.
 
+Click a node to open a **details slider**. It lists **active** (firing, acknowledged) and **historical** (resolved, merged) incidents for that node, including GPU alerts matched by location labels (`host`, `rack`, `row`, `datacenter`, `region`, `gpu_id`).
+
+### Maintenance from the map
+
+From the same slider, **Put node in maintenance** creates a [Maintenance Windows](/overview/maintenance-windows) rule for that resource (reason + duration). Incoming alerts that match the node's CEL are suppressed and skip workflows and correlation. Nodes currently in an active window are color-coded amber on the map. If an [approval policy](/overview/approvals) matches `node_maintenance`, the node shows **Pending** until someone approves. **End now** closes the window early; the rule still appears on the Maintenance Windows page.
+
+### Category icons
+
+Each node shows an icon for its `category`: region, datacenter, row, rack, host, GPU, or service. The NVIDIA GPU demo seeds these categories on the datacenter layout.
 
 ### Manually adding Topology
 
@@ -275,3 +291,14 @@ services:
   tags: ['networking', 'mesh']
   team: 'Infra Team'
 ```
+
+## NVIDIA GPU datacenter map
+
+The AI datacenter demo seeds a region / datacenter / row / rack / GPU graph that matches mock Grafana alert labels. After `make start`, open **Service Topology** and filter application **NVIDIA GPU Inference**. Click a node for incidents and to put that resource in maintenance. **Edit** on the Applications tab updates that application; it does not add another copy. See [NVIDIA GPU Service Topology](/overview/nvidia-gpu-topology).
+
+Install the [NetBox provider](/providers/documentation/netbox-provider) with a URL and API token to pull the same hierarchy from DCIM. Local `make start` includes NetBox at [http://localhost:8000](http://localhost:8000); the mock UI **Configure Keep with NetBox** seeds that inventory and pulls it. Keep `service` ids must match Grafana alert labels (`host`, `rack`, `row`, `datacenter`, `region`, `gpu_id`).
+
+To import by hand (this **replaces** existing topology):
+
+1. Open Service Topology → Import
+2. Choose [`examples/topologies/nvidia-gpu-datacenter.yml`](https://github.com/keephq/keep/blob/main/examples/topologies/nvidia-gpu-datacenter.yml)

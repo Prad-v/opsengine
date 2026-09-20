@@ -16,9 +16,13 @@ This section provides an abstract overview of workflows in Keep. To dive deeper 
 
 ## Why Workflow Automation is Core
 
-Every alert, incident, or integration can be part of a workflow.
+Every alert, incident, or integration can be part of a workflow. Prefer reserved [`labels.code`](/overview/alert-code-catalog) over matching free-form alert names when attaching automation.
 
 Whether it’s auto-creating tickets, sending Slack notifications, or enriching alerts with external data, workflows are central to making Keep a powerful and flexible tool for your IT operations.
+
+The [alert lifecycle](/overview/onboarding) table lists each reserved `labels.code`. **Onboard lifecycle** can create and attach a notify workflow for that code.
+
+Destructive or high-impact runs can wait in [Approvals](/overview/approvals) (`require_approval: true`, catalog `auto_run_on: approval`, or a `run_workflow` policy).
 
 ## Explore Further
 
@@ -32,6 +36,7 @@ Explore [Workflow Documentation](#workflow-documentation) to learn:
 Check out our [GitHub repository](https://github.com/keephq/keep/tree/main/examples/workflows) for:
 - Pre-built workflows ready to use in your environment.
 - Examples for common use cases, such as auto-remediation, alert enrichment, and multi-channel notifications.
+- [Alert codes](/overview/alert-code-catalog) — attach workflows by reserved `labels.code` instead of matching titles.
 - Contributions from the community, showcasing innovative ways to use Keep workflows.
 
 ---

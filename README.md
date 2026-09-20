@@ -45,6 +45,7 @@
 <h1 align="center"></h1>
 
 - 🔍 **Single pane of glass** - Best-in-class customizable UI for all your alerts and incidents
+- 🧭 **[Alert lifecycle](https://docs.keephq.dev/overview/onboarding)** - Table of reserved-code paths (view / edit / pause / delete) plus a repeatable onboard wizard
 - 🛠️ **Swiss Army Knife for alerts** - Deduplication, correlation, filtering and enrichment
 - 🔄 **Deep integrations** - Bi-directional syncs with monitoring tools, customizable workflows
 - ⚡ **[Automation](#workflows)** - GitHub Actions for your monitoring tools
@@ -832,7 +833,7 @@ Keep is GitHub Actions for your monitoring tools.
 
 A Keep Workflow is a declarative YAML file that automates your alert and incident management. Each workflow consists of:
 
-- **Triggers** - What starts the workflow (alerts, incidents, schedule or manual)
+- **Triggers** - What starts the workflow (alerts, incidents, schedule or manual). Prefer reserved [`labels.code`](docs/overview/alert-code-catalog.mdx) over matching free-form names.
 - **Steps** - Read or fetch data (enrichment, context)
 - **Actions** - Execute operations (update tickets, send notifications, restart servers)
 
@@ -909,7 +910,7 @@ workflow:
 Keep can run in various environments and configurations. From this repo, the Makefile covers local hybrid and full Docker modes:
 
 ```shell
-make start    # install + Docker deps (provider-mock :8099) + API/UI + NVIDIA GPU demo setup
+make start    # install + Docker deps (provider-mock :8099, NetBox :8000) + API/UI + NVIDIA GPU demo setup
 make stop     # stop API, UI, Docker deps, and provider-mock
 # make up     # full stack in Docker with mounted source
 # make local  # production Dockerfiles (precompiles Alpine grpcio once)
@@ -925,6 +926,9 @@ make help     # list all targets
 
 - Running Keep [locally](https://docs.keephq.dev/development/getting-started).
 - Provider mock for e2e alert ingestion: [Provider mock](docs/development/provider-mock.mdx).
+- NVIDIA GPU Service Topology (region / rack / GPU; click a node for incidents and maintenance): [NVIDIA GPU topology](docs/overview/nvidia-gpu-topology.mdx).
+- Maintenance windows (suppress alerts during planned work): [Maintenance windows](docs/overview/maintenance-windows.mdx).
+- Approvals (opt-in second-person gate for maintenance, workflow runs, deletes, Temporal HITL): [Approvals](docs/overview/approvals.mdx).
 - Material UI migration (Incidents & Feed): [Material UI](docs/development/material-ui.mdx).
 - Running Keep on [Kubernetes](https://docs.keephq.dev/deployment/kubernetes/installation).
 - Local kind cluster (two namespaces): `make k8s-start` for local images + host UI, `make k8s-prod` for published Helm / CI artifact images ([kind-local](docs/deployment/kubernetes/kind-local.mdx)).

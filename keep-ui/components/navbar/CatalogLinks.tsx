@@ -5,7 +5,11 @@ import { LinkWithIcon } from "components/LinkWithIcon";
 import { Session } from "next-auth";
 import { Disclosure } from "@headlessui/react";
 import { IoChevronUp } from "react-icons/io5";
-import { HiOutlineCollection, HiOutlineStatusOnline } from "react-icons/hi";
+import {
+  HiOutlineCollection,
+  HiOutlineStatusOnline,
+  HiOutlineTag,
+} from "react-icons/hi";
 import clsx from "clsx";
 import { useConfig } from "@/utils/hooks/useConfig";
 import { useTenantConfiguration } from "@/utils/hooks/useTenantConfiguration";
@@ -50,6 +54,8 @@ export const CatalogLinks = ({ session }: CatalogLinksProps) => {
   const catalogKeys = {
     HIDE_NAVBAR_TEMPORAL_WORKFLOWS: "HIDE_NAVBAR_TEMPORAL_WORKFLOWS",
     HIDE_NAVBAR_SYNTHETIC_CHECKS: "HIDE_NAVBAR_SYNTHETIC_CHECKS",
+    HIDE_NAVBAR_ALERT_CODES: "HIDE_NAVBAR_ALERT_CODES",
+    HIDE_NAVBAR_APPROVAL_POLICIES: "HIDE_NAVBAR_APPROVAL_POLICIES",
   };
 
   if (isNOCRole) {
@@ -88,6 +94,30 @@ export const CatalogLinks = ({ session }: CatalogLinksProps) => {
       </Disclosure.Button>
 
       <Disclosure.Panel as="ul" className="space-y-0.5 p-1 pr-1">
+        <TogglableLink disabledConfigKey={catalogKeys.HIDE_NAVBAR_ALERT_CODES}>
+          <li>
+            <LinkWithIcon
+              href="/catalog/alert-codes"
+              icon={HiOutlineTag}
+              testId="alert-code-catalog"
+            >
+              <Subtitle className="text-xs">Alert codes</Subtitle>
+            </LinkWithIcon>
+          </li>
+        </TogglableLink>
+        <TogglableLink
+          disabledConfigKey={catalogKeys.HIDE_NAVBAR_APPROVAL_POLICIES}
+        >
+          <li>
+            <LinkWithIcon
+              href="/catalog/approval-policies"
+              icon={HiOutlineCollection}
+              testId="approval-policies-catalog"
+            >
+              <Subtitle className="text-xs">Approval policies</Subtitle>
+            </LinkWithIcon>
+          </li>
+        </TogglableLink>
         <TogglableLink
           disabledConfigKey={catalogKeys.HIDE_NAVBAR_TEMPORAL_WORKFLOWS}
         >

@@ -3,14 +3,16 @@ title: "Provider mock (e2e)"
 sidebarTitle: "Provider mock"
 ---
 
-Use the **Provider Mock** service to validate Keep alert ingestion end-to-end without standing up real Grafana, Mimir, or VictoriaMetrics.
+Use the **Provider Mock** service to validate Keep alert ingestion end-to-end without standing up real Grafana, Mimir, or VictoriaMetrics. The same Compose file also runs **NetBox** with the NVIDIA GPU DCIM inventory.
 
 It provides:
 
 - A small UI at [http://localhost:8099](http://localhost:8099)
+- NetBox at [http://localhost:8000](http://localhost:8000) (`admin` / `admin`)
 - Mock HTTP backends Keep can connect to during provider install
 - One-click **Register** into Keep (`POST /providers/install`)
 - One-click **Send event** webhooks (`POST /alerts/event/{provider_type}`)
+- **Configure Keep with NetBox** — seed DCIM, install the `netbox` provider, pull topology
 
 Supported mock sources:
 
@@ -20,20 +22,35 @@ Supported mock sources:
 | Alert sources → Mimir Alertmanager | `prometheus` | Webhook `/alerts/event/prometheus` |
 | Alert sources → VictoriaMetrics | `victoriametrics` | Webhook `/alerts/event/victoriametrics` |
 | **Temporal** | `temporal` | Registers against Docker Compose Temporal (`localhost:7233`); no alert webhooks |
+| Service Topology → **NetBox DCIM** | `netbox` | Real NetBox in Compose (`:8000`). Seed the NVIDIA map, then install + pull. |
 
 > Mimir Alertmanager uses Keep’s **prometheus** provider — the same webhook format as Prometheus Alertmanager.
 >
 > Temporal is an **orchestration** provider. After registering, drive it from a Keep workflow action (see [Temporal provider](/providers/documentation/temporal-provider)).
+>
+> NetBox is a real DCIM, not a mock catalog provider. Keep talks to `http://localhost:8000`; the mock seeds it via the Docker DNS name `http://netbox:8080`.
 
 ## Start with Docker Compose
 
-Keep must already be running (for example `make start`). Then:
+The provider mock starts automatically with hybrid local Keep:
+
+```bash
+make start
+```
+
+That brings up Docker deps (Postgres, Redis, Soketi, Temporal, workers), the provider-mock UI, and NetBox, then the host API/UI. Open [http://localhost:8099](http://localhost:8099) and [http://localhost:8000](http://localhost:8000). NetBox’s first boot runs migrations and can take 1–2 minutes; `make start` does **not** wait for it.
+
+Deps only (no host API/UI):
+
+```bash
+make deps
+```
+
+Restart or rebuild just the mock:
 
 ```bash
 make mock-providers
 ```
-
-Open [http://localhost:8099](http://localhost:8099).
 
 Equivalent compose command:
 
@@ -49,6 +66,9 @@ docker compose -f backend/services/provider-mock/docker-compose.yml up --build
 | `TEMPORAL_ADDRESS` | `localhost:7233` | Temporal frontend address Keep will use after register |
 | `TEMPORAL_NAMESPACE` | `default` | Temporal namespace |
 | `TEMPORAL_UI_URL` | `http://localhost:8233` | Link shown on the Temporal tab |
+| `NETBOX_URL` | `http://netbox:8080` | NetBox as seen from the mock container (seed) |
+| `KEEP_NETBOX_URL` | `http://localhost:8000` | NetBox URL Keep (host process) uses after install |
+| `NETBOX_API_TOKEN` | `0123456789abcdef0123456789abcdef01234567` | Superuser token created on first NetBox boot |
 
 Hybrid tip: Keep API runs on the host, so `PUBLIC_BASE_URL` must be `http://localhost:8099` (not `host.docker.internal`). The mock container still reaches Keep via `KEEP_API_URL=http://host.docker.internal:8080`. Temporal address stays `localhost:7233` because Keep (on the host) dials Temporal’s published port.
 
@@ -58,10 +78,10 @@ Hybrid tip: Keep API runs on the host, so `PUBLIC_BASE_URL` must be `http://loca
 
 On the **Alert sources** tab with Grafana selected:
 
-1. Use **Create rule + send both** (or fill Correlations UI manually — see below).
-2. Keep creates rule **Grafana mock payments incident** (`source == "grafana" && labels.cluster == "mock-prod"`, group by `labels.service`, **threshold 2**).
-3. Sends payload A `MockHighCPU` and payload B `MockHighMemory` (shared `service=payments-api`).
-4. Open **Incidents** — look for `INC` / Payments degradation.
+1. Use **Payments: rule + send both** (or fill Correlations UI manually — see below).
+2. Keep creates rule **Grafana mock payments incident** (`source == "grafana" && labels.code == "HIGH_CPU" || "HIGH_MEMORY"`, group by `labels.service`, **threshold 2**).
+3. Sends payload A `MockHighCPU` (`labels.code=HIGH_CPU`) and payload B `MockHighMemory` (`HIGH_MEMORY`) (shared `service=payments-api`).
+4. Open **Incidents** — look for `INC` / Payments `HIGH_CPU` or `HIGH_MEMORY`.
 
 Manual Correlations UI (matches the screenshot):
 
@@ -73,7 +93,61 @@ Manual Correlations UI (matches the screenshot):
 | Alerts threshold | `2` |
 | Filter | `source` `=` **`grafana`** |
 
-Both mock payloads also set `labels.cluster=mock-prod` and `labels.host=srv-payments-1`.
+Both mock payloads also set `labels.cluster=mock-prod`, `labels.host=srv-payments-1`, and reserved `labels.code` (`HIGH_CPU` / `HIGH_MEMORY`). See [Alert codes](/overview/alert-code-catalog).
+
+Mimir’s default webhook uses `labels.code=DISK_SPACE_LOW` (`examples/workflows/mock-mimir-disk.yml`). VictoriaMetrics uses `HIGH_MEMORY` — the same reserved code as Grafana payload B (`examples/workflows/mock-victoriametrics-memory.yml`).
+
+### NVIDIA GPU / AI datacenter demo
+
+Use the same Grafana mock to exercise Keep HQ against an AI datacenter (DCGM-style NVIDIA H100 alerts):
+
+1. Register Grafana in the mock UI (if not already).
+2. Pick a GPU payload from the **NVIDIA GPU / AI datacenter** dropdown, or:
+   - **GPU: rule + temp/mem** — creates rule **NVIDIA GPU cluster incident** and fires `NvidiaGpuHighTemperature` + `NvidiaGpuHighMemoryUtilization`
+   - **GPU: rule + all alerts** — same rule, then fires all eight GPU scenarios (spaced ~4s apart)
+3. Open **Incidents** — look for `GPU` / `NVIDIA_GPU_*` (`gpu-node-a03`).
+
+For the full remediation loop (Temporal → mock GPU server → resolve or email), `make start` auto-registers providers, the Temporal catalog entry, and the Keep workflow. See [Demo: NVIDIA GPU → Temporal remediate](/overview/demo-mock-nvidia-gpu-remediate).
+
+Re-run setup only:
+
+```bash
+make demo-nvidia-gpu
+```
+
+Use the mock UI **Service Topology** tab to push the NVIDIA map into Keep, export YAML, or import YAML (import replaces the tenant map). The same tab has **NetBox DCIM**: seed compose NetBox with that inventory, then **Configure Keep with NetBox**. The **NVIDIA GPU server** tab still toggles **Force fail** and shows remediations / emails. The **Synthetic checks** tab fails individual NVIDIA/AMD inference and training canaries (seeded into Keep by `make start`). See [NVIDIA GPU Service Topology](/overview/nvidia-gpu-topology) and [AI DC synthetics](/overview/ai-dc-synthetic-checks).
+
+Shared labels on every GPU mock alert (values vary by host; demo pair uses `gpu-node-a03`):
+
+| Label | Example |
+| --- | --- |
+| `code` | reserved, e.g. `NVIDIA_GPU_THERMAL` |
+| `cluster` | `ai-dc-prod` |
+| `region` | `us-west-2` |
+| `datacenter` | `ai-dc-1` |
+| `row` | `row-a` |
+| `rack` | `rack-12` |
+| `host` | `gpu-node-a03` |
+| `gpu` | `0` |
+| `gpu_id` | `gpu-node-a03-gpu0` |
+| `service` | `gpu-inference` |
+| `vendor` | `nvidia` |
+| `gpu_model` | `NVIDIA-H100-80GB-HBM3` |
+
+| Scenario id | Alert name | `labels.code` | Severity | DCGM field |
+| --- | --- | --- | --- |
+| `gpu_temp` | `NvidiaGpuHighTemperature` | `NVIDIA_GPU_THERMAL` | critical | `DCGM_FI_DEV_GPU_TEMP` |
+| `gpu_mem` | `NvidiaGpuHighMemoryUtilization` | `NVIDIA_GPU_MEMORY` | warning | `DCGM_FI_DEV_FB_USED` |
+| `gpu_xid` | `NvidiaGpuXidError` | `NVIDIA_GPU_XID` | critical | `DCGM_FI_DEV_XID_ERRORS` |
+| `gpu_ecc` | `NvidiaGpuUncorrectableEcc` | `NVIDIA_GPU_ECC` | critical | `DCGM_FI_DEV_ECC_DBE_VOL_TOTAL` |
+| `gpu_throttle` | `NvidiaGpuThermalThrottle` | `NVIDIA_GPU_THROTTLE` | warning | `DCGM_FI_DEV_CLOCK_THROTTLE_REASONS` |
+| `gpu_nvlink` | `NvidiaNvlinkError` | `NVIDIA_GPU_NVLINK` | critical | `DCGM_FI_DEV_NVLINK_CRC_FLIT_ERROR_COUNT_TOTAL` |
+| `gpu_power` | `NvidiaGpuPowerLimitExceeded` | `NVIDIA_GPU_POWER` | warning | `DCGM_FI_DEV_POWER_USAGE` |
+| `gpu_unavailable` | `NvidiaGpuUnavailable` | `NVIDIA_GPU_UNAVAILABLE` | critical | `DCGM_FI_DEV_HEALTH` |
+
+Correlation rule defaults: CEL
+`source == "grafana" && labels.cluster == "ai-dc-prod" && labels.vendor == "nvidia" && labels.code.startsWith("NVIDIA_GPU")`,
+group by `labels.host`, threshold `2`, incident prefix `GPU`.
 
 ### Temporal tab
 
@@ -81,7 +155,11 @@ Both mock payloads also set `labels.cluster=mock-prod` and `labels.host=srv-paym
 2. Open the **Temporal** tab.
 3. Confirm address `localhost:7233` and namespace `default` (for host Keep via `make start`).
 4. Click **Register Temporal**.
-5. Confirm **mock-temporal** under Installed Providers in Keep, then use a workflow such as `examples/workflows/incident-to-temporal.yml`.
+5. Confirm **mock-temporal** under Installed Providers in Keep, then use a workflow such as `examples/workflows/incident-to-temporal.yml` (triggers on reserved `incident.code`) or the code-specific mock workflows below.
+
+### Synthetic checks tab
+
+`make start` seeds Keep **Catalog → Synthetic checks** with NVIDIA/AMD inference and training canaries against this mock (`make register-ai-dc-synthetic-checks`). On this tab, toggle **Fail this probe** to make the next `keep-synth` run post a `SYNTH_*` alert. See [AI DC synthetics](/overview/ai-dc-synthetic-checks).
 
 ### Full hybrid demo (Grafana → incident → Temporal)
 
@@ -91,9 +169,25 @@ One-command install after `make start`:
 make demo-list-and-zip
 ```
 
-Then in the mock UI: Grafana → **Create rule + send both**. Open the incident in Keep and check **Timeline** (alerts), **Workflows** (Keep + Temporal), and **Overview** enrichments. See [Demo: Mock Grafana → Temporal ListAndZip](/overview/demo-mock-grafana-list-and-zip).
+Then in the mock UI: Grafana → **Payments: rule + send both**. Open the incident in Keep and check **Timeline** (alerts), **Workflows** (Keep + Temporal), and **Overview** enrichments. See [Demo: Mock Grafana → Temporal ListAndZip](/overview/demo-mock-grafana-list-and-zip).
 
 If Keep runs inside Docker Compose, set address to `temporal:7233` (or `host.docker.internal:7233`) before registering.
+
+### NetBox DCIM (same topology as the mock)
+
+Compose starts [NetBox](https://netboxlabs.com/) at [http://localhost:8000](http://localhost:8000) (`admin` / `admin`). It is empty until you seed it.
+
+On **Service Topology**:
+
+1. Wait until **Refresh NetBox status** says NetBox is up (first boot 1–2 minutes).
+2. **Seed NVIDIA DCIM** — idempotent region / site / row / rack / host / GPU / VLAN / prefix (`us-west-2` → `gpu-node-a03-gpu0`, fabric `10.12.0.0/24`).
+3. **Configure Keep with NetBox** — `POST /providers/install` (`provider_type=netbox`, `netbox_url=http://localhost:8000`) then `POST /topology/pull`.
+
+Keep pulls from the published port because the API runs on the host (`make start`). The mock seeds through Docker DNS (`http://netbox:8080`). Override the two URLs in the form if your layout differs.
+
+A NetBox pull **replaces** nodes owned by that provider. The REST **Push NVIDIA map** used by `make start` is a merge onto manual nodes. Using both can show two copies of the same names with different owners. Pick one source of truth while iterating.
+
+See [NetBox provider](/providers/documentation/netbox-provider).
 
 ## API (optional)
 
@@ -117,6 +211,83 @@ curl -X POST http://localhost:8099/api/send-event \
     "keep_api_url": "http://host.docker.internal:8080",
     "keep_api_key": "keepappkey"
   }'
+
+# Preview an NVIDIA GPU scenario
+curl -X POST http://localhost:8099/api/preview-payload \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "provider": "grafana",
+    "scenario": "gpu_xid",
+    "status": "firing",
+    "keep_api_url": "http://host.docker.internal:8080",
+    "keep_api_key": "keepappkey"
+  }'
+
+# Create NVIDIA GPU correlation rule + fire temp/mem (or send_all_gpu: true)
+curl -X POST http://localhost:8099/api/grafana/create-gpu-incident-demo \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "keep_api_url": "http://host.docker.internal:8080",
+    "keep_api_key": "keepappkey",
+    "create_rule": true,
+    "send_all_gpu": false
+  }'
+
+# NVIDIA GPU topology inventory (region/row/rack/GPU)
+curl http://localhost:8099/api/topology
+
+# Download Keep-import YAML
+curl -O -J http://localhost:8099/api/topology/export
+
+# Seed Keep Service Topology from the mock (merge, no wipe)
+curl -X POST http://localhost:8099/api/topology/push \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "keep_api_url": "http://host.docker.internal:8080",
+    "keep_api_key": "keepappkey"
+  }'
+
+# Read what Keep currently has
+curl "http://localhost:8099/api/topology/keep?keep_api_url=http://host.docker.internal:8080&keep_api_key=keepappkey"
+
+# Export Keep's topology YAML through the mock
+curl "http://localhost:8099/api/topology/keep/export?keep_api_url=http://host.docker.internal:8080&keep_api_key=keepappkey"
+
+# NetBox status / seed / install Keep provider + pull topology
+curl http://localhost:8099/api/netbox/status
+curl -X POST http://localhost:8099/api/netbox/seed \
+  -H 'Content-Type: application/json' \
+  -d '{"netbox_url": "http://netbox:8080"}'
+curl -X POST http://localhost:8099/api/netbox/configure-keep \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "keep_api_url": "http://host.docker.internal:8080",
+    "keep_api_key": "keepappkey",
+    "netbox_url": "http://netbox:8080",
+    "keep_netbox_url": "http://localhost:8000",
+    "seed": true,
+    "pull": true
+  }'
+
+# Import YAML into Keep (replaces tenant topology)
+curl -X POST http://localhost:8099/api/topology/keep/import \
+  -H 'Content-Type: application/json' \
+  --data-binary @<(python3 -c '
+import json, urllib.request
+yaml = urllib.request.urlopen("http://localhost:8099/api/topology/export").read().decode()
+print(json.dumps({
+  "keep_api_url": "http://host.docker.internal:8080",
+  "keep_api_key": "keepappkey",
+  "yaml": yaml,
+}))
+')
+
+# AI DC synthetic probes (NVIDIA/AMD inference + training canaries)
+curl http://localhost:8099/api/synth
+curl http://localhost:8099/api/synth/nvidia/dcgm/metrics
+curl -X POST http://localhost:8099/api/synth/fail \
+  -H 'Content-Type: application/json' \
+  -d '{"probe_id": "nvidia-inference-health", "failed": true}'
 ```
 
 ## Tests
@@ -136,5 +307,8 @@ Runs `tests/test_provider_mock.py` inside the mock Docker image (no host Python 
 | Mock shows registered but Keep Providers page does not | Do not run `make start` and `make up` together — both bind `:8080`. `localhost` can hit the Docker API (IPv6) while the mock registered against the host API. Stop the Docker UI/API (`docker compose -f docker-compose.dev.yml stop`) and refresh Keep. You should see **Installed Providers**: `mock-grafana`, `mock-mimir-alertmanager`, `mock-victoriametrics`. |
 | Event sent but nothing in UI | Check API key permissions (`write:alert`) and Keep logs for `/alerts/event/...` |
 | Wrong provider type for Mimir | Expected — Keep stores Mimir Alertmanager webhooks as `prometheus` |
+| NetBox status unreachable | First boot runs migrations (1–2 min). Open http://localhost:8000 — `admin` / `admin`. Check `docker logs keep-netbox`. |
+| Configure Keep with NetBox fails to install | Keep must reach `http://localhost:8000` (hybrid `make start`). Use an **admin** API key (`keepappkey`). |
+| Duplicate topology nodes after NetBox pull | REST seed (`make start` / Push NVIDIA map) and NetBox pull are different owners. Use one path, or delete the extra provider/manual nodes. |
 
 Source: `backend/services/provider-mock/`.

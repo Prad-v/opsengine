@@ -37,6 +37,7 @@ def active_maintenance_window_rule_custom_ignore():
         start_time=datetime.utcnow() - timedelta(hours=1),
         end_time=datetime.utcnow() + timedelta(days=1),
         enabled=True,
+        suppress=False,
         ignore_statuses=[AlertStatus.FIRING.value,],
     )
 
@@ -51,6 +52,7 @@ def active_maintenance_window_rule():
         start_time=datetime.utcnow() - timedelta(hours=1),
         end_time=datetime.utcnow() + timedelta(days=1),
         enabled=True,
+        suppress=False,
         ignore_statuses=[AlertStatus.RESOLVED.value, AlertStatus.ACKNOWLEDGED.value],
     )
 
@@ -93,6 +95,7 @@ def expired_maintenance_window_rule():
         start_time=datetime.utcnow() - timedelta(days=2),
         end_time=datetime.utcnow() - timedelta(days=1),
         enabled=True,
+        suppress=False,
     )
 
 
@@ -555,3 +558,108 @@ def test_strategy_alert_execution_wf(
     n_executions = get_workflow_executions(SINGLE_TENANT_UUID, workflow.id)[0]
 
     assert n_executions == executions
+
+
+def test_normalize_source_variants():
+    from keep.api.bl.maintenance_windows_bl import normalize_source
+
+    assert normalize_source(None) == ""
+    assert normalize_source([]) == ""
+    assert normalize_source("prometheus") == "prometheus"
+    assert normalize_source(["prometheus"]) == "prometheus"
+    assert normalize_source(["a", "b"]) == ["a", "b"]
+
+
+def test_evaluate_cel_does_not_mutate_event_source(
+    mock_session, active_maintenance_window_rule, alert_maint
+):
+    original_source = list(alert_maint.event["source"])
+    env = __import__("celpy").Environment()
+    MaintenanceWindowsBl.evaluate_cel(
+        active_maintenance_window_rule,
+        alert_maint,
+        env,
+        MagicMock(),
+        {"tenant_id": "test-tenant"},
+    )
+    assert alert_maint.event["source"] == original_source
+
+
+def test_ignore_statuses_none_does_not_throw(
+    mock_session, active_maintenance_window_rule, alert_dto
+):
+    active_maintenance_window_rule.ignore_statuses = None
+    mock_session.query.return_value.filter.return_value.filter.return_value.filter.return_value.filter.return_value.all.return_value = [
+        active_maintenance_window_rule
+    ]
+    maintenance_window_bl = MaintenanceWindowsBl(
+        tenant_id="test-tenant", session=mock_session
+    )
+    result = maintenance_window_bl.check_if_alert_in_maintenance_windows(alert_dto)
+    assert result is True
+
+
+def test_higher_priority_rule_wins(mock_session, alert_dto, monkeypatch):
+    monkeypatch.setenv("MAINTENANCE_WINDOW_STRATEGY", "default")
+    importlib.reload(keep.api.consts)
+    importlib.reload(keep.api.bl.maintenance_windows_bl)
+    drop_rule = MaintenanceWindowRule(
+        id=1,
+        name="low",
+        tenant_id="test-tenant",
+        cel_query='source == "test-source"',
+        start_time=datetime.utcnow() - timedelta(hours=1),
+        end_time=datetime.utcnow() + timedelta(days=1),
+        enabled=True,
+        suppress=False,
+        priority=0,
+        ignore_statuses=[],
+    )
+    suppress_rule = MaintenanceWindowRule(
+        id=2,
+        name="high",
+        tenant_id="test-tenant",
+        cel_query='source == "test-source"',
+        start_time=datetime.utcnow() - timedelta(hours=1),
+        end_time=datetime.utcnow() + timedelta(days=1),
+        enabled=True,
+        suppress=True,
+        priority=10,
+        ignore_statuses=[],
+    )
+    mock_session.query.return_value.filter.return_value.filter.return_value.filter.return_value.filter.return_value.all.return_value = [
+        drop_rule,
+        suppress_rule,
+    ]
+    maintenance_window_bl = MaintenanceWindowsBl(
+        tenant_id="test-tenant", session=mock_session
+    )
+    result = maintenance_window_bl.check_if_alert_in_maintenance_windows(alert_dto)
+    assert result is False
+    assert alert_dto.status == AlertStatus.SUPPRESSED.value
+
+
+def test_default_suppress_keeps_alert(mock_session, alert_dto, monkeypatch):
+    monkeypatch.setenv("MAINTENANCE_WINDOW_STRATEGY", "default")
+    importlib.reload(keep.api.consts)
+    importlib.reload(keep.api.bl.maintenance_windows_bl)
+    rule = MaintenanceWindowRule(
+        id=1,
+        name="default-suppress",
+        tenant_id="test-tenant",
+        cel_query='source == "test-source"',
+        start_time=datetime.utcnow() - timedelta(hours=1),
+        end_time=datetime.utcnow() + timedelta(days=1),
+        enabled=True,
+        ignore_statuses=[],
+    )
+    mock_session.query.return_value.filter.return_value.filter.return_value.filter.return_value.filter.return_value.all.return_value = [
+        rule
+    ]
+    assert rule.suppress is True
+    maintenance_window_bl = MaintenanceWindowsBl(
+        tenant_id="test-tenant", session=mock_session
+    )
+    result = maintenance_window_bl.check_if_alert_in_maintenance_windows(alert_dto)
+    assert result is False
+    assert alert_dto.status == AlertStatus.SUPPRESSED.value

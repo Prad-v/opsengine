@@ -1,0 +1,82 @@
+# End-to-end hybrid demo:
+#   NVIDIA GPU mock alerts → Keep incident → Temporal RemediateNvidiaGpu
+#     → success: resolve incident on mock GPU server remediating
+#     → fail:    mock failure email (Force fail toggle on provider-mock GPU tab)
+#
+# Prerequisites:
+#   make start   # provider-mock :8099 + Temporal worker with RemediateNvidiaGpu
+#   Register Grafana + Temporal in http://localhost:8099
+#   make demo-nvidia-gpu
+#
+# Fire:
+#   Mock UI → Grafana → "GPU: rule + temp/mem"
+#   Success: incident resolves; NVIDIA GPU server tab shows remediation ok
+#   Fail:    enable Force fail, re-fire; Failure emails inbox fills; incident stays open
+workflow:
+  id: mock-nvidia-gpu-remediate
+  name: Mock NVIDIA GPU → Temporal remediate
+  description: >
+    On reserved alert code NVIDIA_GPU_* (alert or incident), start Temporal
+    RemediateNvidiaGpu once. The worker remediates the mock NVIDIA GPU server;
+    on success it resolves the Keep incident; on failure it posts a mock email.
+  disabled: false
+  triggers:
+    - type: alert
+      cel: has(labels.code) && labels.code.startsWith("NVIDIA_GPU") && status == "firing"
+    - type: incident
+      events:
+        - created
+        - updated
+      cel: code.startsWith("NVIDIA_GPU") || codes.exists(c, c.startsWith("NVIDIA_GPU"))
+  owners: []
+  services: []
+  consts:
+    temporal_catalog_key: remediate-nvidia-gpu
+    remediation_action: reset_gpu
+  actions:
+    - name: start-gpu-remediation
+      if: "not '{{ incident.gpu_remediation }}{{ alert.gpu_remediation }}'"
+      provider:
+        type: temporal
+        config: "{{ providers.mock-temporal }}"
+        with:
+          operation: start_workflow
+          workflow_type: RemediateNvidiaGpu
+          task_queue: keep-ops
+          workflow_id: "{{ incident.id or alert.fingerprint }}-remediate-nvidia-gpu"
+          arg:
+            incident_id: "{{ incident.id }}"
+            alert_fingerprint: "{{ alert.fingerprint }}"
+            code: "{{ alert.labels.code or incident.code }}"
+            host: "{{ alert.labels.host or incident.gpu_host or 'gpu-node-a03' }}"
+            action: "{{ consts.remediation_action }}"
+            gpu_index: "{{ alert.labels.gpu or 0 }}"
+            name: "{{ incident.name or alert.name }}"
+            severity: "{{ incident.severity or alert.severity }}"
+            status: "{{ incident.status or alert.status }}"
+          enrich_incident:
+            - key: gpu_remediation
+              value: "started"
+            - key: remediation
+              value: "nvidia-gpu-remediate-started"
+            - key: temporal_last_catalog_id
+              value: "remediate-nvidia-gpu"
+            - key: gpu_host
+              value: "{{ alert.labels.host or 'gpu-node-a03' }}"
+            - key: gpu_id
+              value: "{{ alert.labels.gpu_id or '' }}"
+            - key: gpu_rack
+              value: "{{ alert.labels.rack or '' }}"
+            - key: gpu_row
+              value: "{{ alert.labels.row or '' }}"
+
+    - name: log-gpu-remediation-started
+      if: "not '{{ incident.gpu_remediation }}{{ alert.gpu_remediation }}'"
+      provider:
+        type: console
+        with:
+          message: >
+            Temporal RemediateNvidiaGpu started for incident
+            {{ incident.id }} ({{ incident.name }}).
+            Check Temporal UI http://localhost:8233 and
+            provider-mock NVIDIA GPU server tab http://localhost:8099

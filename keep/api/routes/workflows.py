@@ -19,6 +19,7 @@ from fastapi.responses import RedirectResponse
 from opentelemetry import trace
 from sqlmodel import Session
 
+from keep.api.bl.approval_bl import ApprovalBl, pending_response
 from keep.api.core.cel_to_sql.sql_providers.base import CelToSqlException
 from keep.api.core.config import config
 from keep.api.core.db import (
@@ -396,6 +397,7 @@ def run_workflow(
     workflowmanager = WorkflowManager.get_instance()
 
     try:
+        inputs: dict = {}
         # Handle replay from query parameters
         if event_type and event_id:
             if event_type == "alert":
@@ -412,7 +414,46 @@ def run_workflow(
                 )
         else:
             # Handle regular run from body
-            event, inputs = get_event_from_body(body, tenant_id)
+            event, inputs = get_event_from_body(body or {}, tenant_id)
+
+        event_kind = "incident" if event_type == "incident" or (
+            body or {}
+        ).get("type") == "incident" else "alert"
+        try:
+            event_payload = event.dict()
+        except Exception:
+            event_payload = getattr(event, "__dict__", {}) or {}
+        fingerprint = getattr(event, "fingerprint", None) or str(
+            getattr(event, "id", "") or ""
+        )
+        force = bool(getattr(workflow, "workflow_require_approval", False))
+        bl = ApprovalBl(tenant_id)
+        try:
+            gate = bl.gate(
+                action_type="run_workflow",
+                requested_by=created_by,
+                title=f"Run workflow {workflow.workflow_name or workflow_id}",
+                payload={
+                    "workflow_id": workflow_id,
+                    "event_type": event_kind,
+                    "event": event_payload,
+                    "inputs": inputs,
+                    "triggered_by": f"approval:manual:{created_by}",
+                },
+                context={
+                    "workflow_id": workflow_id,
+                    "severity": str(getattr(event, "severity", "") or ""),
+                },
+                resource_type="workflow",
+                resource_id=workflow_id,
+                callback={"kind": "keep_action", "workflow_id": workflow_id},
+                idempotency_key=f"run_workflow:{workflow_id}:{fingerprint}",
+                force=force,
+            )
+            if gate.pending:
+                return pending_response(gate.request)
+        finally:
+            bl.close()
 
         workflow_execution_id = workflowmanager.scheduler.handle_manual_event_workflow(
             workflow_id,
@@ -1081,6 +1122,19 @@ def delete_workflow_by_id(
     ),
 ):
     tenant_id = authenticated_entity.tenant_id
+    bl = ApprovalBl(tenant_id)
+    gate = bl.gate(
+        action_type="delete_resource",
+        requested_by=authenticated_entity.email,
+        title=f"Delete workflow {workflow_id}",
+        payload={"resource_type": "workflow", "resource_id": workflow_id},
+        resource_type="workflow",
+        resource_id=workflow_id,
+        callback={"kind": "keep_action"},
+        idempotency_key=f"delete:workflow:{workflow_id}",
+    )
+    if gate.pending:
+        return pending_response(gate.request)
     workflowstore = WorkflowStore()
     workflowstore.delete_workflow(workflow_id=workflow_id, tenant_id=tenant_id)
     return {"workflow_id": workflow_id, "status": "deleted"}

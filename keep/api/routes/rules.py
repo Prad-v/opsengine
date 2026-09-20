@@ -3,6 +3,7 @@ import logging
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel
 
+from keep.api.bl.approval_bl import ApprovalBl, pending_response
 from keep.api.core.cel_to_sql.cel_ast_converter import CelToAstConverter
 from keep.api.core.db import create_rule as create_rule_db
 from keep.api.core.db import delete_rule as delete_rule_db
@@ -165,6 +166,22 @@ async def delete_rule(
 ):
     tenant_id = authenticated_entity.tenant_id
     logger.info(f"Deleting rule {rule_id}")
+    bl = ApprovalBl(tenant_id)
+    try:
+        gate = bl.gate(
+            action_type="delete_resource",
+            requested_by=authenticated_entity.email,
+            title=f"Delete correlation rule {rule_id}",
+            payload={"resource_type": "correlation_rule", "resource_id": str(rule_id)},
+            resource_type="correlation_rule",
+            resource_id=str(rule_id),
+            callback={"kind": "keep_action"},
+            idempotency_key=f"delete:correlation_rule:{rule_id}",
+        )
+    finally:
+        bl.close()
+    if gate.pending:
+        return pending_response(gate.request)
     if delete_rule_db(tenant_id=tenant_id, rule_id=rule_id):
         logger.info(f"Rule {rule_id} deleted")
         return {"message": "Rule deleted"}

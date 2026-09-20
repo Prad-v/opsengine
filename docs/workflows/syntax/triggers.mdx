@@ -67,6 +67,9 @@ Common CEL patterns:
 - Multiple conditions: `source.contains("datadog") && severity == "critical"`
 - Pattern matching: `name.contains("error") || name.contains("failure")`
 - Complex conditions: `(source.contains("datadog") && severity == "critical") || (source.contains("newrelic") && severity == "error")`
+- Reserved alert code: `has(labels.code) && labels.code == "NVIDIA_GPU_THERMAL"`
+
+Prefer **`labels.code`** over matching `name` or `description`. See [Alert codes](/overview/alert-code-catalog).
 
 You can test and experiment with CEL expressions using the [CEL Playground](https://playcel.undistro.io/).
 
@@ -93,10 +96,14 @@ Runs workflows when an incident is created, updated, or resolved.
 ```yaml
 triggers:
   - type: incident
-    on:
-      - create
-      - update
+    events:
+      - created
+      - updated
+    # Optional. Filter by reserved codes copied from member alerts.
+    cel: code.startsWith("NVIDIA_GPU") || codes.exists(c, c.startsWith("NVIDIA_GPU"))
 ```
+
+Incident CEL sees `code` (primary), `codes` (unique list), `name`, and other incident fields. A workflow may list **both** an `alert` trigger and an `incident` trigger.
 
 ### Field Change Trigger
 

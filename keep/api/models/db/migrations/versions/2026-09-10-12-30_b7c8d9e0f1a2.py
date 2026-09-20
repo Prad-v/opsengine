@@ -20,7 +20,7 @@ def upgrade() -> None:
     op.create_table(
         "temporalworkflowcatalog",
         sa.Column("id", sa.Integer(), nullable=False),
-        sa.Column("tenant_id", sa.String(), nullable=False),
+        sa.Column("tenant_id", sa.String(length=255), nullable=False),
         sa.Column("catalog_key", sa.String(length=255), nullable=False),
         sa.Column("name", sa.String(length=255), nullable=False),
         sa.Column("description", sa.String(length=2048), nullable=True),

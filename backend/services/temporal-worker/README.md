@@ -1,4 +1,9 @@
-# Temporal worker for Keep ops demos (ListAndZipDirectory on keep-ops).
+# Temporal worker for Keep ops demos on keep-ops.
+#
+# Workflows:
+#   ListAndZipDirectory  — ls + zip under /data
+#   RemediateNvidiaGpu   — remediate provider-mock GPU server; resolve or email
+#                          wait_for_approval=false by default (GPU demo unchanged)
 #
 # Local (via repo root):
 #   docker compose -f docker-compose.temporal.yml up -d --build
@@ -6,9 +11,12 @@
 #
 # Register in Keep catalog (API must be up, Temporal provider installed):
 #   python scripts/register_temporal_list_and_zip_catalog.py
+#   python scripts/register_temporal_nvidia_gpu_catalog.py
 #
-# Then: Incident → Workflows → Start for incident
-# Optional incident enrichment: list_path=sample  (lists /data/sample in the worker)
+# GPU e2e:
+#   make demo-nvidia-gpu
+#   Mock UI → GPU: rule + temp/mem  (or Force fail for email path)
+#   Keep → Service Topology (region / datacenter / row / rack / GPU)
 
 ## Workflow
 
@@ -26,6 +34,10 @@
 | `TEMPORAL_NAMESPACE` | `default` | Namespace |
 | `TEMPORAL_TASK_QUEUE` | `keep-ops` | Worker queue |
 | `TEMPORAL_WORKER_ROOT` | `/data` | Sandboxed filesystem root |
+| `KEEP_API_URL` | `http://host.docker.internal:8080` | Keep API for `request_keep_approval` |
+| `KEEP_API_KEY` | `keepappkey` | API key used to POST `/approvals` |
+
+`RemediateNvidiaGpu` accepts `wait_for_approval`. Default is **false** so the GPU demo still remediates immediately. When true, the worker POSTs Keep `/approvals` and waits on signal `approve`.
 
 ## Catalog registration
 

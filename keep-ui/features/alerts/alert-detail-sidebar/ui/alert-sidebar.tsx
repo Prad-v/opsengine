@@ -25,8 +25,8 @@ import {
   alertSidebarFieldsConfig,
   getEnabledFields,
   getCustomFields,
+  mergeDefaultSidebarFields,
   renderCustomField,
-  AlertSidebarFieldName,
 } from "../lib/alertSidebarFields";
 
 type AlertSidebarProps = {
@@ -61,6 +61,9 @@ export const AlertSidebar = ({
       ?.display_name || alert?.providerId;
 
   const { data: config } = useConfig();
+  const configuredFields = mergeDefaultSidebarFields(
+    config?.ALERT_SIDEBAR_FIELDS || []
+  );
 
   const handleRefresh = async () => {
     console.log("Refresh button clicked");
@@ -170,7 +173,6 @@ export const AlertSidebar = ({
               <div className="space-y-4">
                 <div className="space-y-2">
                   {(() => {
-                    const configuredFields = config?.ALERT_SIDEBAR_FIELDS || [];
                     const enabledFields = getEnabledFields(configuredFields);
                     const customFields = getCustomFields(configuredFields);
                     
@@ -215,7 +217,7 @@ export const AlertSidebar = ({
                     return [...standardFields, ...customFieldElements];
                   })()}
                 </div>
-                {config?.ALERT_SIDEBAR_FIELDS?.includes("incidents") &&
+                {configuredFields.includes("incidents") &&
                   alert.incident_dto && (
                     <div>
                       <FieldHeader>Incidents</FieldHeader>
@@ -224,7 +226,7 @@ export const AlertSidebar = ({
                       />
                     </div>
                   )}
-                {config?.ALERT_SIDEBAR_FIELDS?.includes("timeline") && (
+                {configuredFields.includes("timeline") && (
                   <AlertTimeline
                     key={auditData ? auditData.length : 1}
                     alert={alert}
@@ -233,7 +235,7 @@ export const AlertSidebar = ({
                     onRefresh={handleRefresh}
                   />
                 )}
-                {config?.ALERT_SIDEBAR_FIELDS?.includes("relatedServices") && (
+                {configuredFields.includes("relatedServices") && (
                   <>
                     <Title>Related Services</Title>
                     <TopologySearchProvider>

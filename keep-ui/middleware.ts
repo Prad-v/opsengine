@@ -12,6 +12,8 @@ function isMobileDevice(userAgent: string): boolean {
   );
 }
 
+const authDebug = process.env.AUTH_DEBUG === "true";
+
 export const middleware = auth(async (request) => {
   const { pathname, searchParams } = request.nextUrl;
 
@@ -25,8 +27,9 @@ export const middleware = auth(async (request) => {
     return NextResponse.redirect(new URL("/mobile", request.url));
   }
 
-  const session = await auth();
-  const role = session?.userRole;
+  // `auth()` already populated request.auth — do not call auth() again
+  // (a second JWT decrypt was adding hundreds of ms per navigation).
+  const role = request.auth?.userRole;
   const isAuthenticated = !!request.auth;
   // Keep it on header so it can be used in server components
   const requestHeaders = new Headers(request.headers);
@@ -55,9 +58,11 @@ export const middleware = auth(async (request) => {
     !pathname.startsWith("/api/healthcheck")
   ) {
     const redirectTo = request.nextUrl.href || "/incidents";
-    console.log(
-      `Redirecting ${pathname} to signin page because user is not authenticated`
-    );
+    if (authDebug) {
+      console.log(
+        `Redirecting ${pathname} to signin page because user is not authenticated`
+      );
+    }
     return NextResponse.redirect(
       new URL(`/signin?callbackUrl=${redirectTo}`, request.url)
     );
@@ -67,9 +72,11 @@ export const middleware = auth(async (request) => {
   if (isAuthenticated && pathname.startsWith("/signin")) {
     const redirectTo =
       request.nextUrl.searchParams.get("callbackUrl") || "/incidents";
-    console.log(
-      `Redirecting to ${redirectTo} because user try to get /signin but already authenticated`
-    );
+    if (authDebug) {
+      console.log(
+        `Redirecting to ${redirectTo} because user try to get /signin but already authenticated`
+      );
+    }
     return NextResponse.redirect(new URL(redirectTo, request.url));
   }
 
@@ -77,10 +84,6 @@ export const middleware = auth(async (request) => {
   if (role === "noc" && !pathname.startsWith("/alerts")) {
     return NextResponse.redirect(new URL("/alerts/feed", request.url));
   }
-
-  // Allow all other authenticated requests
-  console.log("Allowing request to pass through", request.url);
-  console.log("Request URL: ", request.url);
 
   return NextResponse.next({
     request: {

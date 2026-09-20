@@ -63,6 +63,7 @@ export const DEFAULT_COLS = [
   "source",
   "status",
   "name",
+  "code",
   "description",
   "lastReceived",
   "alertMenu",
@@ -71,6 +72,42 @@ export const DEFAULT_COLS_VISIBILITY = DEFAULT_COLS.reduce<VisibilityState>(
   (acc, colId) => ({ ...acc, [colId]: true }),
   {}
 );
+
+/** Show newly added default columns (e.g. code) even if an older preset hid them by omission. */
+export function mergeDefaultColumnVisibility(
+  visibility: VisibilityState
+): VisibilityState {
+  return { ...DEFAULT_COLS_VISIBILITY, ...visibility };
+}
+
+/** Insert missing default columns into a saved order (code after name). */
+export function mergeDefaultColumnOrder(order: string[]): string[] {
+  const next = [...order];
+  for (const col of DEFAULT_COLS) {
+    if (next.includes(col)) {
+      continue;
+    }
+    if (col === "code") {
+      const nameIdx = next.indexOf("name");
+      if (nameIdx !== -1) {
+        next.splice(nameIdx + 1, 0, col);
+        continue;
+      }
+      const descriptionIdx = next.indexOf("description");
+      if (descriptionIdx !== -1) {
+        next.splice(descriptionIdx, 0, col);
+        continue;
+      }
+    }
+    const menuIdx = next.indexOf("alertMenu");
+    if (menuIdx !== -1) {
+      next.splice(menuIdx, 0, col);
+    } else {
+      next.push(col);
+    }
+  }
+  return next;
+}
 export const getColumnsIds = (columns: ColumnDef<AlertDto>[]) =>
   columns.map((column) => column.id as keyof AlertDto);
 
@@ -563,6 +600,26 @@ export const useAlertTableCols = (
         // Remove w-full from tdClassName to prevent automatic expansion
         tdClassName: "name-cell",
         thClassName: "name-cell",
+      },
+    }),
+    columnHelper.accessor((row) => row.code || row.labels?.code || "", {
+      id: "code",
+      header: getColumnDisplayName("code", "Code", columnRenameMapping),
+      enableGrouping: true,
+      getGroupingValue: (row) => row.code || row.labels?.code || "",
+      minSize: 120,
+      maxSize: 220,
+      size: 160,
+      cell: (context) => {
+        const value = context.getValue();
+        if (!value) {
+          return <span className="text-gray-400">—</span>;
+        }
+        return (
+          <span title={value} className="font-mono text-xs whitespace-nowrap">
+            {value}
+          </span>
+        );
       },
     }),
 

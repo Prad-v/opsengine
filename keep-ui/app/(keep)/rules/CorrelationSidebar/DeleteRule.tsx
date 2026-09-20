@@ -3,7 +3,8 @@ import { Button } from "@tremor/react";
 import { MouseEvent } from "react";
 import { useRules } from "utils/hooks/useRules";
 import { useApi } from "@/shared/lib/hooks/useApi";
-import { showErrorToast } from "@/shared/ui";
+import { showErrorToast, showSuccessToast } from "@/shared/ui";
+import { isApprovalPending } from "@/features/approvals";
 
 type DeleteRuleCellProps = {
   ruleId: string;
@@ -20,6 +21,11 @@ export const DeleteRuleCell = ({ ruleId }: DeleteRuleCellProps) => {
     if (confirmed) {
       try {
         const response = await api.delete(`/rules/${ruleId}`);
+        showSuccessToast(
+          isApprovalPending(response)
+            ? "Delete submitted for approval"
+            : "Rule deleted"
+        );
         await mutate();
       } catch (error) {
         showErrorToast(error, "Failed to delete rule");

@@ -1,0 +1,25 @@
+# Mock Mimir Alertmanager webhook (labels.code=DISK_SPACE_LOW) → console.
+# Fire: Mock UI → Mimir Alertmanager → Send event (firing).
+workflow:
+  id: mock-mimir-disk
+  name: Mock Mimir disk → console
+  description: >
+    Runs when reserved labels.code is DISK_SPACE_LOW (Mimir mock payload)
+    on an alert or a correlated incident.
+  disabled: false
+  triggers:
+    - type: alert
+      cel: has(labels.code) && labels.code == "DISK_SPACE_LOW" && status == "firing"
+    - type: incident
+      events:
+        - created
+        - updated
+      cel: code == "DISK_SPACE_LOW" || codes.exists(c, c == "DISK_SPACE_LOW")
+  actions:
+    - name: log-disk
+      provider:
+        type: console
+        with:
+          message: >
+            DISK_SPACE_LOW on {{ alert.name or incident.name }}
+            (code={{ alert.labels.code or incident.code }}).

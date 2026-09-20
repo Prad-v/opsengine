@@ -4,6 +4,7 @@ import { useState } from "react";
 import { Button, Card, Title, Text } from "@tremor/react";
 import { Drawer } from "@/shared/ui/Drawer";
 import { showErrorToast, showSuccessToast } from "@/shared/ui";
+import { isApprovalPending } from "@/features/approvals";
 import { useSyntheticChecks } from "../model/useSyntheticChecks";
 import type { SyntheticCheck, SyntheticCheckInput } from "../model/types";
 import { SyntheticCheckTable } from "./SyntheticCheckTable";
@@ -60,8 +61,12 @@ export function SyntheticCheckCatalogPage() {
       return;
     }
     try {
-      await deleteCheck(entry.id);
-      showSuccessToast("Synthetic check deleted");
+      const result = await deleteCheck(entry.id);
+      showSuccessToast(
+        isApprovalPending(result)
+          ? "Delete submitted for approval"
+          : "Synthetic check deleted"
+      );
     } catch (err) {
       showErrorToast(err, "Failed to delete synthetic check");
     }
@@ -108,9 +113,10 @@ export function SyntheticCheckCatalogPage() {
           error={error}
           emptyMessage={
             <>
-              No checks yet. Click <strong>New check</strong>. Connect a Temporal
-              provider and run <code>make synthetic-checks</code> so the worker
-              can execute probes.
+              No checks yet. Click <strong>New check</strong>, or seed the AI
+              datacenter pack with <code>make register-ai-dc-synthetic-checks</code>.
+              Connect a Temporal provider and run <code>make synthetic-checks</code>
+              so the worker can execute probes.
             </>
           }
           renderActions={(entry) => (

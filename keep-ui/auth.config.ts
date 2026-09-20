@@ -289,8 +289,9 @@ const baseProviderConfigs = {
   ],
 };
 
-let isDebug =
-  process.env.AUTH_DEBUG == "true" || process.env.NODE_ENV === "development";
+// Opt-in only. Development used to force this on, which logged the full
+// Auth.js config and JWT decrypt errors on every navigation.
+let isDebug = process.env.AUTH_DEBUG == "true";
 if (isDebug) {
   console.log("Auth debug mode enabled");
 }

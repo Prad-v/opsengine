@@ -1,11 +1,80 @@
-# Mock Grafana / Mimir Alertmanager / VictoriaMetrics for Keep e2e webhook testing.
-# Usage:
-#   docker compose -f backend/services/provider-mock/docker-compose.yml up --build
+# Mock Grafana / Mimir Alertmanager / VictoriaMetrics for Keep e2e webhook testing,
+# plus NetBox DCIM (NVIDIA GPU topology) for Keep Service Topology sync.
+# Usage (preferred — included in make start / make deps):
+#   make start
 #   open http://localhost:8099
+#   open http://localhost:8000  (NetBox admin / admin)
 #
-# Or: make mock-providers
+# Restart mock only:
+#   make mock-providers
+#   docker compose -f backend/services/provider-mock/docker-compose.yml up --build
 
 services:
+  netbox-postgres:
+    image: postgres:16-alpine
+    container_name: keep-netbox-postgres
+    environment:
+      POSTGRES_DB: netbox
+      POSTGRES_USER: netbox
+      POSTGRES_PASSWORD: netbox
+    volumes:
+      - keep-netbox-postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U netbox -d netbox"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  netbox-redis:
+    image: redis:7-alpine
+    container_name: keep-netbox-redis
+    command: ["redis-server", "--appendonly", "yes", "--requirepass", "netbox"]
+    volumes:
+      - keep-netbox-redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "netbox", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+
+  netbox:
+    image: docker.io/netboxcommunity/netbox:v4.2.9
+    container_name: keep-netbox
+    depends_on:
+      netbox-postgres:
+        condition: service_healthy
+      netbox-redis:
+        condition: service_healthy
+    ports:
+      - "8000:8080"
+    environment:
+      ALLOWED_HOSTS: "*"
+      DB_HOST: netbox-postgres
+      DB_NAME: netbox
+      DB_USER: netbox
+      DB_PASSWORD: netbox
+      REDIS_HOST: netbox-redis
+      REDIS_PASSWORD: netbox
+      REDIS_DATABASE: "0"
+      REDIS_CACHE_HOST: netbox-redis
+      REDIS_CACHE_PASSWORD: netbox
+      REDIS_CACHE_DATABASE: "1"
+      SECRET_KEY: "abcdefghijklmnopqrstuvwxyz0123456789KEEPNETBOXSECRETKEY"
+      SKIP_SUPERUSER: "false"
+      SUPERUSER_NAME: admin
+      SUPERUSER_EMAIL: admin@example.com
+      SUPERUSER_PASSWORD: admin
+      SUPERUSER_API_TOKEN: "0123456789abcdef0123456789abcdef01234567"
+      REDIS_SSL: "false"
+      REDIS_CACHE_SSL: "false"
+      CORS_ORIGIN_ALLOW_ALL: "true"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:8080/api/status/ >/dev/null || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 90s
+
   provider-mock:
     build:
       context: .
@@ -25,8 +94,15 @@ services:
       TEMPORAL_NAMESPACE: ${TEMPORAL_NAMESPACE:-default}
       TEMPORAL_TLS: ${TEMPORAL_TLS:-false}
       TEMPORAL_UI_URL: ${TEMPORAL_UI_URL:-http://localhost:8233}
+      # NetBox in this compose file. Mock seeds via the Docker DNS name;
+      # Keep (on the host) uses the published port.
+      NETBOX_URL: ${NETBOX_URL:-http://netbox:8080}
+      KEEP_NETBOX_URL: ${KEEP_NETBOX_URL:-http://localhost:8000}
+      NETBOX_API_TOKEN: ${NETBOX_API_TOKEN:-0123456789abcdef0123456789abcdef01234567}
     extra_hosts:
       - "host.docker.internal:host-gateway"
+    # NetBox first boot runs migrations (1–2 min). Mock stays up so deps-wait
+    # does not block; seed/configure from the Service Topology tab.
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8099/api/health')"]
       interval: 5s
@@ -44,3 +120,7 @@ services:
     volumes:
       - ../../../tests/test_provider_mock.py:/app/tests/test_provider_mock.py:ro
     command: ["pytest", "-q", "/app/tests/test_provider_mock.py"]
+
+volumes:
+  keep-netbox-postgres-data:
+  keep-netbox-redis-data:

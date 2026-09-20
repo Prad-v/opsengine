@@ -51,6 +51,7 @@ import { useApi } from "@/shared/lib/hooks/useApi";
 import { useConfig } from "@/utils/hooks/useConfig";
 import { KeepApiError, KeepApiReadOnlyError } from "@/shared/api";
 import { showErrorToast } from "@/shared/ui";
+import { isApprovalPending } from "@/features/approvals";
 import {
   base64urlencode,
   generatePkceVerifier,
@@ -235,8 +236,13 @@ const ProviderForm = ({
     if (confirm("Are you sure you want to delete this provider?")) {
       api
         .delete(`/providers/${provider.type}/${provider.id}`)
-        .then(() => {
+        .then((result) => {
           mutate();
+          toast.success(
+            isApprovalPending(result)
+              ? "Delete submitted for approval"
+              : "Provider deleted"
+          );
           closeModal();
         })
         .catch((error: any) => {

@@ -3,6 +3,7 @@
 # Local (via repo root):
 #   docker compose -f docker-compose.temporal.yml up -d --build synthetic-checks
 #   # or: make synthetic-checks
+#   make register-ai-dc-synthetic-checks   # NVIDIA/AMD inference + training pack
 #
 # Mode 1: Catalog → Synthetic checks (API creates Temporal Schedules)
 # Mode 2: Register ProbeTargets in Temporal workflow catalog

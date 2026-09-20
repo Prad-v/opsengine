@@ -36,6 +36,7 @@ export function ApplicationModal({
     <Modal isOpen={isOpen} onClose={onClose} title={title}>
       {actionType === "create" ? (
         <CreateOrUpdateApplicationForm
+          key="create"
           action="create"
           application={application}
           onSubmit={onSubmit}
@@ -43,6 +44,7 @@ export function ApplicationModal({
         />
       ) : (
         <CreateOrUpdateApplicationForm
+          key={application.id}
           action={actionType}
           application={application}
           onSubmit={onSubmit}

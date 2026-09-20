@@ -1,4 +1,4 @@
-"""Temporal worker entrypoint — polls keep-ops for ListAndZipDirectory."""
+"""Temporal worker entrypoint — polls keep-ops for ops remediations."""
 
 from __future__ import annotations
 
@@ -10,8 +10,15 @@ from concurrent.futures import ThreadPoolExecutor
 from temporalio.client import Client
 from temporalio.worker import Worker
 
-from app.activities import create_zip_from_ls, run_ls
-from app.workflows import ListAndZipDirectory
+from app.activities import (
+    create_zip_from_ls,
+    remediate_nvidia_gpu,
+    request_keep_approval,
+    resolve_keep_incident,
+    run_ls,
+    send_gpu_failure_email,
+)
+from app.workflows import ListAndZipDirectory, RemediateNvidiaGpu
 
 logger = logging.getLogger(__name__)
 
@@ -31,14 +38,26 @@ async def main() -> None:
         namespace,
         task_queue,
     )
+    logger.info(
+        "GPU_MOCK_URL=%s KEEP_API_URL=%s",
+        os.environ.get("GPU_MOCK_URL", "http://host.docker.internal:8099"),
+        os.environ.get("KEEP_API_URL", "http://host.docker.internal:8080"),
+    )
 
     client = await Client.connect(address, namespace=namespace)
     activity_executor = ThreadPoolExecutor(max_workers=10)
     worker = Worker(
         client,
         task_queue=task_queue,
-        workflows=[ListAndZipDirectory],
-        activities=[run_ls, create_zip_from_ls],
+        workflows=[ListAndZipDirectory, RemediateNvidiaGpu],
+        activities=[
+            run_ls,
+            create_zip_from_ls,
+            remediate_nvidia_gpu,
+            request_keep_approval,
+            resolve_keep_incident,
+            send_gpu_failure_email,
+        ],
         activity_executor=activity_executor,
     )
     logger.info("Temporal worker started on queue %s", task_queue)

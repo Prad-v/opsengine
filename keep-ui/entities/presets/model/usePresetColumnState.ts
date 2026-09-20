@@ -8,6 +8,8 @@ import { ColumnRenameMapping } from "@/widgets/alerts-table/ui/alert-table-colum
 import {
   DEFAULT_COLS,
   DEFAULT_COLS_VISIBILITY,
+  mergeDefaultColumnOrder,
+  mergeDefaultColumnVisibility,
 } from "@/widgets/alerts-table/lib/alert-table-utils";
 import { STATIC_PRESETS_NAMES, STATIC_PRESET_IDS } from "./constants";
 import { ColumnConfiguration } from "./types";
@@ -70,7 +72,7 @@ export const usePresetColumnState = ({
   const columnVisibility = useMemo(() => {
     // If we shouldn't use backend or there's an error, use local storage immediately
     if (!shouldUseBackend || error) {
-      return localColumnVisibility;
+      return mergeDefaultColumnVisibility(localColumnVisibility);
     }
     // If backend is loading, return defaults to avoid blocking render
     // Once loaded, backend config will be used
@@ -88,11 +90,11 @@ export const usePresetColumnState = ({
   const columnOrder = useMemo(() => {
     // If we shouldn't use backend or there's an error, use local storage immediately
     if (!shouldUseBackend || error) {
-      return localColumnOrder;
+      return mergeDefaultColumnOrder(localColumnOrder);
     }
     // For backend presets, use backend order if available, otherwise default
     return columnConfig?.column_order && columnConfig.column_order.length > 0
-      ? columnConfig.column_order
+      ? mergeDefaultColumnOrder(columnConfig.column_order)
       : DEFAULT_COLS;
   }, [shouldUseBackend, columnConfig?.column_order, localColumnOrder, error]);
 

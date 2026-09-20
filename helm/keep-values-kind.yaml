@@ -16,6 +16,28 @@ backend:
   service:
     type: NodePort
     port: 8080
+  # Chart default is 4 gunicorn workers. On a 6-CPU kind node that starves
+  # the host Next.js UI and the MySQL pool during ingest. Two workers +
+  # a larger in-process digest pool is the local-dev balance.
+  args:
+    - gunicorn
+    - keep.api.api:get_app
+    - --bind
+    - 0.0.0.0:8080
+    - --workers
+    - "2"
+    - -k
+    - uvicorn.workers.UvicornWorker
+    - -c
+    - /venv/lib/python3.13/site-packages/keep/api/config.py
+    - --preload
+  resources:
+    requests:
+      cpu: 500m
+      memory: 1Gi
+    limits:
+      cpu: "2"
+      memory: 2Gi
   env:
     - name: DATABASE_CONNECTION_STRING
       value: mysql+pymysql://root@keep-database:3306/keep
@@ -38,9 +60,34 @@ backend:
     - name: PROMETHEUS_MULTIPROC_DIR
       value: /tmp/prometheus
     - name: AUTH_TYPE
-      value: NOAUTH
+      value: DB
+    - name: KEEP_DEFAULT_USERNAME
+      value: admin
+    - name: KEEP_DEFAULT_PASSWORD
+      value: admin
+    - name: KEEP_JWT_SECRET
+      value: keep-dev-jwt-secret-change-me
+    # Local kind MySQL may already have a user from an older AUTH_TYPE; reset admin/admin.
+    - name: KEEP_FORCE_RESET_DEFAULT_PASSWORD
+      value: "true"
     - name: KEEP_DEFAULT_API_KEYS
       value: mock-admin:admin:keepappkey
+    - name: KEEP_API_URL
+      value: http://keep-backend:8080
+    - name: KEEP_EVENT_WORKERS
+      value: "8"
+    - name: KEEP_MAX_WORKFLOW_WORKERS
+      value: "8"
+    - name: KEEP_MAINTENANCE_WINDOWS_ENABLED
+      value: "true"
+    - name: MAINTENANCE_WINDOW_STRATEGY
+      value: default
+    - name: DATABASE_POOL_SIZE
+      value: "15"
+    - name: DATABASE_MAX_OVERFLOW
+      value: "15"
+    - name: DATABASE_POOL_TIMEOUT
+      value: "30"
 
 # Host `npm run dev` (make k8s-ui) talks to the NodePort-mapped API.
 frontend:
@@ -52,6 +99,13 @@ websocket:
   service:
     type: NodePort
     port: 6001
+  resources:
+    requests:
+      cpu: 50m
+      memory: 128Mi
+    limits:
+      cpu: 250m
+      memory: 256Mi
 
 database:
   pv:
@@ -60,3 +114,10 @@ database:
   pvc:
     enabled: true
     size: 5Gi
+  resources:
+    requests:
+      cpu: 250m
+      memory: 512Mi
+    limits:
+      cpu: "1"
+      memory: 1.5Gi

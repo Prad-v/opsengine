@@ -1,0 +1,24 @@
+# Example: reserved labels.code is the stable join key for automation.
+# Name/description can change; the catalog and this CEL stay the same.
+workflow:
+  id: alert-code-console
+  name: Log reserved alert code
+  description: >
+    Runs when an alert carries reserved labels.code. Use the same code in
+    Catalog → Alert codes to attach a runbook or auto-run a richer workflow.
+  triggers:
+    - type: alert
+      cel: has(labels.code) && labels.code != ""
+    - type: incident
+      events:
+        - created
+      cel: code != "" || codes.exists(c, c != "")
+  actions:
+    - name: log-code
+      provider:
+        type: console
+        with:
+          message: >
+            Reserved alert code {{ alert.labels.code or incident.code }}
+            (codes={{ incident.codes }}) on
+            {{ alert.name or incident.name }}.

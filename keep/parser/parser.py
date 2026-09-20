@@ -173,6 +173,7 @@ class Parser:
         workflow_name = workflow.get("name", "Untitled")
         workflow_description = workflow.get("description", "No description")
         workflow_permissions = workflow.get("permissions", [])
+        workflow_require_approval = bool(workflow.get("require_approval", False))
         workflow_disabled = self.__class__.parse_disabled(workflow)
         workflow_owners = self._parse_owners(workflow)
         workflow_tags = self._parse_tags(workflow)
@@ -215,6 +216,7 @@ class Parser:
             workflow_consts=workflow_consts,
             workflow_debug=workflow_debug,
             workflow_permissions=workflow_permissions,
+            workflow_require_approval=workflow_require_approval,
             is_test=is_test,
         )
         self.logger.debug("Workflow parsed successfully")

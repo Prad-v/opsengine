@@ -130,6 +130,27 @@ def mask_openai_settings(settings: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def get_openai_client_for_tenant(tenant_id: str = SINGLE_TENANT_UUID):
+    """Build an OpenAI client from Settings → AI (or env override).
+
+    Returns ``(client, model, runtime)``. ``client`` is None when AI is not configured.
+    """
+    runtime = get_runtime_openai_settings(tenant_id)
+    api_key = runtime.get("api_key")
+    if not api_key:
+        return None, None, runtime
+
+    from openai import OpenAI
+
+    kwargs: dict[str, Any] = {"api_key": api_key}
+    if runtime.get("organization_id"):
+        kwargs["organization"] = runtime["organization_id"]
+    if runtime.get("base_url"):
+        kwargs["base_url"] = runtime["base_url"]
+    model = (runtime.get("model") or "").strip() or "gpt-4o-mini"
+    return OpenAI(**kwargs), model, runtime
+
+
 def get_runtime_openai_settings(tenant_id: str = SINGLE_TENANT_UUID) -> dict[str, Any]:
     """Return credentials for server-side AI (CopilotKit / backend LLM calls).
 

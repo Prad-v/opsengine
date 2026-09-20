@@ -39,6 +39,27 @@ backend:
       value: NOAUTH
     - name: KEEP_DEFAULT_API_KEYS
       value: mock-admin:admin:keepappkey
+    - name: KEEP_API_URL
+      value: http://keep-backend:8080
+    - name: KEEP_EVENT_WORKERS
+      value: "8"
+    - name: KEEP_MAX_WORKFLOW_WORKERS
+      value: "10"
+    - name: KEEP_MAINTENANCE_WINDOWS_ENABLED
+      value: "true"
+    - name: MAINTENANCE_WINDOW_STRATEGY
+      value: default
+    - name: DATABASE_POOL_SIZE
+      value: "20"
+    - name: DATABASE_MAX_OVERFLOW
+      value: "20"
+  resources:
+    requests:
+      cpu: 500m
+      memory: 1Gi
+    limits:
+      cpu: "2"
+      memory: 2Gi
 
 frontend:
   enabled: true
@@ -81,3 +102,10 @@ database:
   pvc:
     enabled: true
     size: 5Gi
+  resources:
+    requests:
+      cpu: 250m
+      memory: 512Mi
+    limits:
+      cpu: "1"
+      memory: 1.5Gi
