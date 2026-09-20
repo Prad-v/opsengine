@@ -1,7 +1,7 @@
 # Prod overlay (namespace: keep-prod). CI sets tag to the published artifact.
 image:
   repository: keep-temporal-worker
-  tag: "sha-89a585d"
+  tag: "sha-c719e4e"
   pullPolicy: IfNotPresent
 
 replicaCount: 2

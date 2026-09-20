@@ -2,5 +2,5 @@ apiVersion: v2
 name: synthetic-checks
 description: Keep Temporal worker for HTTP/TCP/DNS synthetic checks (keep-synth queue)
 type: application
-version: 0.1.2
+version: 0.1.3
 appVersion: "0.1.0"
