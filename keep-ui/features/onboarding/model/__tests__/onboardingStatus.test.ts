@@ -63,7 +63,7 @@ describe("computeOnboardingStatus", () => {
       ],
       catalog: [
         { code: "HIGH_CPU", keep_workflow_id: "onboarding-notify-high-cpu" },
-        { code: "NVIDIA_GPU_THERMAL" },
+        { code: "DCGM_FI_DEV_GPU_TEMP" },
       ],
       rules: [
         { id: "rule-cpu", definition_cel: 'labels.code == "HIGH_CPU"' },
@@ -75,7 +75,7 @@ describe("computeOnboardingStatus", () => {
             'triggers:\n  - type: alert\n    cel: labels.code == "HIGH_CPU"\nactions:\n  - provider:\n      type: slack\n',
         },
       ],
-      selectedCode: "NVIDIA_GPU_THERMAL",
+      selectedCode: "DCGM_FI_DEV_GPU_TEMP",
       workflowId: "",
       ruleId: "",
     });

@@ -444,7 +444,7 @@ describe("getYamlWorkflowDefinitionSchema", () => {
           {
             type: "incident",
             events: ["created"],
-            cel: 'code == "NVIDIA_GPU_THERMAL"',
+            cel: 'code == "DCGM_FI_DEV_GPU_TEMP"',
           },
         ],
       },

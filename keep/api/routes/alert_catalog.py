@@ -25,7 +25,17 @@ logger = logging.getLogger(__name__)
 
 
 def _to_dto(entry: AlertCatalog) -> AlertCatalogDtoOut:
-    return AlertCatalogDtoOut(**entry.dict())
+    payload = entry.dict()
+    payload["tags"] = payload.get("tags") or []
+    return AlertCatalogDtoOut(**payload)
+
+
+def _entry_has_tag(entry: AlertCatalog, tag: str) -> bool:
+    needle = tag.strip().lower()
+    if not needle:
+        return True
+    tags = entry.tags or []
+    return any(isinstance(t, str) and t.strip().lower() == needle for t in tags)
 
 
 def _get_entry(session: Session, tenant_id: str, entry_id: int) -> AlertCatalog:
@@ -52,6 +62,7 @@ def _validate_workflow(tenant_id: str, workflow_id: str | None) -> None:
 
 @router.get("", description="List reserved alert codes")
 def list_alert_catalog(
+    tag: str | None = None,
     authenticated_entity: AuthenticatedEntity = Depends(
         IdentityManagerFactory.get_auth_verifier(["read:providers"])
     ),
@@ -62,6 +73,8 @@ def list_alert_catalog(
         .where(AlertCatalog.tenant_id == authenticated_entity.tenant_id)
         .order_by(AlertCatalog.code)
     ).all()
+    if tag and tag.strip():
+        entries = [entry for entry in entries if _entry_has_tag(entry, tag)]
     return [_to_dto(entry) for entry in entries]
 
 

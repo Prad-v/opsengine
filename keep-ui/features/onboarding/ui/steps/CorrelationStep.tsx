@@ -78,7 +78,7 @@ export function CorrelationStep({
           required
           value={code}
           onValueChange={setCode}
-          placeholder="NVIDIA_GPU_THERMAL"
+          placeholder="DCGM_FI_DEV_GPU_TEMP"
         />
       </div>
       <div>

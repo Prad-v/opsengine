@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useEffect, useState } from "react";
+import { FormEvent, useEffect, useMemo, useState } from "react";
 import {
   Button,
   Select,
@@ -10,6 +10,8 @@ import {
   Textarea,
 } from "@tremor/react";
 import { TbSparkles } from "react-icons/tb";
+import { MultiValue } from "react-select";
+import CreatableMultiSelect from "@/components/ui/CreatableMultiSelect";
 import { useWorkflows } from "@/entities/workflows/model";
 import { useAISettings } from "@/features/settings/ai";
 import { showErrorToast, showSuccessToast } from "@/shared/ui";
@@ -26,7 +28,10 @@ interface AlertCatalogFormProps {
   onCancel: () => void;
   showWorkflowFields?: boolean;
   submitLabel?: string;
+  suggestedTags?: string[];
 }
+
+type TagOption = { value: string; label: string };
 
 const AUTO_RUN_OPTIONS: { id: AlertCatalogAutoRunOn; label: string }[] = [
   { id: "none", label: "None (metadata / runbook only)" },
@@ -36,16 +41,25 @@ const AUTO_RUN_OPTIONS: { id: AlertCatalogAutoRunOn; label: string }[] = [
   { id: "approval", label: "Propose run for approval" },
 ];
 
+function toTagOptions(tags: string[]): TagOption[] {
+  return tags.map((tag) => ({ value: tag, label: tag }));
+}
+
+function normalizeTag(value: string): string {
+  return value.trim().toLowerCase();
+}
+
 export function AlertCatalogForm({
   initial,
   onSubmit,
   onCancel,
   showWorkflowFields = true,
   submitLabel,
+  suggestedTags = [],
 }: AlertCatalogFormProps) {
   const { data: workflows } = useWorkflows();
   const { isAIEnabled } = useAISettings();
-  const { enhanceDescription } = useAlertCatalog();
+  const { enhanceDescription, catalog } = useAlertCatalog();
   const [code, setCode] = useState("");
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
@@ -53,8 +67,17 @@ export function AlertCatalogForm({
   const [keepWorkflowId, setKeepWorkflowId] = useState("");
   const [autoRunOn, setAutoRunOn] = useState<AlertCatalogAutoRunOn>("none");
   const [disabled, setDisabled] = useState(false);
+  const [tags, setTags] = useState<string[]>([]);
   const [isSaving, setIsSaving] = useState(false);
   const [isEnhancing, setIsEnhancing] = useState(false);
+
+  const tagOptions = useMemo(() => {
+    const fromCatalog = (catalog ?? []).flatMap((entry) => entry.tags ?? []);
+    const unique = Array.from(
+      new Set([...suggestedTags, ...fromCatalog].map(normalizeTag).filter(Boolean))
+    ).sort();
+    return toTagOptions(unique);
+  }, [catalog, suggestedTags]);
 
   useEffect(() => {
     if (initial) {
@@ -65,6 +88,7 @@ export function AlertCatalogForm({
       setKeepWorkflowId(initial.keep_workflow_id || "");
       setAutoRunOn(initial.auto_run_on || "none");
       setDisabled(!!initial.disabled);
+      setTags((initial.tags ?? []).map(normalizeTag).filter(Boolean));
       return;
     }
     setCode("");
@@ -74,6 +98,7 @@ export function AlertCatalogForm({
     setKeepWorkflowId("");
     setAutoRunOn("none");
     setDisabled(false);
+    setTags([]);
   }, [initial]);
 
   const handleSubmit = async (event: FormEvent) => {
@@ -88,6 +113,7 @@ export function AlertCatalogForm({
         keep_workflow_id: keepWorkflowId || undefined,
         auto_run_on: autoRunOn,
         disabled,
+        tags,
       });
     } finally {
       setIsSaving(false);
@@ -134,6 +160,28 @@ export function AlertCatalogForm({
     }
   };
 
+  const handleTagsChange = (selected: MultiValue<TagOption>) => {
+    setTags(
+      Array.from(
+        new Set(
+          (selected ?? [])
+            .map((option) => normalizeTag(option.value))
+            .filter(Boolean)
+        )
+      )
+    );
+  };
+
+  const handleCreateTag = (inputValue: string) => {
+    const tag = normalizeTag(inputValue);
+    if (!tag) {
+      return;
+    }
+    setTags((current) =>
+      current.includes(tag) ? current : [...current, tag]
+    );
+  };
+
   return (
     <form className="flex flex-col gap-3" onSubmit={handleSubmit}>
       <div>
@@ -142,7 +190,7 @@ export function AlertCatalogForm({
           required
           value={code}
           onValueChange={setCode}
-          placeholder="NVIDIA_GPU_THERMAL"
+          placeholder="DCGM_FI_DEV_GPU_TEMP"
           disabled={!!initial}
         />
         <Text className="text-xs mt-1">
@@ -155,7 +203,7 @@ export function AlertCatalogForm({
           required
           value={name}
           onValueChange={setName}
-          placeholder="NVIDIA GPU thermal"
+          placeholder="DCGM GPU temperature"
         />
       </div>
       <div>
@@ -186,11 +234,27 @@ export function AlertCatalogForm({
         />
       </div>
       <div>
+        <Text>Tags</Text>
+        <div className="mt-1">
+          <CreatableMultiSelect
+            value={toTagOptions(tags)}
+            onChange={handleTagsChange}
+            onCreateOption={handleCreateTag}
+            options={tagOptions}
+            placeholder="Select or create tags (e.g. nvidia, thermal)"
+          />
+        </div>
+        <Text className="text-xs mt-1">
+          Group codes in the catalog (multi-tag). Example:{" "}
+          <code>nvidia</code>, <code>dcgm</code>, <code>thermal</code>.
+        </Text>
+      </div>
+      <div>
         <Text>Runbook URL</Text>
         <TextInput
           value={runbookUrl}
           onValueChange={setRunbookUrl}
-          placeholder="https://wiki.example/runbooks/gpu-thermal"
+          placeholder="https://docs.nvidia.com/datacenter/dcgm/latest/reference/dcgm-exporter-metrics.html"
         />
         <Text className="text-xs mt-1">
           Copied onto matching alerts as <code>playbook_url</code>.

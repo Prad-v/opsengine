@@ -6,7 +6,7 @@ Usage:
 
   python scripts/register_temporal_probe_targets_catalog.py
 
-Env overrides:
+Env:
   KEEP_API_URL=http://localhost:8080
   KEEP_API_KEY=keepappkey
   TEMPORAL_PROVIDER_ID=
@@ -19,6 +19,14 @@ import os
 import sys
 import urllib.error
 import urllib.request
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parents[1]
+MOCK_APP = ROOT / "backend" / "services" / "provider-mock"
+if str(MOCK_APP) not in sys.path:
+    sys.path.insert(0, str(MOCK_APP))
+
+from app.setup_actions import register_probe_targets_catalog  # noqa: E402
 
 
 def _request(method: str, url: str, api_key: str, body: dict | None = None) -> tuple[int, object]:
@@ -44,83 +52,20 @@ def _request(method: str, url: str, api_key: str, body: dict | None = None) -> t
 def main() -> int:
     api_url = os.environ.get("KEEP_API_URL", "http://localhost:8080").rstrip("/")
     api_key = os.environ.get("KEEP_API_KEY", "keepappkey")
-    provider_id = os.environ.get("TEMPORAL_PROVIDER_ID")
 
-    if not provider_id:
-        status, providers = _request("GET", f"{api_url}/providers", api_key)
-        if status != 200:
-            print(f"Failed to list providers ({status}): {providers}", file=sys.stderr)
-            return 1
-        installed = []
-        if isinstance(providers, dict):
-            installed = providers.get("installed_providers") or providers.get("providers") or []
-        elif isinstance(providers, list):
-            installed = providers
-        temporal = [
-            p
-            for p in installed
-            if isinstance(p, dict) and p.get("type") == "temporal"
-        ]
-        if not temporal:
-            print(
-                "No Temporal provider installed. Connect Temporal under Providers first.",
-                file=sys.stderr,
-            )
-            return 1
-        provider_id = temporal[0].get("id")
-        print(f"Using Temporal provider: {provider_id}")
+    def request_fn(method: str, path: str, body: dict | None = None) -> tuple[int, object]:
+        return _request(method, f"{api_url}{path}", api_key, body)
 
-    payload = {
-        "name": "Probe Targets",
-        "description": (
-            "On-demand synthetic checks (HTTP/TCP/DNS) against a list of targets "
-            "on the keep-synth worker. Pass targets via incident enrichments."
-        ),
-        "workflow_type": "ProbeTargets",
-        "task_queue": "keep-synth",
-        "provider_id": provider_id,
-        "catalog_key": "probe-targets",
-        "input_mapping": {
-            "incident_id": "id",
-            "name": "name",
-            "prober": "enrichments.synth_prober",
-            "targets": "enrichments.synth_targets",
-            "check_key": "enrichments.synth_check_key",
-        },
-        "disabled": False,
-    }
-
-    status, existing = _request("GET", f"{api_url}/temporal-workflows", api_key)
-    if status != 200:
-        print(f"Failed to list catalog ({status}): {existing}", file=sys.stderr)
-        return 1
-    match = None
-    if isinstance(existing, list):
-        match = next(
-            (e for e in existing if e.get("catalog_key") == payload["catalog_key"]),
-            None,
+    try:
+        result = register_probe_targets_catalog(
+            request_fn, provider_id=os.environ.get("TEMPORAL_PROVIDER_ID")
         )
-
-    if match:
-        status, result = _request(
-            "PUT",
-            f"{api_url}/temporal-workflows/{match['id']}",
-            api_key,
-            payload,
-        )
-        action = "updated"
-    else:
-        status, result = _request(
-            "POST", f"{api_url}/temporal-workflows", api_key, payload
-        )
-        action = "created"
-
-    if status not in (200, 201):
-        print(f"Failed to register catalog ({status}): {result}", file=sys.stderr)
+    except RuntimeError as exc:
+        print(str(exc), file=sys.stderr)
         return 1
 
-    print(f"Catalog entry {action}:")
-    print(json.dumps(result, indent=2))
+    print(f"Catalog entry {result['action']}:")
+    print(json.dumps(result.get("entry"), indent=2))
     print(
         "\nStart from an incident Workflows tab. Set enrichments:\n"
         "  synth_prober=http\n"

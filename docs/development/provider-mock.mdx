@@ -99,15 +99,15 @@ Mimir’s default webhook uses `labels.code=DISK_SPACE_LOW` (`examples/workflows
 
 ### NVIDIA GPU / AI datacenter demo
 
-Use the same Grafana mock to exercise Keep HQ against an AI datacenter (DCGM-style NVIDIA H100 alerts):
+Use the VictoriaMetrics mock to exercise Keep HQ against an AI datacenter (DCGM-style NVIDIA H100 alerts via VMAlert):
 
-1. Register Grafana in the mock UI (if not already).
+1. Register VictoriaMetrics in the mock UI (if not already).
 2. Pick a GPU payload from the **NVIDIA GPU / AI datacenter** dropdown, or:
-   - **GPU: rule + temp/mem** — creates rule **NVIDIA GPU cluster incident** and fires `NvidiaGpuHighTemperature` + `NvidiaGpuHighMemoryUtilization`
+   - **GPU: rule + temp/mem** — creates rule **NVIDIA GPU VictoriaMetrics incident** and fires `NvidiaGpuHighTemperature` + `NvidiaGpuHighMemoryUtilization`
    - **GPU: rule + all alerts** — same rule, then fires all eight GPU scenarios (spaced ~4s apart)
-3. Open **Incidents** — look for `GPU` / `NVIDIA_GPU_*` (`gpu-node-a03`).
+3. Open **Incidents** — look for `GPU` / `DCGM_*` (`gpu-node-a03`).
 
-For the full remediation loop (Temporal → mock GPU server → resolve or email), `make start` auto-registers providers, the Temporal catalog entry, and the Keep workflow. See [Demo: NVIDIA GPU → Temporal remediate](/overview/demo-mock-nvidia-gpu-remediate).
+For the full remediation loop (Temporal → mock DCGM diag → reset or isolate → resolve or email), `make start` auto-registers providers, the Temporal catalog entry, and the Keep workflow. See [Demo: NVIDIA GPU → Temporal remediate](/overview/demo-mock-nvidia-gpu-remediate).
 
 Re-run setup only:
 
@@ -115,13 +115,15 @@ Re-run setup only:
 make demo-nvidia-gpu
 ```
 
-Use the mock UI **Service Topology** tab to push the NVIDIA map into Keep, export YAML, or import YAML (import replaces the tenant map). The same tab has **NetBox DCIM**: seed compose NetBox with that inventory, then **Configure Keep with NetBox**. The **NVIDIA GPU server** tab still toggles **Force fail** and shows remediations / emails. The **Synthetic checks** tab fails individual NVIDIA/AMD inference and training canaries (seeded into Keep by `make start`). See [NVIDIA GPU Service Topology](/overview/nvidia-gpu-topology) and [AI DC synthetics](/overview/ai-dc-synthetic-checks).
+Or mock UI → **Setup** → **Demo: NVIDIA GPU remediate**.
+
+Use the mock UI **Service Topology** tab to push the NVIDIA map into Keep, export YAML, or import YAML (import replaces the tenant map). The same tab has **NetBox DCIM**: seed compose NetBox with that inventory, then **Configure Keep with NetBox**. The **NVIDIA GPU server** tab runs mock `dcgmi diag`, cordon/drain lifecycle, toggles **Force fail** (diag ISOLATE), and shows diagnostics / remediations / emails. The **Synthetic checks** tab fails individual NVIDIA/AMD inference and training canaries (seeded into Keep by `make start` or Setup → **AI DC synthetic checks**). See [NVIDIA GPU Service Topology](/overview/nvidia-gpu-topology) and [AI DC synthetics](/overview/ai-dc-synthetic-checks).
 
 Shared labels on every GPU mock alert (values vary by host; demo pair uses `gpu-node-a03`):
 
 | Label | Example |
 | --- | --- |
-| `code` | reserved, e.g. `NVIDIA_GPU_THERMAL` |
+| `code` | reserved, e.g. `DCGM_FI_DEV_GPU_TEMP` |
 | `cluster` | `ai-dc-prod` |
 | `region` | `us-west-2` |
 | `datacenter` | `ai-dc-1` |
@@ -136,17 +138,17 @@ Shared labels on every GPU mock alert (values vary by host; demo pair uses `gpu-
 
 | Scenario id | Alert name | `labels.code` | Severity | DCGM field |
 | --- | --- | --- | --- |
-| `gpu_temp` | `NvidiaGpuHighTemperature` | `NVIDIA_GPU_THERMAL` | critical | `DCGM_FI_DEV_GPU_TEMP` |
-| `gpu_mem` | `NvidiaGpuHighMemoryUtilization` | `NVIDIA_GPU_MEMORY` | warning | `DCGM_FI_DEV_FB_USED` |
-| `gpu_xid` | `NvidiaGpuXidError` | `NVIDIA_GPU_XID` | critical | `DCGM_FI_DEV_XID_ERRORS` |
-| `gpu_ecc` | `NvidiaGpuUncorrectableEcc` | `NVIDIA_GPU_ECC` | critical | `DCGM_FI_DEV_ECC_DBE_VOL_TOTAL` |
-| `gpu_throttle` | `NvidiaGpuThermalThrottle` | `NVIDIA_GPU_THROTTLE` | warning | `DCGM_FI_DEV_CLOCK_THROTTLE_REASONS` |
-| `gpu_nvlink` | `NvidiaNvlinkError` | `NVIDIA_GPU_NVLINK` | critical | `DCGM_FI_DEV_NVLINK_CRC_FLIT_ERROR_COUNT_TOTAL` |
-| `gpu_power` | `NvidiaGpuPowerLimitExceeded` | `NVIDIA_GPU_POWER` | warning | `DCGM_FI_DEV_POWER_USAGE` |
-| `gpu_unavailable` | `NvidiaGpuUnavailable` | `NVIDIA_GPU_UNAVAILABLE` | critical | `DCGM_FI_DEV_HEALTH` |
+| `gpu_temp` | `NvidiaGpuHighTemperature` | `DCGM_FI_DEV_GPU_TEMP` | critical | `DCGM_FI_DEV_GPU_TEMP` |
+| `gpu_mem` | `NvidiaGpuHighMemoryUtilization` | `DCGM_FI_DEV_FB_USED` | warning | `DCGM_FI_DEV_FB_USED` |
+| `gpu_xid` | `NvidiaGpuXidError` | `DCGM_FI_DEV_XID_ERRORS` | critical | `DCGM_FI_DEV_XID_ERRORS` |
+| `gpu_ecc` | `NvidiaGpuUncorrectableEcc` | `DCGM_FI_DEV_ECC_DBE_VOL_TOTAL` | critical | `DCGM_FI_DEV_ECC_DBE_VOL_TOTAL` |
+| `gpu_throttle` | `NvidiaGpuThermalThrottle` | `DCGM_FI_DEV_THERMAL_VIOLATION` | warning | `DCGM_FI_DEV_THERMAL_VIOLATION` |
+| `gpu_nvlink` | `NvidiaNvlinkError` | `DCGM_FI_DEV_NVLINK_CRC_FLIT_ERROR_COUNT_TOTAL` | critical | `DCGM_FI_DEV_NVLINK_CRC_FLIT_ERROR_COUNT_TOTAL` |
+| `gpu_power` | `NvidiaGpuPowerLimitExceeded` | `DCGM_FI_DEV_POWER_USAGE` | warning | `DCGM_FI_DEV_POWER_USAGE` |
+| `gpu_unavailable` | `NvidiaGpuUnavailable` | `DCGM_EXP_GPU_HEALTH_STATUS` | critical | `DCGM_EXP_GPU_HEALTH_STATUS` |
 
 Correlation rule defaults: CEL
-`source == "grafana" && labels.cluster == "ai-dc-prod" && labels.vendor == "nvidia" && labels.code.startsWith("NVIDIA_GPU")`,
+`source == "victoriametrics" && labels.cluster == "ai-dc-prod" && labels.vendor == "nvidia" && labels.code.startsWith("DCGM_")`,
 group by `labels.host`, threshold `2`, incident prefix `GPU`.
 
 ### Temporal tab
@@ -157,9 +159,41 @@ group by `labels.host`, threshold `2`, incident prefix `GPU`.
 4. Click **Register Temporal**.
 5. Confirm **mock-temporal** under Installed Providers in Keep, then use a workflow such as `examples/workflows/incident-to-temporal.yml` (triggers on reserved `incident.code`) or the code-specific mock workflows below.
 
+### Setup tab (catalog / demos)
+
+The **Setup** tab runs the same Keep registration steps as the Makefile targets below — without leaving the browser. Use the Keep API URL / key at the top of the page. Register Temporal first.
+
+| UI action | Makefile equivalent |
+| --- | --- |
+| ListAndZipDirectory catalog | `make register-list-and-zip-catalog` |
+| RemediateNvidiaGpu catalog | `make register-nvidia-gpu-catalog` |
+| ProbeTargets catalog | `make register-probe-targets-catalog` |
+| Payments alert codes | `make register-payments-alert-codes` |
+| NVIDIA GPU alert codes | `make register-nvidia-gpu-alert-codes` |
+| NVIDIA GPU topology | `make register-nvidia-gpu-topology` |
+| AI DC synthetic checks | `make register-ai-dc-synthetic-checks` |
+| Demo: Grafana → ListAndZip | `make demo-list-and-zip` |
+| Demo: NVIDIA GPU remediate | `make demo-nvidia-gpu` |
+
+Workers (`temporal-worker` / `synthetic-checks`) still start via Docker Compose — the Setup tab does not build or restart containers.
+
+API:
+
+```bash
+curl http://localhost:8099/api/setup
+
+curl -X POST http://localhost:8099/api/setup/demo-nvidia-gpu \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "keep_api_url": "http://host.docker.internal:8080",
+    "keep_api_key": "keepappkey",
+    "synth_target_base_url": "http://host.docker.internal:8099"
+  }'
+```
+
 ### Synthetic checks tab
 
-`make start` seeds Keep **Catalog → Synthetic checks** with NVIDIA/AMD inference and training canaries against this mock (`make register-ai-dc-synthetic-checks`). On this tab, toggle **Fail this probe** to make the next `keep-synth` run post a `SYNTH_*` alert. See [AI DC synthetics](/overview/ai-dc-synthetic-checks).
+`make start` seeds Keep **Catalog → Synthetic checks** with NVIDIA/AMD inference and training canaries against this mock (`make register-ai-dc-synthetic-checks`, or Setup tab → **AI DC synthetic checks**). On this tab, toggle **Fail this probe** to make the next `keep-synth` run post a `SYNTH_*` alert. See [AI DC synthetics](/overview/ai-dc-synthetic-checks).
 
 ### Full hybrid demo (Grafana → incident → Temporal)
 
@@ -168,6 +202,8 @@ One-command install after `make start`:
 ```bash
 make demo-list-and-zip
 ```
+
+Or open the mock UI → **Setup** → **Demo: Grafana → ListAndZip**.
 
 Then in the mock UI: Grafana → **Payments: rule + send both**. Open the incident in Keep and check **Timeline** (alerts), **Workflows** (Keep + Temporal), and **Overview** enrichments. See [Demo: Mock Grafana → Temporal ListAndZip](/overview/demo-mock-grafana-list-and-zip).
 
@@ -216,7 +252,7 @@ curl -X POST http://localhost:8099/api/send-event \
 curl -X POST http://localhost:8099/api/preview-payload \
   -H 'Content-Type: application/json' \
   -d '{
-    "provider": "grafana",
+    "provider": "victoriametrics",
     "scenario": "gpu_xid",
     "status": "firing",
     "keep_api_url": "http://host.docker.internal:8080",
@@ -224,7 +260,7 @@ curl -X POST http://localhost:8099/api/preview-payload \
   }'
 
 # Create NVIDIA GPU correlation rule + fire temp/mem (or send_all_gpu: true)
-curl -X POST http://localhost:8099/api/grafana/create-gpu-incident-demo \
+curl -X POST http://localhost:8099/api/victoriametrics/create-gpu-incident-demo \
   -H 'Content-Type: application/json' \
   -d '{
     "keep_api_url": "http://host.docker.internal:8080",

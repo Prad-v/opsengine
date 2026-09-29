@@ -1,0 +1,26 @@
+# Mock VictoriaMetrics webhook (labels.code=HIGH_MEMORY) → console.
+# Same reserved code as Grafana payments payload B; automation joins on code.
+# Fire: Mock UI → VictoriaMetrics → Send event (firing).
+workflow:
+  id: mock-victoriametrics-memory
+  name: Mock VictoriaMetrics memory → console
+  description: >
+    Runs when reserved labels.code is HIGH_MEMORY (VictoriaMetrics mock,
+    or Grafana MockHighMemory) on an alert or a correlated incident.
+  disabled: false
+  triggers:
+    - type: alert
+      cel: has(labels.code) && labels.code == "HIGH_MEMORY" && status == "firing"
+    - type: incident
+      events:
+        - created
+        - updated
+      cel: code == "HIGH_MEMORY" || codes.exists(c, c == "HIGH_MEMORY")
+  actions:
+    - name: log-memory
+      provider:
+        type: console
+        with:
+          message: >
+            HIGH_MEMORY on {{ alert.name or incident.name }}
+            (code={{ alert.labels.code or incident.code }}).

@@ -137,10 +137,10 @@ Dev overlays live in each chart's `values-dev.yaml` and `helm/keep-values-kind.y
 
 After pods are Ready and the host UI is up:
 
-1. Open http://localhost:8099 → **Grafana** → **Register**
+1. Open http://localhost:8099 → **VictoriaMetrics** → **Register**
 2. **Temporal** → **Register Temporal**
 3. Keep → **Service Topology** (region / datacenter / row / rack / GPU; `make k8s-e2e` seeds it)
-4. Grafana → **GPU: rule + temp/mem**
+4. VictoriaMetrics → **GPU: rule + temp/mem**
 5. Confirm on the incident in Keep (http://localhost:3000) and in Temporal UI (`RemediateNvidiaGpu`)
 
 Or run the scripted e2e (no Compose workers):

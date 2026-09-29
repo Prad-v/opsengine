@@ -107,13 +107,13 @@ Then open **Noise Reduction → Service Topology → Pull**, or wait for the pro
 2. Wait until **Refresh NetBox status** succeeds.
 3. Click **Configure Keep with NetBox** (seeds DCIM, installs this provider with `netbox_url=http://localhost:8000` and the compose API token, then pulls).
 
-The seeded inventory matches the mock Grafana labels: `us-west-2` / `ai-dc-1` / `row-a` / `rack-12` / `gpu-node-a03` / `gpu-node-a03-gpu0`. See [Provider mock](/development/provider-mock) and [NVIDIA GPU Service Topology](/overview/nvidia-gpu-topology).
+The seeded inventory matches the mock VictoriaMetrics GPU labels: `us-west-2` / `ai-dc-1` / `row-a` / `rack-12` / `gpu-node-a03` / `gpu-node-a03-gpu0`. See [Provider mock](/development/provider-mock) and [NVIDIA GPU Service Topology](/overview/nvidia-gpu-topology).
 
 Production Keep should point at your existing NetBox; do not run this demo compose file as a production DCIM.
 
 ### Object mapping
 
-Keep topology is a named-node graph. NetBox objects become nodes whose `service` id should match Grafana alert labels (`host`, `rack`, `row`, `datacenter`, `region`, `gpu_id`).
+Keep topology is a named-node graph. NetBox objects become nodes whose `service` id should match VictoriaMetrics / Grafana alert labels (`host`, `rack`, `row`, `datacenter`, `region`, `gpu_id`).
 
 | NetBox | Keep `category` | `service` id | Depends on |
 | --- | --- | --- | --- |

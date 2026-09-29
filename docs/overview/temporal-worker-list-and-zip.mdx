@@ -1,7 +1,7 @@
 ---
 title: "Temporal worker (ops remediations)"
 sidebarTitle: "Temporal worker"
-description: "Local Temporal worker on keep-ops: ListAndZipDirectory and RemediateNvidiaGpu."
+description: "Local Temporal worker on keep-ops: ListAndZipDirectory and RemediateNvidiaGpu (diag → reset/isolate)."
 ---
 
 ## Overview
@@ -15,9 +15,15 @@ The **temporal-worker** service polls Temporal task queue `keep-ops` and runs:
 
 ### `RemediateNvidiaGpu`
 
-1. Activity `remediate_nvidia_gpu` — `POST` provider-mock `/gpu/server/remediate`
-2. On success — `resolve_keep_incident` → Keep `POST /incidents/{id}/status` (`resolved`)
-3. On failure — `send_gpu_failure_email` → provider-mock `/gpu/emails`
+1. **Approval** — auto-required for suite L3+ (`long` / `xlong`); or when `wait_for_approval: true`. Escape hatch: `skip_approval: true`
+2. **Cordon/drain** — for suite L2+ (`POST` provider-mock `/gpu/server/cordon`). Skip with `skip_cordon: true`
+3. Activity `run_dcgm_diag` — mock `POST /gpu/server/diag`, or real `dcgmi diag --json` when `DCGM_DIAG_MODE=real`
+4. On **Fail / ISOLATE** — `send_gpu_failure_email`; leave node cordoned and incident open
+5. On **Pass / RESET** — `remediate_nvidia_gpu` → `/gpu/server/remediate`
+6. Remediation success — `uncordon` (if cordoned) + `resolve_keep_incident`
+7. Remediation failure — `send_gpu_failure_email` (node stays cordoned)
+
+Pass `skip_diag: true` to remediate without diagnostics (legacy path).
 
 | Env | Default | Purpose |
 | --- | --- | --- |
@@ -25,6 +31,10 @@ The **temporal-worker** service polls Temporal task queue `keep-ops` and runs:
 | `KEEP_API_KEY` | `keepappkey` | Admin API key |
 | `GPU_MOCK_URL` | `http://host.docker.internal:8099` | Provider-mock NVIDIA GPU server |
 | `GPU_ALERT_EMAIL_TO` | `ops@ai-dc.local` | Failure email recipient |
+| `DCGM_DIAG_MODE` | `mock` | `mock` or `real` (`dcgmi` on the worker) |
+| `DCGM_DIAG_REQUIRE_REAL` | unset | If `1`, do not fall back to mock when `dcgmi` is missing |
+| `DCGM_DIAG_TIMEOUT_SEC` | `600` | Real `dcgmi` timeout |
+| `DCGM_BIN` | `dcgmi` on PATH | Optional absolute path to `dcgmi` |
 
 ## Start
 

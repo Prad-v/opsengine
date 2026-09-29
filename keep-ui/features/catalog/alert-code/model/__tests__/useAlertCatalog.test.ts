@@ -36,12 +36,12 @@ describe("useAlertCatalog", () => {
     });
 
     const enhanced = await result.current.enhanceDescription({
-      code: "NVIDIA_GPU_THERMAL",
+      code: "DCGM_FI_DEV_GPU_TEMP",
       description: "gpu going high",
     });
 
     expect(mockPost).toHaveBeenCalledWith("/alert-catalog/enhance-description", {
-      code: "NVIDIA_GPU_THERMAL",
+      code: "DCGM_FI_DEV_GPU_TEMP",
       description: "gpu going high",
     });
     expect(enhanced.description).toContain("NVIDIA GPU thermal");

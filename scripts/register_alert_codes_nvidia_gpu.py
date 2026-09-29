@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Register reserved NVIDIA GPU alert codes in Keep's alert catalog.
+"""Register DCGM exporter + diagnostics alert codes in Keep's alert catalog.
 
 Usage:
 
@@ -9,6 +9,7 @@ Env:
   KEEP_API_URL=http://localhost:8080
   KEEP_API_KEY=keepappkey
   KEEP_WORKFLOW_ID=mock-nvidia-gpu-remediate
+  KEEP_AUTO_RUN_ON=both
 """
 
 from __future__ import annotations
@@ -18,49 +19,14 @@ import os
 import sys
 import urllib.error
 import urllib.request
+from pathlib import Path
 
-CODES = (
-    {
-        "code": "NVIDIA_GPU_THERMAL",
-        "name": "NVIDIA GPU thermal",
-        "description": "DCGM GPU temperature exceeded threshold.",
-    },
-    {
-        "code": "NVIDIA_GPU_MEMORY",
-        "name": "NVIDIA GPU memory",
-        "description": "GPU framebuffer utilization near capacity.",
-    },
-    {
-        "code": "NVIDIA_GPU_XID",
-        "name": "NVIDIA GPU XID",
-        "description": "NVIDIA XID error reported by DCGM.",
-    },
-    {
-        "code": "NVIDIA_GPU_ECC",
-        "name": "NVIDIA GPU uncorrectable ECC",
-        "description": "Uncorrectable ECC errors on HBM.",
-    },
-    {
-        "code": "NVIDIA_GPU_THROTTLE",
-        "name": "NVIDIA GPU thermal throttle",
-        "description": "GPU clocks thermally throttled.",
-    },
-    {
-        "code": "NVIDIA_GPU_NVLINK",
-        "name": "NVIDIA NVLink error",
-        "description": "NVLink CRC / flit errors on multi-GPU fabric.",
-    },
-    {
-        "code": "NVIDIA_GPU_POWER",
-        "name": "NVIDIA GPU power limit",
-        "description": "GPU power draw at configured limit.",
-    },
-    {
-        "code": "NVIDIA_GPU_UNAVAILABLE",
-        "name": "NVIDIA GPU unavailable",
-        "description": "GPU not ready — driver lost or device missing.",
-    },
-)
+ROOT = Path(__file__).resolve().parents[1]
+MOCK_APP = ROOT / "backend" / "services" / "provider-mock"
+if str(MOCK_APP) not in sys.path:
+    sys.path.insert(0, str(MOCK_APP))
+
+from app.setup_actions import register_nvidia_gpu_alert_codes  # noqa: E402
 
 
 def _request(method: str, url: str, api_key: str, body: dict | None = None) -> tuple[int, object]:
@@ -87,45 +53,26 @@ def main() -> int:
     api_url = os.environ.get("KEEP_API_URL", "http://localhost:8080").rstrip("/")
     api_key = os.environ.get("KEEP_API_KEY", "keepappkey")
     workflow_id = os.environ.get("KEEP_WORKFLOW_ID", "mock-nvidia-gpu-remediate")
+    demo_auto_run = os.environ.get("KEEP_AUTO_RUN_ON", "both")
 
-    status, listed = _request("GET", f"{api_url}/alert-catalog", api_key)
-    existing = {}
-    if status == 200 and isinstance(listed, list):
-        existing = {item.get("code"): item for item in listed if isinstance(item, dict)}
-    elif status != 200:
-        print(f"Failed to list alert catalog ({status}): {listed}", file=sys.stderr)
+    def request_fn(method: str, path: str, body: dict | None = None) -> tuple[int, object]:
+        return _request(method, f"{api_url}{path}", api_key, body)
+
+    try:
+        result = register_nvidia_gpu_alert_codes(
+            request_fn,
+            workflow_id=workflow_id,
+            auto_run_on=demo_auto_run,
+        )
+    except RuntimeError as exc:
+        print(str(exc), file=sys.stderr)
         return 1
 
-    # Workflow may not exist yet — still register codes without auto-run.
-    wf_status, _ = _request("GET", f"{api_url}/workflows/{workflow_id}", api_key)
-    keep_workflow_id = workflow_id if wf_status == 200 else None
-    auto_run_on = "both" if keep_workflow_id else "none"
-
-    created = 0
-    skipped = 0
-    for item in CODES:
-        if item["code"] in existing:
-            print(f"    exists {item['code']}")
-            skipped += 1
-            continue
-        payload = {
-            **item,
-            "keep_workflow_id": keep_workflow_id,
-            "auto_run_on": auto_run_on,
-            "disabled": False,
-        }
-        code, body = _request("POST", f"{api_url}/alert-catalog", api_key, payload)
-        if code in (200, 201):
-            print(f"    registered {item['code']}")
-            created += 1
-        elif code == 409:
-            print(f"    exists {item['code']}")
-            skipped += 1
-        else:
-            print(f"    failed {item['code']} ({code}): {body}", file=sys.stderr)
-            return 1
-
-    print(f"Alert catalog: created={created} skipped={skipped}")
+    print(
+        f"Alert catalog (DCGM): created={result['created']} "
+        f"updated={result['updated']} skipped={result['skipped']} "
+        f"total={result['total']}"
+    )
     return 0
 
 

@@ -90,7 +90,7 @@ def test_catalog_approval_does_not_enqueue(db_session):
     db_session.add(
         AlertCatalog(
             tenant_id=SINGLE_TENANT_UUID,
-            code="NVIDIA_GPU_THERMAL",
+            code="DCGM_FI_DEV_GPU_TEMP",
             name="NVIDIA GPU thermal",
             keep_workflow_id="mock-nvidia-gpu-remediate",
             auto_run_on="approval",
@@ -104,7 +104,7 @@ def test_catalog_approval_does_not_enqueue(db_session):
         lastReceived=datetime.now(timezone.utc).isoformat(),
         source=["prometheus"],
         fingerprint="fp-gpu-1",
-        labels={"code": "NVIDIA_GPU_THERMAL"},
+        labels={"code": "DCGM_FI_DEV_GPU_TEMP"},
     )
     with patch(
         "keep.workflowmanager.workflowmanager.WorkflowManager.get_instance"

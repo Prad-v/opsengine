@@ -85,7 +85,7 @@ Alerts, incidents, users, and API keys are not gated in this release.
 
 ### Temporal HITL
 
-The Temporal worker activity `request_keep_approval` POSTs `/approvals` with `callback.kind = temporal_signal`. `RemediateNvidiaGpu` waits when `wait_for_approval: true` (default **false**, so the existing GPU demo is unchanged). Approve/reject signals `approve` with `{ approved, decided_by, comment }`.
+The Temporal worker activity `request_keep_approval` POSTs `/approvals` with `callback.kind = temporal_signal`. `RemediateNvidiaGpu` waits when `wait_for_approval: true`, and **automatically** requires approval for DCGM suite L3+ (`long` / `xlong`) unless `skip_approval: true`. The default demo suite is `2` (medium), so the GPU demo still remediates without an inbox stop. Approve/reject signals `approve` with `{ approved, decided_by, comment }`.
 
 ### Keep YAML and external systems
 

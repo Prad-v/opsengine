@@ -119,6 +119,7 @@ help: ## Show available targets
 	@echo "  make synthetic-checks    Build/start Temporal keep-synth worker"
 	@echo "  make register-probe-targets-catalog  Register ProbeTargets in catalog"
 	@echo "  make register-ai-dc-synthetic-checks Seed NVIDIA/AMD inference+training synthetics"
+	@echo "  (Same register/demo actions: mock UI http://localhost:8099 → Setup tab)"
 	@echo ""
 	@echo "Kubernetes (kind + Helm, two namespaces):"
 	@echo "  make k8s-start         Local-dev ns 'keep': backend/worker/mock + host UI"

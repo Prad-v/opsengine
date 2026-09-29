@@ -80,7 +80,7 @@ def test_demo_scripts_seed_nvidia_topology():
     assert "alert.labels.host" in workflow
     assert "alert.labels.gpu" in workflow
     assert "alert.labels.rack" in workflow
-    assert 'labels.code.startsWith("NVIDIA_GPU")' in workflow
+    assert 'labels.code.startsWith("DCGM_")' in workflow
 
 
 def test_nvidia_gpu_docs_cover_netbox_configure():

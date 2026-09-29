@@ -23,8 +23,8 @@ describe("alert sidebar reserved code", () => {
   });
 
   it("reads alert.code then labels.code", () => {
-    expect(getAlertCode(alertWith({ code: "NVIDIA_GPU_UNAVAILABLE" }))).toBe(
-      "NVIDIA_GPU_UNAVAILABLE"
+    expect(getAlertCode(alertWith({ code: "DCGM_EXP_GPU_HEALTH_STATUS" }))).toBe(
+      "DCGM_EXP_GPU_HEALTH_STATUS"
     );
     expect(
       getAlertCode(alertWith({ labels: { code: "HIGH_CPU" } }))

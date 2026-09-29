@@ -14,7 +14,7 @@ Keep reserves **`labels.code`** (mirrored as first-class `alert.code`) as the st
 - Catalog, CEL, and correlation all key off that code
 - A Keep workflow can run for the **alert**, the correlated **incident**, or both
 
-Convention: `UPPER_SNAKE`, source-agnostic, e.g. `NVIDIA_GPU_THERMAL`, `HIGH_CPU`, `HTTP_5XX`.
+Convention: `UPPER_SNAKE`, source-agnostic, e.g. `DCGM_FI_DEV_GPU_TEMP`, `HIGH_CPU`, `HTTP_5XX`.
 
 Keep **does not invent** a code from the title. Sources, mapping/extraction, or the catalog populate it.
 
@@ -36,11 +36,24 @@ Mapping rules that set a top-level `code` column are copied into `labels.code` a
 
 | Field | Purpose |
 | --- | --- |
-| **Code** | Join key (`NVIDIA_GPU_THERMAL`) |
+| **Code** | Join key (`DCGM_FI_DEV_GPU_TEMP`) |
 | **Name / description** | Human catalog text. Use **AI** next to Description to expand your draft with Settings → AI |
+| **Tags** | Multi-value labels for grouping/filtering (e.g. `nvidia`, `dcgm`, `thermal`, `ecc`). Filter chips on the catalog table |
 | **Runbook URL** | Copied onto matching alerts as `playbook_url` |
 | **Keep workflow** | Optional YAML workflow to auto-run |
 | **Auto-run on** | `none` / `alert` / `incident` / `both` / `approval` |
+
+### NVIDIA / DCGM seed
+
+`scripts/register_alert_codes_nvidia_gpu.py` registers:
+
+- Every shipped default, optional, and exporter-owned [DCGM Exporter metric](https://docs.nvidia.com/datacenter/dcgm/latest/reference/dcgm-exporter-metrics.html) (bucket tags `exporter-default` / `exporter-optional` / `exporter-owned`)
+- Active [diagnostic plugins](https://docs.nvidia.com/datacenter/dcgm/latest/reference/diagnostics/plugins/index.html) as `DCGM_DIAG_*` (bucket `diag-plugin`, tag `diag`)
+- Key [diagnostic finding codes](https://docs.nvidia.com/datacenter/dcgm/latest/reference/diagnostics/errors.html) as `DCGM_FR_*` (bucket `diag-error`, tags `isolate` / `reset` / `monitor` / `triage` / `config`)
+
+The **code is the DCGM metric or finding name** (no `NVIDIA_` prefix). Every row includes tag **`nvidia`** plus domain tags (`thermal`, `ecc`, `nvlink`, `diag`, …).
+
+Filter Catalog → Alert codes by tag `nvidia` or `diag` to browse the set. Demo GPU scenarios use exporter metric names as `labels.code`.
 
 When an alert arrives with that code:
 
@@ -65,12 +78,12 @@ Configure the key first under [Settings → AI](/overview/ai-workflow-assistant)
 ```yaml
 triggers:
   - type: alert
-    cel: has(labels.code) && labels.code == "NVIDIA_GPU_THERMAL"
+    cel: has(labels.code) && labels.code == "DCGM_FI_DEV_GPU_TEMP"
   - type: incident
     events:
       - created
       - updated
-    cel: code == "NVIDIA_GPU_THERMAL"
+    cel: code == "DCGM_FI_DEV_GPU_TEMP"
 ```
 
 Incident triggers now accept optional **CEL** against the incident payload (`code`, `codes`, `name`, enrichments).
@@ -83,20 +96,20 @@ code: "{{ alert.labels.code or incident.code }}"
 
 Example: [`examples/workflows/alert-code-console.yml`](https://github.com/keephq/keep/blob/main/examples/workflows/alert-code-console.yml).
 
-The NVIDIA GPU demo uses `labels.code.startsWith("NVIDIA_GPU")` and the payments ListAndZip demo uses `HIGH_CPU` / `HIGH_MEMORY` — neither matches free-form incident names. See [GPU remediate demo](/overview/demo-mock-nvidia-gpu-remediate) and [ListAndZip demo](/overview/demo-mock-grafana-list-and-zip).
+The NVIDIA GPU demo uses `labels.code.startsWith("DCGM_")` and the payments ListAndZip demo uses `HIGH_CPU` / `HIGH_MEMORY` — neither matches free-form incident names. See [GPU remediate demo](/overview/demo-mock-nvidia-gpu-remediate) and [ListAndZip demo](/overview/demo-mock-grafana-list-and-zip).
 
 ## How sources should send `code`
 
-1. **Native label** — add `code=NVIDIA_GPU_THERMAL` on the Grafana / Prometheus / Datadog rule
+1. **Native label** — add `code=DCGM_FI_DEV_GPU_TEMP` on the Grafana / Prometheus / Datadog rule
 2. **Mapping / extraction** — CSV or regex from `name` / `alertname` → `code` when you cannot change the source
-3. **Mocks** — provider-mock always sets `labels.code` (Grafana payments: `HIGH_CPU` / `HIGH_MEMORY`; GPU: `NVIDIA_GPU_*`; Mimir: `DISK_SPACE_LOW`; VictoriaMetrics: `HIGH_MEMORY`; synthetic checks: `SYNTH_*`)
+3. **Mocks** — provider-mock always sets `labels.code` (Grafana payments: `HIGH_CPU` / `HIGH_MEMORY`; VictoriaMetrics GPU: `DCGM_*`; Mimir: `DISK_SPACE_LOW`; VictoriaMetrics default: `HIGH_MEMORY`; synthetic checks: `SYNTH_*`)
 
 ## API
 
 | Method | Path | Purpose |
 | --- | --- | --- |
-| `GET` | `/alert-catalog` | List codes |
-| `POST` | `/alert-catalog` | Register |
+| `GET` | `/alert-catalog` | List codes (optional `?tag=nvidia`) |
+| `POST` | `/alert-catalog` | Register (body may include `tags: string[]`) |
 | `POST` | `/alert-catalog/enhance-description` | Enhance description via Settings → AI |
 | `PUT` | `/alert-catalog/{id}` | Update |
 | `DELETE` | `/alert-catalog/{id}` | Delete |

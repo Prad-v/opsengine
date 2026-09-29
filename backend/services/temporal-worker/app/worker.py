@@ -11,12 +11,15 @@ from temporalio.client import Client
 from temporalio.worker import Worker
 
 from app.activities import (
+    cordon_nvidia_gpu,
     create_zip_from_ls,
     remediate_nvidia_gpu,
     request_keep_approval,
     resolve_keep_incident,
+    run_dcgm_diag,
     run_ls,
     send_gpu_failure_email,
+    uncordon_nvidia_gpu,
 )
 from app.workflows import ListAndZipDirectory, RemediateNvidiaGpu
 
@@ -54,6 +57,9 @@ async def main() -> None:
             run_ls,
             create_zip_from_ls,
             remediate_nvidia_gpu,
+            run_dcgm_diag,
+            cordon_nvidia_gpu,
+            uncordon_nvidia_gpu,
             request_keep_approval,
             resolve_keep_incident,
             send_gpu_failure_email,

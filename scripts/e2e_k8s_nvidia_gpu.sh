@@ -35,8 +35,8 @@ echo "==> Health checks"
 wait_http "${KEEP_API}/healthcheck" "Keep API"
 wait_http "${MOCK_URL}/api/health" "provider-mock"
 
-echo "==> Register Grafana + Temporal (in-cluster Keep URL)"
-for provider in grafana temporal; do
+echo "==> Register VictoriaMetrics + Temporal (in-cluster Keep URL)"
+for provider in victoriametrics temporal; do
   code=$(curl -sS -o /tmp/k8s-reg-${provider}.json -w "%{http_code}" \
     -X POST "${MOCK_URL}/api/register" \
     -H "Content-Type: application/json" \
@@ -81,7 +81,7 @@ curl -sf -X POST "${MOCK_URL}/api/gpu/server/reset" -H "Content-Type: applicatio
 curl -sf -X POST "${MOCK_URL}/api/gpu/server/mode" -H "Content-Type: application/json" -d '{"force_fail": false}' >/dev/null
 
 echo "==> Fire GPU: rule + temp/mem (success path)"
-curl -sf -X POST "${MOCK_URL}/api/grafana/create-gpu-incident-demo" \
+curl -sf -X POST "${MOCK_URL}/api/victoriametrics/create-gpu-incident-demo" \
   -H "Content-Type: application/json" \
   -d "{
     \"keep_api_url\": \"${INCLUSTER_KEEP}\",

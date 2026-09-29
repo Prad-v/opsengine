@@ -62,7 +62,8 @@ DEFAULT_ALERT_CODES: dict[str, str] = {
 }
 
 PAYMENTS_CODES: tuple[str, ...] = ("HIGH_CPU", "HIGH_MEMORY")
-NVIDIA_GPU_CODE_PREFIX = "NVIDIA_GPU"
+# Reserved labels.code for GPU mocks is the DCGM metric / field name (DCGM_*).
+DCGM_CODE_PREFIX = "DCGM_"
 
 
 def _now_iso() -> str:
@@ -232,7 +233,14 @@ def _gpu_scenario(
         )
     }
     extra_labels["dcgm_field"] = dcgm_field
-    extra_labels.update(extra or {})
+    # Catalog join key: DCGM configured name (tag nvidia groups these in the UI).
+    extra_labels["code"] = dcgm_field
+    if extra:
+        # Allow demos to add labels, but never override the DCGM code.
+        for key, value in extra.items():
+            if key == "code":
+                continue
+            extra_labels[key] = value
     return {
         "id": scenario_id,
         "label": label,
@@ -288,8 +296,8 @@ GRAFANA_PAYMENTS_SCENARIOS: dict[str, dict[str, Any]] = {
     },
 }
 
-# NVIDIA GPU / DCGM-style alerts for AI datacenter Keep HQ demos.
-GRAFANA_GPU_SCENARIOS: dict[str, dict[str, Any]] = {
+# NVIDIA GPU / DCGM-style alerts via VictoriaMetrics (VMAlert) for AI DC demos.
+VICTORIAMETRICS_GPU_SCENARIOS: dict[str, dict[str, Any]] = {
     "gpu_temp": _gpu_scenario(
         scenario_id="gpu_temp",
         label="GPU — High temperature",
@@ -297,12 +305,12 @@ GRAFANA_GPU_SCENARIOS: dict[str, dict[str, Any]] = {
         severity="critical",
         summary="GPU temperature above 85°C on H100 (gpu-node-a03 / row-a / rack-12)",
         description=(
-            "DCGM mock: DCGM_FI_DEV_GPU_TEMP exceeded threshold on NVIDIA H100 "
-            "in us-west-2 / ai-dc-1 / row-a / rack-12 / gpu-node-a03-gpu0."
+            "DCGM mock via VMAlert: DCGM_FI_DEV_GPU_TEMP exceeded threshold on "
+            "NVIDIA H100 in us-west-2 / ai-dc-1 / row-a / rack-12 / "
+            "gpu-node-a03-gpu0."
         ),
         dcgm_field="DCGM_FI_DEV_GPU_TEMP",
         value=91.0,
-        extra={"code": "NVIDIA_GPU_THERMAL"},
     ),
     "gpu_mem": _gpu_scenario(
         scenario_id="gpu_mem",
@@ -311,12 +319,11 @@ GRAFANA_GPU_SCENARIOS: dict[str, dict[str, Any]] = {
         severity="warning",
         summary="GPU framebuffer utilization above 95% on H100 (gpu-node-a03)",
         description=(
-            "DCGM mock: DCGM_FI_DEV_FB_USED near capacity for inference workload "
-            "on gpu-node-a03 / row-a / rack-12."
+            "DCGM mock via VMAlert: DCGM_FI_DEV_FB_USED near capacity for "
+            "inference workload on gpu-node-a03 / row-a / rack-12."
         ),
         dcgm_field="DCGM_FI_DEV_FB_USED",
         value=97.2,
-        extra={"code": "NVIDIA_GPU_MEMORY"},
     ),
     "gpu_xid": _gpu_scenario(
         scenario_id="gpu_xid",
@@ -325,12 +332,13 @@ GRAFANA_GPU_SCENARIOS: dict[str, dict[str, Any]] = {
         severity="critical",
         summary="NVIDIA XID error detected on gpu-node-a03-gpu1 (rack-12)",
         description=(
-            "DCGM mock: DCGM_FI_DEV_XID_ERRORS reported on gpu-node-a03 / "
-            "row-a / rack-12 / GPU 1; check nvidia-smi and kernel logs."
+            "DCGM mock via VMAlert: DCGM_FI_DEV_XID_ERRORS reported on "
+            "gpu-node-a03 / row-a / rack-12 / GPU 1; check nvidia-smi and "
+            "kernel logs."
         ),
         dcgm_field="DCGM_FI_DEV_XID_ERRORS",
         value=79.0,
-        extra={"xid_code": "79", "code": "NVIDIA_GPU_XID"},
+        extra={"xid_code": "79"},
     ),
     "gpu_ecc": _gpu_scenario(
         scenario_id="gpu_ecc",
@@ -339,12 +347,11 @@ GRAFANA_GPU_SCENARIOS: dict[str, dict[str, Any]] = {
         severity="critical",
         summary="Uncorrectable ECC errors on H100 HBM (gpu-node-a01 / rack-11)",
         description=(
-            "DCGM mock: DCGM_FI_DEV_ECC_DBE_VOL_TOTAL increased on "
+            "DCGM mock via VMAlert: DCGM_FI_DEV_ECC_DBE_VOL_TOTAL increased on "
             "gpu-node-a01 / row-a / rack-11; schedule GPU quarantine / RMA."
         ),
         dcgm_field="DCGM_FI_DEV_ECC_DBE_VOL_TOTAL",
         value=3.0,
-        extra={"code": "NVIDIA_GPU_ECC"},
     ),
     "gpu_throttle": _gpu_scenario(
         scenario_id="gpu_throttle",
@@ -353,12 +360,12 @@ GRAFANA_GPU_SCENARIOS: dict[str, dict[str, Any]] = {
         severity="warning",
         summary="GPU clocks thermally throttled (gpu-node-a01-gpu1 / row-a)",
         description=(
-            "DCGM mock: DCGM_FI_DEV_CLOCK_THROTTLE_REASONS indicates thermal "
-            "limit on gpu-node-a01 / row-a / rack-11; check cooling / airflow."
+            "DCGM mock via VMAlert: DCGM_FI_DEV_THERMAL_VIOLATION indicates "
+            "thermal limit on gpu-node-a01 / row-a / rack-11; check cooling / "
+            "airflow."
         ),
-        dcgm_field="DCGM_FI_DEV_CLOCK_THROTTLE_REASONS",
+        dcgm_field="DCGM_FI_DEV_THERMAL_VIOLATION",
         value=1.0,
-        extra={"code": "NVIDIA_GPU_THROTTLE"},
     ),
     "gpu_nvlink": _gpu_scenario(
         scenario_id="gpu_nvlink",
@@ -367,12 +374,12 @@ GRAFANA_GPU_SCENARIOS: dict[str, dict[str, Any]] = {
         severity="critical",
         summary="NVLink CRC / flit errors on gpu-node-b01 (row-b / rack-21)",
         description=(
-            "DCGM mock: DCGM_FI_DEV_NVLINK_CRC_FLIT_ERROR_COUNT_TOTAL rising on "
+            "DCGM mock via VMAlert: "
+            "DCGM_FI_DEV_NVLINK_CRC_FLIT_ERROR_COUNT_TOTAL rising on "
             "gpu-node-b01 / row-b / rack-21; inspect NVLink fabric and cables."
         ),
         dcgm_field="DCGM_FI_DEV_NVLINK_CRC_FLIT_ERROR_COUNT_TOTAL",
         value=12.0,
-        extra={"code": "NVIDIA_GPU_NVLINK"},
     ),
     "gpu_power": _gpu_scenario(
         scenario_id="gpu_power",
@@ -381,12 +388,12 @@ GRAFANA_GPU_SCENARIOS: dict[str, dict[str, Any]] = {
         severity="warning",
         summary="GPU power draw near / at power limit (gpu-node-b01-gpu1)",
         description=(
-            "DCGM mock: DCGM_FI_DEV_POWER_USAGE sustained near configured power "
-            "limit on H100 in us-west-2 / ai-dc-1 / row-b / rack-21."
+            "DCGM mock via VMAlert: DCGM_FI_DEV_POWER_USAGE sustained near "
+            "configured power limit on H100 in us-west-2 / ai-dc-1 / row-b / "
+            "rack-21."
         ),
         dcgm_field="DCGM_FI_DEV_POWER_USAGE",
         value=698.0,
-        extra={"code": "NVIDIA_GPU_POWER"},
     ),
     "gpu_unavailable": _gpu_scenario(
         scenario_id="gpu_unavailable",
@@ -395,22 +402,22 @@ GRAFANA_GPU_SCENARIOS: dict[str, dict[str, Any]] = {
         severity="critical",
         summary="GPU not ready — driver lost on gpu-node-a03 / rack-12",
         description=(
-            "Mock node-level alert: nvidia device disappeared or DCGM health "
-            "check failed on gpu-node-a03 / row-a / rack-12 / gpu-node-a03-gpu0."
+            "VMAlert mock node-level alert: nvidia device disappeared or DCGM "
+            "health check failed on gpu-node-a03 / row-a / rack-12 / "
+            "gpu-node-a03-gpu0."
         ),
-        dcgm_field="DCGM_FI_DEV_HEALTH",
-        value=0.0,
-        extra={"health": "fail", "code": "NVIDIA_GPU_UNAVAILABLE"},
+        dcgm_field="DCGM_EXP_GPU_HEALTH_STATUS",
+        value=20.0,
+        extra={"health": "fail"},
     ),
 }
 
 GRAFANA_SCENARIOS: dict[str, dict[str, Any]] = {
     **GRAFANA_PAYMENTS_SCENARIOS,
-    **GRAFANA_GPU_SCENARIOS,
 }
 
 # Default pair fired by the NVIDIA GPU incident demo (threshold=2).
-GRAFANA_GPU_DEMO_SCENARIO_IDS: tuple[str, ...] = ("gpu_temp", "gpu_mem")
+VICTORIAMETRICS_GPU_DEMO_SCENARIO_IDS: tuple[str, ...] = ("gpu_temp", "gpu_mem")
 
 GRAFANA_CORRELATION_RULE: dict[str, Any] = {
     "ruleName": "Grafana mock payments incident",
@@ -440,20 +447,20 @@ GRAFANA_CORRELATION_RULE: dict[str, Any] = {
     "incidentPrefix": "INC",
 }
 
-GRAFANA_GPU_CORRELATION_RULE: dict[str, Any] = {
-    "ruleName": "NVIDIA GPU cluster incident",
+VICTORIAMETRICS_GPU_CORRELATION_RULE: dict[str, Any] = {
+    "ruleName": "NVIDIA GPU VictoriaMetrics incident",
     "groupDescription": (
-        "Correlates NVIDIA / DCGM Grafana mock alerts whose reserved "
-        "labels.code starts with NVIDIA_GPU, grouped by labels.host "
+        "Correlates NVIDIA / DCGM VictoriaMetrics (VMAlert) mock alerts whose "
+        "reserved labels.code starts with DCGM_, grouped by labels.host "
         "(region/row/rack/gpu on labels)."
     ),
     "celQuery": (
-        'source == "grafana" && labels.cluster == "ai-dc-prod" '
-        '&& labels.vendor == "nvidia" && labels.code.startsWith("NVIDIA_GPU")'
+        'source == "victoriametrics" && labels.cluster == "ai-dc-prod" '
+        '&& labels.vendor == "nvidia" && labels.code.startsWith("DCGM_")'
     ),
     "sqlQuery": {
         "sql": "((source = :source_1))",
-        "params": {"source_1": "grafana"},
+        "params": {"source_1": "victoriametrics"},
     },
     "timeframeInSeconds": 86400,
     "timeUnit": "hours",
@@ -482,12 +489,6 @@ def build_grafana_scenario_payload(
             f"Choose one of: {', '.join(GRAFANA_SCENARIOS)}"
         )
     payload = build_grafana_payload(status=status, **scenario["builder_kwargs"])
-    # Optional DCGM-style numeric values for GPU scenarios.
-    values = scenario.get("values")
-    if values:
-        for alert in payload["alerts"]:
-            alert["values"] = values
-            alert["valueString"] = f"[ var='B' value={values.get('B')} ]"
     if run_id:
         # Unique fingerprints per demo run so re-sends create fresh alerts.
         for alert in payload["alerts"]:
@@ -534,31 +535,77 @@ def build_victoriametrics_payload(
     status: str = "firing",
     alertname: str = "MockHighMemory",
     severity: str = "critical",
+    service: str = "payments-api",
+    host: str = "srv-payments-1",
+    cluster: str = "mock-vm",
+    summary: str | None = None,
+    description: str | None = None,
+    extra_labels: dict[str, str] | None = None,
 ) -> dict[str, Any]:
+    labels_extra = {
+        "cluster": cluster,
+        "env": "local",
+        "service": service,
+        "host": host,
+        **(extra_labels or {}),
+    }
+    if "code" not in labels_extra:
+        labels_extra["code"] = DEFAULT_ALERT_CODES.get(alertname) or slugify_alert_code(
+            alertname
+        )
     alert = build_alertmanager_alert(
         alertname=alertname,
         severity=severity,
         status=status,
-        summary=f"VictoriaMetrics mock: {alertname}",
-        description="Simulated VMAlert / VictoriaMetrics webhook.",
-        extra_labels={
-            "cluster": "mock-vm",
-            "env": "local",
-            "code": "HIGH_MEMORY",
-        },
+        summary=summary or f"VictoriaMetrics mock: {alertname}",
+        description=description
+        or "Simulated VMAlert / VictoriaMetrics webhook.",
+        extra_labels=labels_extra,
     )
+    alert["labels"]["service"] = service
+    alert["labels"]["host"] = host
+    alert["labels"]["cluster"] = cluster
+    alert["fingerprint"] = _fingerprint(alert["labels"])
     return {
         "receiver": "keep",
         "status": status,
         "alerts": [alert],
-        "groupLabels": {"alertname": alertname},
+        "groupLabels": {"alertname": alertname, "service": service},
         "commonLabels": alert["labels"],
         "commonAnnotations": alert["annotations"],
         "externalURL": "http://mock-vmalert.local",
         "version": "4",
-        "groupKey": f"vm-{uuid.uuid4().hex[:8]}",
+        "groupKey": f"vm-{alertname}-{service}",
         "truncatedAlerts": 0,
     }
+
+
+def build_victoriametrics_scenario_payload(
+    scenario_id: str,
+    *,
+    status: str = "firing",
+    run_id: str | None = None,
+) -> dict[str, Any]:
+    scenario = VICTORIAMETRICS_GPU_SCENARIOS.get(scenario_id)
+    if not scenario:
+        raise ValueError(
+            f"Unknown VictoriaMetrics scenario '{scenario_id}'. "
+            f"Choose one of: {', '.join(VICTORIAMETRICS_GPU_SCENARIOS)}"
+        )
+    payload = build_victoriametrics_payload(
+        status=status, **scenario["builder_kwargs"]
+    )
+    values = scenario.get("values")
+    if values:
+        for alert in payload["alerts"]:
+            alert["values"] = values
+            alert["valueString"] = f"[ var='B' value={values.get('B')} ]"
+    if run_id:
+        for alert in payload["alerts"]:
+            alert["labels"]["demo_run"] = run_id
+            alert["fingerprint"] = _fingerprint(alert["labels"])
+        payload["commonLabels"]["demo_run"] = run_id
+    return payload
 
 
 def build_payload(

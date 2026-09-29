@@ -1,13 +1,38 @@
 from datetime import datetime, timezone
-from typing import Literal, Optional
+from typing import List, Literal, Optional
 
 from pydantic import BaseModel, Field as PydanticField, validator
-from sqlalchemy import UniqueConstraint
-from sqlmodel import Field, SQLModel
+from sqlalchemy import Column, UniqueConstraint
+from sqlmodel import Field, JSON, SQLModel
 
 from keep.api.utils.alert_code import slugify_alert_code
 
 AlertCatalogAutoRunOn = Literal["none", "alert", "incident", "both", "approval"]
+
+
+def normalize_alert_catalog_tags(value) -> list[str]:
+    """Trim, lowercase, and dedupe catalog tags."""
+    if value is None:
+        return []
+    if isinstance(value, str):
+        value = [part.strip() for part in value.split(",")]
+    if not isinstance(value, (list, tuple)):
+        raise ValueError("tags must be a list of strings")
+    seen: set[str] = set()
+    tags: list[str] = []
+    for item in value:
+        if item is None:
+            continue
+        if not isinstance(item, str):
+            raise ValueError("tags must be a list of strings")
+        tag = item.strip().lower()
+        if not tag or tag in seen:
+            continue
+        if len(tag) > 64:
+            raise ValueError("each tag must be at most 64 characters")
+        seen.add(tag)
+        tags.append(tag)
+    return tags
 
 
 class AlertCatalog(SQLModel, table=True):
@@ -31,6 +56,7 @@ class AlertCatalog(SQLModel, table=True):
     keep_workflow_id: Optional[str] = Field(max_length=255, default=None)
     auto_run_on: str = Field(max_length=32, default="none")
     disabled: bool = Field(default=False)
+    tags: Optional[List[str]] = Field(default=None, sa_column=Column(JSON))
     created_by: Optional[str] = Field(max_length=255, default=None)
     created_at: datetime = Field(
         default_factory=lambda: datetime.now(tz=timezone.utc)
@@ -49,6 +75,7 @@ class AlertCatalogDtoBase(BaseModel):
     keep_workflow_id: Optional[str] = None
     auto_run_on: AlertCatalogAutoRunOn = "none"
     disabled: bool = False
+    tags: List[str] = PydanticField(default_factory=list)
 
     @validator("code", pre=True)
     def normalize_code(cls, value):
@@ -82,6 +109,10 @@ class AlertCatalogDtoBase(BaseModel):
             raise ValueError(f"auto_run_on must be one of {sorted(allowed)}")
         return value
 
+    @validator("tags", pre=True, always=True)
+    def normalize_tags(cls, value):
+        return normalize_alert_catalog_tags(value)
+
 
 class AlertCatalogDtoOut(AlertCatalogDtoBase, extra="ignore"):
     id: int
@@ -89,6 +120,10 @@ class AlertCatalogDtoOut(AlertCatalogDtoBase, extra="ignore"):
     created_at: datetime
     updated_by: Optional[str] = None
     updated_at: datetime
+
+    @validator("tags", pre=True, always=True)
+    def normalize_tags_out(cls, value):
+        return normalize_alert_catalog_tags(value)
 
 
 class AlertCatalogDtoIn(AlertCatalogDtoBase):

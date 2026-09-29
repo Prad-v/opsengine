@@ -1,8 +1,6 @@
 #!/usr/bin/env python3
 """Create Keep Service Topology for the NVIDIA GPU datacenter inventory.
 
-Hierarchy: region → datacenter → row → rack → host → GPU (+ gpu-inference).
-
 Usage:
 
   python scripts/register_nvidia_gpu_topology.py
@@ -26,7 +24,7 @@ MOCK_APP = ROOT / "backend" / "services" / "provider-mock"
 if str(MOCK_APP) not in sys.path:
     sys.path.insert(0, str(MOCK_APP))
 
-from app.gpu_topology import apply_keep_topology  # noqa: E402
+from app.setup_actions import register_nvidia_gpu_topology  # noqa: E402
 
 
 def _request(method: str, url: str, api_key: str, body: dict | None = None) -> tuple[int, object]:
@@ -62,17 +60,16 @@ def main() -> int:
         return _request(method, url, api_key, body)
 
     try:
-        result = apply_keep_topology(request_fn)
+        result = register_nvidia_gpu_topology(request_fn)
     except RuntimeError as exc:
         print(f"Failed to register NVIDIA GPU topology: {exc}", file=sys.stderr)
         return 1
 
-    print(json.dumps(result, indent=2))
-    created = result.get("services_created") or []
+    print(json.dumps(result.get("detail") or result, indent=2))
     print(
-        f"NVIDIA GPU topology: created {len(created)} services, "
-        f"{result.get('dependencies_created', 0)} edges, "
-        f"application_created={result.get('application_created')}"
+        f"NVIDIA GPU topology: created {result['services_created']} services, "
+        f"{result['dependencies_created']} edges, "
+        f"application_created={result['application_created']}"
     )
     return 0
 

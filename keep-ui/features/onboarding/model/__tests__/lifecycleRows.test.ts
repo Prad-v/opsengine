@@ -10,7 +10,7 @@ const catalogEntry = (
   overrides: Partial<AlertCatalogEntry> = {}
 ): AlertCatalogEntry => ({
   id: 1,
-  code: "NVIDIA_GPU_THERMAL",
+  code: "DCGM_FI_DEV_GPU_TEMP",
   name: "NVIDIA GPU thermal",
   auto_run_on: "both",
   keep_workflow_id: "wf-thermal",
@@ -21,8 +21,8 @@ describe("ruleMatchesCode", () => {
   it("matches the quoted reserved code from the wizard CEL", () => {
     expect(
       ruleMatchesCode(
-        'has(labels.code) && labels.code == "NVIDIA_GPU_THERMAL"',
-        "NVIDIA_GPU_THERMAL"
+        'has(labels.code) && labels.code == "DCGM_FI_DEV_GPU_TEMP"',
+        "DCGM_FI_DEV_GPU_TEMP"
       )
     ).toBe(true);
   });
@@ -66,14 +66,14 @@ describe("buildLifecycleRows", () => {
       rules: [
         {
           id: "rule-thermal",
-          name: "NVIDIA_GPU_THERMAL incidents",
-          definition_cel: 'labels.code == "NVIDIA_GPU_THERMAL"',
+          name: "DCGM_FI_DEV_GPU_TEMP incidents",
+          definition_cel: 'labels.code == "DCGM_FI_DEV_GPU_TEMP"',
         },
       ],
       workflows: [
         {
           id: "wf-thermal",
-          name: "Notify on NVIDIA_GPU_THERMAL",
+          name: "Notify on DCGM_FI_DEV_GPU_TEMP",
           workflow_raw: "provider:\n  type: slack\n",
         },
       ],
@@ -84,10 +84,10 @@ describe("buildLifecycleRows", () => {
     });
 
     expect(rows).toHaveLength(2);
-    expect(rows[0].code).toBe("NVIDIA_GPU_THERMAL");
+    expect(rows[0].code).toBe("DCGM_FI_DEV_GPU_TEMP");
     expect(rows[0].paused).toBe(false);
-    expect(rows[0].correlation?.name).toBe("NVIDIA_GPU_THERMAL incidents");
-    expect(rows[0].workflow?.name).toBe("Notify on NVIDIA_GPU_THERMAL");
+    expect(rows[0].correlation?.name).toBe("DCGM_FI_DEV_GPU_TEMP incidents");
+    expect(rows[0].workflow?.name).toBe("Notify on DCGM_FI_DEV_GPU_TEMP");
     expect(rows[0].notification).toBe(true);
     expect(rows[0].isComplete).toBe(true);
 

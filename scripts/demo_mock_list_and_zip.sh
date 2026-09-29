@@ -71,7 +71,7 @@ Demo ready: Mock Grafana → Incident → Temporal ListAndZip
 3) Fire the correlation demo:
      Grafana tab → "Payments: rule + send both"
      (2 alerts, shared service=payments-api → 1 incident)
-     # Or NVIDIA GPU pack: "GPU: rule + temp/mem" / "GPU: rule + all alerts"
+     # NVIDIA GPU pack is under VictoriaMetrics → "GPU: rule + temp/mem"
 
 4) In Keep UI (http://localhost:3000):
      - Incidents → open Payments HIGH_CPU / HIGH_MEMORY / INC-*

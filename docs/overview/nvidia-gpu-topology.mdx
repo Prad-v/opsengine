@@ -1,7 +1,7 @@
 ---
 title: "NVIDIA GPU Service Topology"
 sidebarTitle: "NVIDIA GPU topology"
-description: "Region / datacenter / row / rack / GPU map for the AI datacenter demo, aligned with mock Grafana alerts."
+description: "Region / datacenter / row / rack / GPU map for the AI datacenter demo, aligned with mock VictoriaMetrics alerts."
 ---
 
 Keep Service Topology is a service graph. The NVIDIA GPU demo seeds that graph as a **physical datacenter layout** so alerts light up the path from region down to the GPU.
@@ -33,7 +33,7 @@ YAML import wipes existing topology for the tenant. Prefer the REST seed while i
 
 ## Alert labels (aligned with node `service` names)
 
-Every NVIDIA GPU Grafana mock alert includes:
+Every NVIDIA GPU VictoriaMetrics (VMAlert) mock alert includes:
 
 | Label | Example | Topology node |
 | --- | --- | --- |

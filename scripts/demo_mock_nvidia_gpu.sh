@@ -24,8 +24,8 @@ docker compose -f docker-compose.temporal.yml up -d --build temporal-worker >/de
 echo "==> Ensuring provider-mock is up (NVIDIA GPU server :8099)"
 docker compose -f backend/services/provider-mock/docker-compose.yml up --build -d >/dev/null
 
-echo "==> Registering mock Temporal + Grafana providers (best-effort)"
-for provider in temporal grafana; do
+echo "==> Registering mock Temporal + VictoriaMetrics providers (best-effort)"
+for provider in temporal victoriametrics; do
   curl -sf -X POST "${MOCK_URL}/api/register" \
     -H "Content-Type: application/json" \
     -d "{
@@ -80,8 +80,8 @@ Already included in: make start
      open http://localhost:8099
 
 2) Fire success path:
-     Grafana → "GPU: rule + temp/mem"
-     Keep Incidents → GPU-* / NVIDIA_GPU_*
+     VictoriaMetrics → "GPU: rule + temp/mem"
+     Keep Incidents → GPU-* / DCGM_*
      Temporal remediates mock GPU server → incident status becomes resolved
      Mock UI → NVIDIA GPU server tab → remediations show ok
 
@@ -95,7 +95,7 @@ Already included in: make start
      open http://localhost:8233
      docker logs keep-temporal-worker --tail 80
 
-Optional: Catalog → Alert codes (NVIDIA_GPU_* and SYNTH_*) and
+Optional: Catalog → Alert codes (DCGM_* and SYNTH_*) and
           Catalog → Temporal workflow → Remediate NVIDIA GPU
           Catalog → Synthetic checks (NVIDIA/AMD inference + training pack)
           Keep → Service Topology (region / datacenter / row / rack / GPU)

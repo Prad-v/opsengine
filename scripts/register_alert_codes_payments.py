@@ -18,24 +18,14 @@ import os
 import sys
 import urllib.error
 import urllib.request
+from pathlib import Path
 
-CODES = (
-    {
-        "code": "HIGH_CPU",
-        "name": "High CPU",
-        "description": "Host CPU above threshold on payments-api.",
-    },
-    {
-        "code": "HIGH_MEMORY",
-        "name": "High memory",
-        "description": "Host memory above threshold on payments-api (Grafana or VictoriaMetrics).",
-    },
-    {
-        "code": "DISK_SPACE_LOW",
-        "name": "Disk space low",
-        "description": "Disk space below threshold (Mimir Alertmanager mock).",
-    },
-)
+ROOT = Path(__file__).resolve().parents[1]
+MOCK_APP = ROOT / "backend" / "services" / "provider-mock"
+if str(MOCK_APP) not in sys.path:
+    sys.path.insert(0, str(MOCK_APP))
+
+from app.setup_actions import register_payments_alert_codes  # noqa: E402
 
 
 def _request(method: str, url: str, api_key: str, body: dict | None = None) -> tuple[int, object]:
@@ -63,49 +53,18 @@ def main() -> int:
     api_key = os.environ.get("KEEP_API_KEY", "keepappkey")
     workflow_id = os.environ.get("KEEP_WORKFLOW_ID", "mock-grafana-list-and-zip")
 
-    status, listed = _request("GET", f"{api_url}/alert-catalog", api_key)
-    existing = {}
-    if status == 200 and isinstance(listed, list):
-        existing = {item.get("code"): item for item in listed if isinstance(item, dict)}
-    elif status != 200:
-        print(f"Failed to list alert catalog ({status}): {listed}", file=sys.stderr)
+    def request_fn(method: str, path: str, body: dict | None = None) -> tuple[int, object]:
+        return _request(method, f"{api_url}{path}", api_key, body)
+
+    try:
+        result = register_payments_alert_codes(request_fn, workflow_id=workflow_id)
+    except RuntimeError as exc:
+        print(str(exc), file=sys.stderr)
         return 1
 
-    wf_status, _ = _request("GET", f"{api_url}/workflows/{workflow_id}", api_key)
-    keep_workflow_id = workflow_id if wf_status == 200 else None
-
-    created = 0
-    skipped = 0
-    for item in CODES:
-        if item["code"] in existing:
-            print(f"    exists {item['code']}")
-            skipped += 1
-            continue
-        auto_run_on = "incident" if keep_workflow_id and item["code"] != "DISK_SPACE_LOW" else "none"
-        linked = keep_workflow_id if auto_run_on != "none" else None
-        if item["code"] == "DISK_SPACE_LOW":
-            disk_status, _ = _request("GET", f"{api_url}/workflows/mock-mimir-disk", api_key)
-            if disk_status == 200:
-                linked = "mock-mimir-disk"
-                auto_run_on = "both"
-        payload = {
-            **item,
-            "keep_workflow_id": linked,
-            "auto_run_on": auto_run_on,
-            "disabled": False,
-        }
-        code, body = _request("POST", f"{api_url}/alert-catalog", api_key, payload)
-        if code in (200, 201):
-            print(f"    registered {item['code']}")
-            created += 1
-        elif code == 409:
-            print(f"    exists {item['code']}")
-            skipped += 1
-        else:
-            print(f"    failed {item['code']} ({code}): {body}", file=sys.stderr)
-            return 1
-
-    print(f"Alert catalog: created={created} skipped={skipped}")
+    print(
+        f"Alert catalog: created={result['created']} skipped={result['skipped']}"
+    )
     return 0
 
 

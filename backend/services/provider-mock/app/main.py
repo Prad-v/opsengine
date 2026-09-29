@@ -49,16 +49,18 @@ from app.netbox_dcim import (
 )
 from app.payloads import (
     GRAFANA_CORRELATION_RULE,
-    GRAFANA_GPU_CORRELATION_RULE,
-    GRAFANA_GPU_DEMO_SCENARIO_IDS,
-    GRAFANA_GPU_SCENARIOS,
     GRAFANA_PAYMENTS_SCENARIOS,
     GRAFANA_SCENARIOS,
     PROVIDER_CATALOG,
     ProviderKey,
+    VICTORIAMETRICS_GPU_CORRELATION_RULE,
+    VICTORIAMETRICS_GPU_DEMO_SCENARIO_IDS,
+    VICTORIAMETRICS_GPU_SCENARIOS,
     build_grafana_scenario_payload,
     build_payload,
+    build_victoriametrics_scenario_payload,
 )
+from app.setup_actions import list_setup_actions, run_setup_action
 
 STATIC_DIR = Path(__file__).parent / "static"
 DEFAULT_KEEP_API_URL = os.environ.get("KEEP_API_URL", "http://host.docker.internal:8080")
@@ -91,12 +93,13 @@ app = FastAPI(
     title="Keep Provider Mock",
     description=(
         "Mock Grafana / Mimir Alertmanager / VictoriaMetrics webhooks "
-        "(including NVIDIA GPU / AI datacenter scenarios), "
+        "(Grafana payments + VictoriaMetrics NVIDIA GPU / AI datacenter scenarios), "
         "plus Temporal provider registration against local Docker Compose Temporal, "
         "NVIDIA GPU Service Topology import/export, NetBox DCIM seed/configure, "
-        "and AI-datacenter synthetic probe endpoints (NVIDIA/AMD inference + training)"
+        "AI-datacenter synthetic probe endpoints (NVIDIA/AMD inference + training), "
+        "and one-click Keep catalog/demo setup (Makefile register-* / demo-* targets)"
     ),
-    version="1.5.0",
+    version="1.6.0",
 )
 
 
@@ -126,7 +129,15 @@ class SendEventRequest(KeepConnection):
 
 
 class GrafanaIncidentDemoRequest(KeepConnection):
-    """Create correlation rule (if missing) and send Grafana mock payloads."""
+    """Create correlation rule (if missing) and send Grafana payments mock payloads."""
+
+    provider_id: str | None = None
+    create_rule: bool = True
+    status: Literal["firing", "resolved"] = "firing"
+
+
+class VictoriaMetricsGpuIncidentDemoRequest(KeepConnection):
+    """Create GPU correlation rule (if missing) and send VMAlert NVIDIA GPU payloads."""
 
     provider_id: str | None = None
     create_rule: bool = True
@@ -143,8 +154,33 @@ class GpuRemediateRequest(BaseModel):
     host: str | None = None
 
 
+class GpuDiagRequest(BaseModel):
+    """Mock ``dcgmi diag --run`` request (suite level or named plugins)."""
+
+    suite: str | None = None
+    run: str | None = None
+    gpu_index: int = 0
+    incident_id: str | None = None
+    alertname: str | None = None
+    alert_code: str | None = None
+    host: str | None = None
+
+
 class GpuModeRequest(BaseModel):
     force_fail: bool = False
+
+
+class GpuCordonRequest(BaseModel):
+    host: str | None = None
+    drain: bool = True
+    incident_id: str | None = None
+    reason: str | None = None
+
+
+class GpuUncordonRequest(BaseModel):
+    host: str | None = None
+    incident_id: str | None = None
+    reason: str | None = None
 
 
 class SynthFailRequest(BaseModel):
@@ -180,6 +216,13 @@ class NetBoxConfigureKeepRequest(KeepConnection, NetBoxSeedRequest):
     seed: bool = True
     pull: bool = True
     pulling_enabled: bool = True
+
+
+class SetupActionRequest(KeepConnection):
+    """Run a Makefile-equivalent Keep setup action from the mock UI."""
+
+    temporal_provider_id: str | None = None
+    synth_target_base_url: str | None = None
 
 
 def _log(entry: dict[str, Any]) -> None:
@@ -466,6 +509,79 @@ async def remediate_gpu(body: GpuRemediateRequest) -> dict[str, Any]:
     )
     if not result.get("ok"):
         raise HTTPException(status_code=503, detail=result)
+    return result
+
+
+@app.post("/gpu/server/diag")
+@app.post("/api/gpu/server/diag")
+async def diag_gpu(body: GpuDiagRequest) -> dict[str, Any]:
+    """
+    Mock NVIDIA ``dcgmi diag`` against an inventory GPU.
+
+    Always returns 200 with structured Pass/Fail + recommendation
+    (RESET vs ISOLATE) so Temporal can branch without treating Fail as
+    transport error. Force-fail mode on the GPU server yields Fail/ISOLATE.
+    """
+    result = gpu_server.diag(
+        suite=body.suite,
+        run=body.run,
+        gpu_index=body.gpu_index,
+        incident_id=body.incident_id,
+        alertname=body.alertname,
+        alert_code=body.alert_code,
+        host=body.host,
+    )
+    _log(
+        {
+            "action": "gpu-diag",
+            "ok": result.get("ok"),
+            "result": result.get("result"),
+            "recommendation": result.get("recommendation"),
+            "suite": result.get("suite"),
+            "incident_id": body.incident_id,
+            "error_code": result.get("error_code"),
+        }
+    )
+    return result
+
+
+@app.post("/gpu/server/cordon")
+@app.post("/api/gpu/server/cordon")
+async def cordon_gpu(body: GpuCordonRequest) -> dict[str, Any]:
+    result = gpu_server.cordon(
+        host=body.host,
+        drain=body.drain,
+        incident_id=body.incident_id,
+        reason=body.reason,
+    )
+    _log(
+        {
+            "action": "gpu-cordon",
+            "ok": True,
+            "host": result.get("host"),
+            "drained": result.get("drained"),
+            "incident_id": body.incident_id,
+        }
+    )
+    return result
+
+
+@app.post("/gpu/server/uncordon")
+@app.post("/api/gpu/server/uncordon")
+async def uncordon_gpu(body: GpuUncordonRequest) -> dict[str, Any]:
+    result = gpu_server.uncordon(
+        host=body.host,
+        incident_id=body.incident_id,
+        reason=body.reason,
+    )
+    _log(
+        {
+            "action": "gpu-uncordon",
+            "ok": True,
+            "host": result.get("host"),
+            "incident_id": body.incident_id,
+        }
+    )
     return result
 
 
@@ -919,12 +1035,6 @@ async def grafana_scenarios() -> dict[str, Any]:
                     "cluster": kwargs["cluster"],
                     "host": kwargs["host"],
                     "code": payload["alerts"][0]["labels"].get("code"),
-                    "region": payload["alerts"][0]["labels"].get("region"),
-                    "datacenter": payload["alerts"][0]["labels"].get("datacenter"),
-                    "row": payload["alerts"][0]["labels"].get("row"),
-                    "rack": payload["alerts"][0]["labels"].get("rack"),
-                    "gpu": payload["alerts"][0]["labels"].get("gpu"),
-                    "gpu_id": payload["alerts"][0]["labels"].get("gpu_id"),
                 },
                 "payload": payload,
             }
@@ -937,21 +1047,57 @@ async def grafana_scenarios() -> dict[str, Any]:
                 "correlation_rule": GRAFANA_CORRELATION_RULE,
                 "demo_scenario_ids": ["cpu", "memory"],
             },
-            "nvidia-gpu": {
-                "scenario_ids": list(GRAFANA_GPU_SCENARIOS),
-                "correlation_rule": GRAFANA_GPU_CORRELATION_RULE,
-                "demo_scenario_ids": list(GRAFANA_GPU_DEMO_SCENARIO_IDS),
-            },
         },
         "correlation_rule": GRAFANA_CORRELATION_RULE,
-        "gpu_correlation_rule": GRAFANA_GPU_CORRELATION_RULE,
         "ui_hint": {
             "source_filter_value": "grafana",
             "group_by": "labels.service",
             "threshold": 2,
             "cel": GRAFANA_CORRELATION_RULE["celQuery"],
+        },
+    }
+
+
+@app.get("/api/victoriametrics/scenarios")
+async def victoriametrics_scenarios() -> dict[str, Any]:
+    scenarios = []
+    for item in VICTORIAMETRICS_GPU_SCENARIOS.values():
+        payload = build_victoriametrics_scenario_payload(item["id"], status="firing")
+        kwargs = item["builder_kwargs"]
+        labels = payload["alerts"][0]["labels"]
+        scenarios.append(
+            {
+                **{k: item[k] for k in ("id", "label", "description", "pack") if k in item},
+                "shared_labels": {
+                    "service": kwargs["service"],
+                    "cluster": kwargs["cluster"],
+                    "host": kwargs["host"],
+                    "code": labels.get("code"),
+                    "region": labels.get("region"),
+                    "datacenter": labels.get("datacenter"),
+                    "row": labels.get("row"),
+                    "rack": labels.get("rack"),
+                    "gpu": labels.get("gpu"),
+                    "gpu_id": labels.get("gpu_id"),
+                },
+                "payload": payload,
+            }
+        )
+    return {
+        "scenarios": scenarios,
+        "packs": {
+            "nvidia-gpu": {
+                "scenario_ids": list(VICTORIAMETRICS_GPU_SCENARIOS),
+                "correlation_rule": VICTORIAMETRICS_GPU_CORRELATION_RULE,
+                "demo_scenario_ids": list(VICTORIAMETRICS_GPU_DEMO_SCENARIO_IDS),
+            },
+        },
+        "gpu_correlation_rule": VICTORIAMETRICS_GPU_CORRELATION_RULE,
+        "ui_hint": {
+            "source_filter_value": "victoriametrics",
             "gpu_group_by": "labels.host",
-            "gpu_cel": GRAFANA_GPU_CORRELATION_RULE["celQuery"],
+            "threshold": 2,
+            "gpu_cel": VICTORIAMETRICS_GPU_CORRELATION_RULE["celQuery"],
         },
     }
 
@@ -961,6 +1107,7 @@ async def _ensure_correlation_rule(
     keep_base: str,
     headers: dict[str, str],
     rule: dict[str, Any],
+    provider: str = "grafana",
 ) -> dict[str, Any]:
     try:
         async with httpx.AsyncClient(timeout=30.0) as client:
@@ -994,7 +1141,7 @@ async def _ensure_correlation_rule(
             _log(
                 {
                     "action": "create-rule",
-                    "provider": "grafana",
+                    "provider": provider,
                     "ok": True,
                     "rule": rule["ruleName"],
                 }
@@ -1075,6 +1222,73 @@ async def _send_grafana_scenarios(
     return send_results
 
 
+async def _send_victoriametrics_scenarios(
+    *,
+    keep_base: str,
+    headers: dict[str, str],
+    provider_id: str | None,
+    scenario_ids: tuple[str, ...] | list[str],
+    status: str,
+    run_id: str,
+) -> list[dict[str, Any]]:
+    import asyncio
+
+    send_results = []
+    for idx, scenario_id in enumerate(scenario_ids):
+        if idx > 0:
+            await asyncio.sleep(4)
+        payload = build_victoriametrics_scenario_payload(
+            scenario_id, status=status, run_id=run_id
+        )
+        path = "alerts/event/victoriametrics"
+        query = f"?provider_id={provider_id}" if provider_id else ""
+        url = urljoin(keep_base + "/", path) + query
+        try:
+            async with httpx.AsyncClient(timeout=30.0) as client:
+                resp = await client.post(url, headers=headers, json=payload)
+        except httpx.HTTPError as exc:
+            _log(
+                {
+                    "action": "send-event",
+                    "provider": "victoriametrics",
+                    "ok": False,
+                    "error": str(exc),
+                    "scenario": scenario_id,
+                }
+            )
+            raise HTTPException(
+                status_code=502, detail=f"Failed to send {scenario_id} event: {exc}"
+            ) from exc
+        try:
+            response_body: Any = resp.json()
+        except Exception:
+            response_body = resp.text
+        ok = resp.status_code < 400
+        _log(
+            {
+                "action": "send-event",
+                "provider": "victoriametrics",
+                "ok": ok,
+                "status_code": resp.status_code,
+                "scenario": scenario_id,
+                "payload_alertname": payload["alerts"][0]["labels"]["alertname"],
+                "provider_id": provider_id,
+                "run_id": run_id,
+            }
+        )
+        if not ok:
+            raise HTTPException(status_code=resp.status_code, detail=response_body)
+        send_results.append(
+            {
+                "scenario": scenario_id,
+                "status_code": resp.status_code,
+                "response": response_body,
+                "alertname": payload["alerts"][0]["labels"]["alertname"],
+            }
+        )
+    return send_results
+
+
 @app.post("/api/grafana/create-incident-demo")
 async def grafana_create_incident_demo(
     body: GrafanaIncidentDemoRequest,
@@ -1092,6 +1306,7 @@ async def grafana_create_incident_demo(
             keep_base=keep_base,
             headers=headers,
             rule=GRAFANA_CORRELATION_RULE,
+            provider="grafana",
         )
 
     provider_id = body.provider_id or (_registry.get("grafana") or {}).get(
@@ -1119,11 +1334,11 @@ async def grafana_create_incident_demo(
     }
 
 
-@app.post("/api/grafana/create-gpu-incident-demo")
-async def grafana_create_gpu_incident_demo(
-    body: GrafanaIncidentDemoRequest,
+@app.post("/api/victoriametrics/create-gpu-incident-demo")
+async def victoriametrics_create_gpu_incident_demo(
+    body: VictoriaMetricsGpuIncidentDemoRequest,
 ) -> dict[str, Any]:
-    """Ensure the NVIDIA GPU correlation rule exists, then fire GPU mock alerts."""
+    """Ensure the NVIDIA GPU correlation rule exists, then fire VMAlert GPU alerts."""
     import uuid as uuid_mod
 
     keep_base = str(body.keep_api_url).rstrip("/")
@@ -1135,18 +1350,19 @@ async def grafana_create_gpu_incident_demo(
         rule_result = await _ensure_correlation_rule(
             keep_base=keep_base,
             headers=headers,
-            rule=GRAFANA_GPU_CORRELATION_RULE,
+            rule=VICTORIAMETRICS_GPU_CORRELATION_RULE,
+            provider="victoriametrics",
         )
 
-    provider_id = body.provider_id or (_registry.get("grafana") or {}).get(
+    provider_id = body.provider_id or (_registry.get("victoriametrics") or {}).get(
         "keep_provider_id"
     )
     scenario_ids: list[str] = (
-        list(GRAFANA_GPU_SCENARIOS)
+        list(VICTORIAMETRICS_GPU_SCENARIOS)
         if body.send_all_gpu
-        else list(GRAFANA_GPU_DEMO_SCENARIO_IDS)
+        else list(VICTORIAMETRICS_GPU_DEMO_SCENARIO_IDS)
     )
-    send_results = await _send_grafana_scenarios(
+    send_results = await _send_victoriametrics_scenarios(
         keep_base=keep_base,
         headers=headers,
         provider_id=provider_id,
@@ -1163,8 +1379,9 @@ async def grafana_create_gpu_incident_demo(
         "events": send_results,
         "next_steps": (
             "Open Keep → Incidents. After alerts are processed, look for "
-            f"'{GRAFANA_GPU_CORRELATION_RULE['incidentPrefix']}' / NVIDIA_GPU_* "
-            "(threshold=2, group by labels.host, labels.code starts with NVIDIA_GPU)."
+            f"'{VICTORIAMETRICS_GPU_CORRELATION_RULE['incidentPrefix']}' / DCGM_* "
+            "(threshold=2, group by labels.host, labels.code starts with DCGM_, "
+            "source=victoriametrics)."
         ),
     }
 
@@ -1306,6 +1523,10 @@ async def send_event(body: SendEventRequest) -> dict[str, Any]:
         payload = body.payload
     elif body.provider == "grafana" and body.scenario:
         payload = build_grafana_scenario_payload(body.scenario, status=body.status)
+    elif body.provider == "victoriametrics" and body.scenario:
+        payload = build_victoriametrics_scenario_payload(
+            body.scenario, status=body.status
+        )
     else:
         payload = build_payload(
             body.provider,
@@ -1394,6 +1615,10 @@ async def preview_payload(body: SendEventRequest) -> dict[str, Any]:
         payload = body.payload
     elif body.provider == "grafana" and body.scenario:
         payload = build_grafana_scenario_payload(body.scenario, status=body.status)
+    elif body.provider == "victoriametrics" and body.scenario:
+        payload = build_victoriametrics_scenario_payload(
+            body.scenario, status=body.status
+        )
     else:
         payload = build_payload(
             body.provider,
@@ -1406,6 +1631,87 @@ async def preview_payload(body: SendEventRequest) -> dict[str, Any]:
         "payload": payload,
         "scenario": body.scenario,
     }
+
+
+# ---------------------------------------------------------------------------
+# Keep catalog / demo setup (mirrors make register-* / demo-*)
+# ---------------------------------------------------------------------------
+
+
+def _setup_request_fn(keep_base: str, api_key: str):
+    def request_fn(
+        method: str, path: str, body: dict[str, Any] | None = None
+    ) -> tuple[int, Any]:
+        return _keep_call(
+            keep_base=keep_base,
+            api_key=api_key,
+            method=method,
+            path=path,
+            json_body=body,
+        )
+
+    return request_fn
+
+
+def _setup_upload_fn(keep_base: str, api_key: str):
+    def upload_fn(
+        path: str, filename: str, content: bytes, content_type: str
+    ) -> tuple[int, Any]:
+        return _keep_call(
+            keep_base=keep_base,
+            api_key=api_key,
+            method="POST",
+            path=path,
+            files={
+                "file": (filename, content, content_type),
+            },
+        )
+
+    return upload_fn
+
+
+@app.get("/api/setup")
+async def get_setup_actions() -> dict[str, Any]:
+    """List Makefile-equivalent Keep setup actions available from this mock."""
+    return {"actions": list_setup_actions()}
+
+
+@app.post("/api/setup/{action_id}")
+async def run_setup(action_id: str, body: SetupActionRequest) -> dict[str, Any]:
+    """Run a Keep catalog / alert-code / topology / demo setup action."""
+    known = {item["id"] for item in list_setup_actions()}
+    if action_id not in known:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Unknown setup action '{action_id}'. Known: {sorted(known)}",
+        )
+
+    keep_base = str(body.keep_api_url).rstrip("/")
+    request_fn = _setup_request_fn(keep_base, body.keep_api_key)
+    upload_fn = _setup_upload_fn(keep_base, body.keep_api_key)
+    try:
+        result = run_setup_action(
+            action_id,
+            request_fn,
+            upload_fn,
+            provider_id=body.temporal_provider_id,
+            target_base_url=body.synth_target_base_url,
+        )
+    except RuntimeError as exc:
+        _log(
+            {
+                "action": "setup",
+                "setup_action": action_id,
+                "ok": False,
+                "error": str(exc),
+            }
+        )
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+    _log({"action": "setup", "setup_action": action_id, "ok": True})
+    return {"ok": True, "action": action_id, "result": result}
 
 
 # ---------------------------------------------------------------------------

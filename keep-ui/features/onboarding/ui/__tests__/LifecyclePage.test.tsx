@@ -55,7 +55,7 @@ jest.mock("@/shared/ui", () => ({
 
 const catalogEntry = {
   id: 1,
-  code: "NVIDIA_GPU_THERMAL",
+  code: "DCGM_FI_DEV_GPU_TEMP",
   name: "NVIDIA GPU thermal",
   description: "GPU temperature exceeded threshold",
   keep_workflow_id: "wf-thermal",
@@ -73,14 +73,14 @@ function mockProgress(overrides: Record<string, unknown> = {}) {
     rules: [
       {
         id: "rule-thermal",
-        name: "NVIDIA_GPU_THERMAL incidents",
-        definition_cel: 'labels.code == "NVIDIA_GPU_THERMAL"',
+        name: "DCGM_FI_DEV_GPU_TEMP incidents",
+        definition_cel: 'labels.code == "DCGM_FI_DEV_GPU_TEMP"',
       },
     ],
     workflows: [
       {
         id: "wf-thermal",
-        name: "Notify on NVIDIA_GPU_THERMAL",
+        name: "Notify on DCGM_FI_DEV_GPU_TEMP",
         workflow_raw: "provider:\n  type: slack\n",
       },
     ],
@@ -136,14 +136,14 @@ describe("LifecyclePage", () => {
     render(<LifecyclePage />);
 
     expect(screen.getByTestId("lifecycle-table")).toBeInTheDocument();
-    expect(screen.getByText("NVIDIA_GPU_THERMAL")).toBeInTheDocument();
+    expect(screen.getByText("DCGM_FI_DEV_GPU_TEMP")).toBeInTheDocument();
     expect(screen.getByText("NVIDIA GPU thermal")).toBeInTheDocument();
     expect(screen.getByText("Active")).toBeInTheDocument();
-    expect(screen.getByLabelText("View NVIDIA_GPU_THERMAL")).toBeInTheDocument();
-    expect(screen.getByLabelText("Edit NVIDIA_GPU_THERMAL")).toBeInTheDocument();
-    expect(screen.getByLabelText("Pause NVIDIA_GPU_THERMAL")).toBeInTheDocument();
+    expect(screen.getByLabelText("View DCGM_FI_DEV_GPU_TEMP")).toBeInTheDocument();
+    expect(screen.getByLabelText("Edit DCGM_FI_DEV_GPU_TEMP")).toBeInTheDocument();
+    expect(screen.getByLabelText("Pause DCGM_FI_DEV_GPU_TEMP")).toBeInTheDocument();
     expect(
-      screen.getByLabelText("Delete NVIDIA_GPU_THERMAL")
+      screen.getByLabelText("Delete DCGM_FI_DEV_GPU_TEMP")
     ).toBeInTheDocument();
   });
 
@@ -164,14 +164,14 @@ describe("LifecyclePage", () => {
     mockProgress({ editLifecycle });
     render(<LifecyclePage />);
 
-    fireEvent.click(screen.getByLabelText("Edit NVIDIA_GPU_THERMAL"));
-    expect(editLifecycle).toHaveBeenCalledWith("NVIDIA_GPU_THERMAL");
+    fireEvent.click(screen.getByLabelText("Edit DCGM_FI_DEV_GPU_TEMP"));
+    expect(editLifecycle).toHaveBeenCalledWith("DCGM_FI_DEV_GPU_TEMP");
     expect(screen.getByTestId("onboarding-wizard")).toBeInTheDocument();
   });
 
   it("opens the view drawer from View", () => {
     render(<LifecyclePage />);
-    fireEvent.click(screen.getByLabelText("View NVIDIA_GPU_THERMAL"));
+    fireEvent.click(screen.getByLabelText("View DCGM_FI_DEV_GPU_TEMP"));
     expect(screen.getByTestId("lifecycle-view")).toHaveTextContent(
       "NVIDIA GPU thermal"
     );
@@ -186,13 +186,13 @@ describe("LifecyclePage", () => {
 
   it("pauses a lifecycle by disabling the catalog entry", async () => {
     render(<LifecyclePage />);
-    fireEvent.click(screen.getByLabelText("Pause NVIDIA_GPU_THERMAL"));
+    fireEvent.click(screen.getByLabelText("Pause DCGM_FI_DEV_GPU_TEMP"));
 
     await waitFor(() => {
       expect(updateEntry).toHaveBeenCalledWith(
         1,
         expect.objectContaining({
-          code: "NVIDIA_GPU_THERMAL",
+          code: "DCGM_FI_DEV_GPU_TEMP",
           disabled: true,
         })
       );
@@ -202,7 +202,7 @@ describe("LifecyclePage", () => {
   it("deletes the catalog entry and matching correlation rule", async () => {
     window.confirm = jest.fn(() => true);
     render(<LifecyclePage />);
-    fireEvent.click(screen.getByLabelText("Delete NVIDIA_GPU_THERMAL"));
+    fireEvent.click(screen.getByLabelText("Delete DCGM_FI_DEV_GPU_TEMP"));
 
     await waitFor(() => {
       expect(deleteEntry).toHaveBeenCalledWith(1);

@@ -20,17 +20,18 @@ export const ALERT_CODE_PACKS: AlertCodePack[] = [
   },
   {
     id: "nvidia-gpu",
-    title: "NVIDIA GPU (thermal / memory)",
-    description: "Reserved DCGM-style codes used by the GPU remediate demo.",
+    title: "NVIDIA GPU / DCGM (temperature / memory)",
+    description:
+      "DCGM exporter codes used by the VictoriaMetrics GPU remediate demo. Tag: nvidia.",
     entries: [
       {
-        code: "NVIDIA_GPU_THERMAL",
-        name: "NVIDIA GPU thermal",
+        code: "DCGM_FI_DEV_GPU_TEMP",
+        name: "DCGM GPU temperature",
         description: "DCGM GPU temperature exceeded threshold.",
       },
       {
-        code: "NVIDIA_GPU_MEMORY",
-        name: "NVIDIA GPU memory",
+        code: "DCGM_FI_DEV_FB_USED",
+        name: "DCGM framebuffer used",
         description: "GPU framebuffer utilization near capacity.",
       },
     ],

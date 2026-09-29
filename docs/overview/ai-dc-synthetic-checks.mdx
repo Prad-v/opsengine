@@ -6,9 +6,11 @@ description: "NVIDIA and AMD inference/training canaries seeded into Catalog →
 
 ## Why synthetics next to DCGM
 
-[NVIDIA GPU Grafana alerts](/overview/demo-mock-nvidia-gpu-remediate) tell you the **hardware** is sick (temp, XID, ECC, NVLink CRC). Synthetic checks tell you the **path still works** for users and jobs: gateway ready, golden prompt, NCCL/RCCL fabric, scheduler submit, checkpoint I/O.
+[NVIDIA GPU VictoriaMetrics alerts](/overview/demo-mock-nvidia-gpu-remediate) tell you the **hardware** is sick (temp, XID, ECC, NVLink CRC). Synthetic checks tell you the **path still works** for users and jobs: gateway ready, golden prompt, NCCL/RCCL fabric, scheduler submit, checkpoint I/O.
 
-Keep still only runs **http / tcp / dns** probers. The AI datacenter pack is a set of HTTP (and one TCP) checks against [provider-mock](/development/provider-mock) endpoints that stand in for DCGM, NVML, ROCm, Triton/vLLM, NCCL/RCCL, and the training scheduler. No GPUs required locally.
+**Active DCGM diagnostics** (`dcgmi diag` / mock `POST /gpu/server/diag`) sit between those layers: they confirm and classify defects (Pass → RESET, Fail → ISOLATE) before Temporal remediates. That host-side path is separate from the `nvidia-dcgm` synthetic probe, which only scrapes Prometheus-style exporter text.
+
+Keep still only runs **http / tcp / dns** probers. The AI datacenter pack is a set of HTTP (and one TCP) checks against [provider-mock](/development/provider-mock) endpoints that stand in for DCGM exporter scrapes, NVML, ROCm, Triton/vLLM, NCCL/RCCL, and the training scheduler. No GPUs required locally.
 
 ## Seed the pack
 

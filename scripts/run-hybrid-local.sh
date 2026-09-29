@@ -111,9 +111,9 @@ setup_nvidia_gpu_demo() {
     register_mock_provider temporal \
       && echo "Registered mock-temporal into Keep." \
       || echo "Temporal provider register skipped (may already exist)."
-    register_mock_provider grafana \
-      && echo "Registered mock-grafana into Keep." \
-      || echo "Grafana provider register skipped (may already exist)."
+    register_mock_provider victoriametrics \
+      && echo "Registered mock-victoriametrics into Keep." \
+      || echo "VictoriaMetrics provider register skipped (may already exist)."
   fi
 
   if [[ -x "${VENV_PYTHON}" ]]; then
@@ -172,8 +172,8 @@ echo "  NetBox:            http://localhost:8000 (admin/admin; seed from mock To
 echo "  Catalog UI:        /catalog/synthetic-checks  and  /catalog/temporal-workflows"
 echo ""
 echo "NVIDIA GPU remediation demo is ready with make start:"
-echo "  1) open http://localhost:8099  → Grafana → GPU: rule + temp/mem"
-echo "  2) Keep Incidents → NVIDIA_GPU_* (auto Temporal remediate → resolve)"
+echo "  1) open http://localhost:8099  → VictoriaMetrics → GPU: rule + temp/mem"
+echo "  2) Keep Incidents → DCGM_* (auto Temporal remediate → resolve)"
 echo "  3) Force fail path: NVIDIA GPU server tab → Force fail → re-fire"
 echo "  Re-run setup only: make demo-nvidia-gpu"
 echo ""

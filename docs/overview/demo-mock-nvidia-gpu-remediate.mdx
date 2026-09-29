@@ -1,29 +1,31 @@
 ---
 title: "Demo: NVIDIA GPU → Temporal remediate"
 sidebarTitle: "GPU remediate demo"
-description: "End-to-end AI datacenter demo: NVIDIA GPU mock alerts → Keep incident → Temporal remediation → resolve or email."
+description: "End-to-end AI datacenter demo: NVIDIA GPU mock alerts → Keep incident → DCGM diag → Temporal remediate or isolate."
 ---
 
 ## Goal
 
 Prove the AI datacenter remediation path:
 
-1. **Provider mock** fires NVIDIA / DCGM Grafana alerts into Keep  
+1. **Provider mock** fires NVIDIA / DCGM VictoriaMetrics (VMAlert) alerts into Keep  
 2. Keep correlates them into a **GPU** incident  
 3. Keep workflow starts Temporal **`RemediateNvidiaGpu`**  
-4. Temporal remediates the **mock NVIDIA GPU server**  
-   - Optional: set `wait_for_approval: true` on the Temporal input so Keep **Approvals** must accept before reset  
-   - **Success** → resolves the Keep incident  
-   - **Failure** → posts a mock ops email (incident stays open)
+4. Temporal runs the GPU path:  
+   - Optional / auto **approval** for suite L3+  
+   - **Cordon + drain** for suite L2+  
+   - Mock **`dcgmi diag`** (`POST /gpu/server/diag`)  
+   - **Pass / RESET** → remediates → uncordon → resolves the Keep incident  
+   - **Fail / ISOLATE** → mock ops email; node stays cordoned; incident stays open
 
 ## One-command setup
 
 `make start` already:
 
 - Starts provider-mock (`:8099`) and the Temporal worker (`RemediateNvidiaGpu`)
-- Registers **mock-grafana** + **mock-temporal** into Keep (best-effort)
+- Registers **mock-victoriametrics** + **mock-temporal** into Keep (best-effort)
 - Registers **Remediate NVIDIA GPU** in the Temporal catalog
-- Registers reserved **NVIDIA_GPU_*** codes under Catalog → Alert codes
+- Registers reserved **DCGM_*** codes (exporter metrics + diag plugins + `DCGM_FR_*`) under Catalog → Alert codes
 - Uploads `examples/workflows/mock-nvidia-gpu-remediate.yml`
 - Seeds **Service Topology** (region / datacenter / row / rack / GPU)
 
@@ -37,10 +39,10 @@ Disable auto-setup: `AUTO_SETUP_NVIDIA_GPU_DEMO=0 make start`
 
 ## Fire the demo
 
-1. Mock UI → **Grafana** → **Register**  
+1. Mock UI → **VictoriaMetrics** → **Register**  
 2. Mock UI → **Temporal** → **Register Temporal**  
 3. Keep → **Service Topology** — filter **NVIDIA GPU Inference** (seeded by `make start`)  
-4. Success path: Grafana → **GPU: rule + temp/mem**  
+4. Success path: VictoriaMetrics → **GPU: rule + temp/mem**  
 5. Failure path: **NVIDIA GPU server** tab → enable **Force fail**, then re-fire GPU alerts  
 
 ## What to check
@@ -49,21 +51,39 @@ Disable auto-setup: `AUTO_SETUP_NVIDIA_GPU_DEMO=0 make start`
 | --- | --- | --- |
 | **Incident** | Status becomes **resolved** | Stays open |
 | **Incident → Workflows** | Keep workflow + Temporal start | Same |
-| **Incident → Overview** | `gpu_remediation=started` | Same |
-| **Mock → NVIDIA GPU server** | Remediations show **ok** | Remediations show **fail** |
+| **Incident → Overview** | `gpu_remediation=started`, `gpu_diag_suite=2` | Same |
+| **Mock → Lifecycle** | cordon → … → uncordon | cordon (stays cordoned) |
+| **Mock → DCGM diagnostics** | `Pass` → `RESET` | `Fail` → `ISOLATE` (`DCGM_FR_FAULTY_MEMORY`) |
+| **Mock → Remediations** | `reset_gpu` **ok** | Empty for this run (isolate skips reset) |
 | **Mock → Failure emails** | Empty (or prior) | New email to `ops@ai-dc.local` |
 | **Keep → Service Topology** | `gpu-inference` + `gpu-node-a03` / `rack-12` / `row-a` badge | Same path, incident stays open |
-| **Temporal UI** http://localhost:8233 | Workflow `RemediateNvidiaGpu` completed | Completed with `ok=false` |
+| **Temporal UI** http://localhost:8233 | Workflow `RemediateNvidiaGpu` completed | Completed with `ok=false`, `reason=diag_isolate` |
 
 ## Workflow file
 
 [`examples/workflows/mock-nvidia-gpu-remediate.yml`](https://github.com/keephq/keep/blob/main/examples/workflows/mock-nvidia-gpu-remediate.yml)
 
-- Triggers: alert CEL `labels.code.startsWith("NVIDIA_GPU")` **or** incident `created` / `updated` with the same code filter  
+- Triggers: alert CEL `labels.code.startsWith("DCGM_")` **or** incident `created` / `updated` with the same code filter  
 - Guard: enrichment `gpu_remediation` not set  
-- Action: Temporal `start_workflow` → `RemediateNvidiaGpu` / `keep-ops`  
-- Mock payloads set reserved `labels.code` (`NVIDIA_GPU_THERMAL`, `NVIDIA_GPU_MEMORY`, …). Register those codes under [Catalog → Alert codes](/overview/alert-code-catalog) to attach a runbook or auto-run this workflow.  
-- Temporal activities call provider-mock `/gpu/server/remediate`, then Keep `/incidents/{id}/status` or `/gpu/emails`
+- Action: Temporal `start_workflow` → `RemediateNvidiaGpu` / `keep-ops` with `suite: "2"` (medium: software + memory + pcie)  
+- Mock payloads set reserved `labels.code` to the DCGM metric name (`DCGM_FI_DEV_GPU_TEMP`, `DCGM_FI_DEV_FB_USED`, …). `make start` / `scripts/register_alert_codes_nvidia_gpu.py` seeds exporter metrics, diag plugins (`DCGM_DIAG_*`), and finding codes (`DCGM_FR_*`) under [Catalog → Alert codes](/overview/alert-code-catalog).  
+- Temporal: cordon (L2+) → `run_dcgm_diag` → Pass: remediate + uncordon + resolve; Fail: email only  
+- Suite L3+ (`3` / `long` / `4` / `xlong`) auto-creates a Keep **Approvals** request unless `skip_approval: true`
+
+## DCGM diagnostics (mock + real)
+
+| Suite | Plugins (mock) | Cordon | Approval | Typical use |
+| --- | --- | --- | --- | --- |
+| `1` / `quick` | `software` | no | no | Pre-flight / thermal soft alerts |
+| `2` / `medium` | `software`, `memory`, `pcie` | yes | no | Default confirm before reset |
+| `3` / `long` | + compute / bandwidth / stress / power | yes | **yes** | After L2 or NVLink alerts |
+| `4` / `xlong` | + `memtest`, `pulse_test` | yes | **yes** | Burn-in |
+
+Pass → recommendation **RESET**. Force-fail → **ISOLATE** with `DCGM_FR_FAULTY_MEMORY`.
+
+Set `DCGM_DIAG_MODE=real` on the Temporal worker to run `dcgmi diag --run … --json` on the worker host (falls back to mock if `dcgmi` is missing unless `DCGM_DIAG_REQUIRE_REAL=1`). Pin DCGM versions — JSON is not a stable public schema.
+
+Passive exporter scrapes (`/api/synth/nvidia/dcgm/metrics`) are a separate canary — see [AI DC synthetics](/overview/ai-dc-synthetic-checks).
 
 ## Related
 
@@ -71,4 +91,6 @@ Disable auto-setup: `AUTO_SETUP_NVIDIA_GPU_DEMO=0 make start`
 - [NVIDIA GPU Service Topology](/overview/nvidia-gpu-topology)  
 - [AI datacenter synthetic checks](/overview/ai-dc-synthetic-checks)  
 - [Temporal worker](/overview/temporal-worker-list-and-zip)  
+- [Approvals](/overview/approvals)  
 - [Demo: Mock Grafana → Temporal ListAndZip](/overview/demo-mock-grafana-list-and-zip)  
+- [NVIDIA DCGM diagnostics](https://docs.nvidia.com/datacenter/dcgm/latest/reference/diagnostics/index.html)  

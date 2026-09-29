@@ -29,13 +29,14 @@ def _seed_workflow(db_session, workflow_id="mock-nvidia-gpu-remediate"):
 
 def _payload(**overrides):
     body = {
-        "code": "nvidia_gpu_thermal",
-        "name": "NVIDIA GPU thermal",
+        "code": "dcgm_fi_dev_gpu_temp",
+        "name": "DCGM GPU temperature",
         "description": "Reset GPU when DCGM temp exceeds threshold",
         "runbook_url": "https://wiki.example/gpu-thermal",
         "keep_workflow_id": "mock-nvidia-gpu-remediate",
         "auto_run_on": "both",
         "disabled": False,
+        "tags": ["nvidia", "dcgm", "thermal"],
     }
     body.update(overrides)
     return body
@@ -52,14 +53,31 @@ def test_alert_catalog_crud(db_session, client, test_app):
     )
     assert create_resp.status_code == 200, create_resp.text
     created = create_resp.json()
-    assert created["code"] == "NVIDIA_GPU_THERMAL"
+    assert created["code"] == "DCGM_FI_DEV_GPU_TEMP"
     assert created["keep_workflow_id"] == "mock-nvidia-gpu-remediate"
     assert created["auto_run_on"] == "both"
+    assert created["tags"] == ["nvidia", "dcgm", "thermal"]
     entry_id = created["id"]
 
     list_resp = client.get("/alert-catalog", headers={"x-api-key": "some-key"})
     assert list_resp.status_code == 200
     assert len(list_resp.json()) == 1
+
+    tagged = client.get(
+        "/alert-catalog",
+        headers={"x-api-key": "some-key"},
+        params={"tag": "nvidia"},
+    )
+    assert tagged.status_code == 200
+    assert len(tagged.json()) == 1
+
+    untagged = client.get(
+        "/alert-catalog",
+        headers={"x-api-key": "some-key"},
+        params={"tag": "payments"},
+    )
+    assert untagged.status_code == 200
+    assert untagged.json() == []
 
     get_resp = client.get(
         f"/alert-catalog/{entry_id}", headers={"x-api-key": "some-key"}
@@ -70,11 +88,16 @@ def test_alert_catalog_crud(db_session, client, test_app):
     update_resp = client.put(
         f"/alert-catalog/{entry_id}",
         headers={"x-api-key": "some-key"},
-        json=_payload(auto_run_on="alert", name="GPU thermal v2"),
+        json=_payload(
+            auto_run_on="alert",
+            name="GPU thermal v2",
+            tags=["nvidia", "thermal", "THERMAL", "  "],
+        ),
     )
     assert update_resp.status_code == 200
     assert update_resp.json()["auto_run_on"] == "alert"
     assert update_resp.json()["name"] == "GPU thermal v2"
+    assert update_resp.json()["tags"] == ["nvidia", "thermal"]
 
     dup = client.post(
         "/alert-catalog",
@@ -86,7 +109,7 @@ def test_alert_catalog_crud(db_session, client, test_app):
     missing_wf = client.post(
         "/alert-catalog",
         headers={"x-api-key": "some-key"},
-        json=_payload(code="HIGH_CPU", keep_workflow_id="does-not-exist"),
+        json=_payload(code="HIGH_CPU", keep_workflow_id="does-not-exist", tags=["payments"]),
     )
     assert missing_wf.status_code == 400
 
@@ -117,7 +140,7 @@ def test_enhance_description_requires_ai(db_session, client, test_app):
         resp = client.post(
             "/alert-catalog/enhance-description",
             headers={"x-api-key": "some-key"},
-            json={"code": "NVIDIA_GPU_THERMAL", "description": "gpu hot"},
+            json={"code": "DCGM_FI_DEV_GPU_TEMP", "description": "gpu hot"},
         )
     assert resp.status_code == 400
     assert "Settings" in resp.json()["detail"]
@@ -130,7 +153,7 @@ def test_enhance_description_uses_tenant_ai(db_session, client, test_app):
         MagicMock(
             message=MagicMock(
                 content=(
-                    "NVIDIA_GPU_THERMAL fires when GPU temperature exceeds "
+                    "DCGM_FI_DEV_GPU_TEMP fires when GPU temperature exceeds "
                     "the DCGM threshold. Reset the GPU and page on-call."
                 )
             )
@@ -147,17 +170,17 @@ def test_enhance_description_uses_tenant_ai(db_session, client, test_app):
             "/alert-catalog/enhance-description",
             headers={"x-api-key": "some-key"},
             json={
-                "code": "NVIDIA_GPU_THERMAL",
+                "code": "DCGM_FI_DEV_GPU_TEMP",
                 "name": "NVIDIA GPU thermal",
                 "description": "gpu going high",
             },
         )
     assert resp.status_code == 200, resp.text
     body = resp.json()
-    assert "NVIDIA_GPU_THERMAL" in body["description"]
+    assert "DCGM_FI_DEV_GPU_TEMP" in body["description"]
     assert body["model"] == "gpt-4o-mini"
     kwargs = mock_client.chat.completions.create.call_args.kwargs
     assert kwargs["model"] == "gpt-4o-mini"
     user_msg = kwargs["messages"][1]["content"]
     assert "gpu going high" in user_msg
-    assert "NVIDIA_GPU_THERMAL" in user_msg
+    assert "DCGM_FI_DEV_GPU_TEMP" in user_msg

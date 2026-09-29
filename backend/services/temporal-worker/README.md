@@ -2,8 +2,9 @@
 #
 # Workflows:
 #   ListAndZipDirectory  — ls + zip under /data
-#   RemediateNvidiaGpu   — remediate provider-mock GPU server; resolve or email
-#                          wait_for_approval=false by default (GPU demo unchanged)
+#   RemediateNvidiaGpu   — cordon (L2+) → approve (L3+) → dcgmi diag →
+#                          reset/uncordon (Pass) or email/isolate (Fail)
+#                          Demo suite=2: cordon yes, approval no
 #
 # Local (via repo root):
 #   docker compose -f docker-compose.temporal.yml up -d --build
@@ -15,8 +16,11 @@
 #
 # GPU e2e:
 #   make demo-nvidia-gpu
-#   Mock UI → GPU: rule + temp/mem  (or Force fail for email path)
+#   Mock UI → GPU: rule + temp/mem  (or Force fail for diag ISOLATE / email path)
 #   Keep → Service Topology (region / datacenter / row / rack / GPU)
+#
+# Real dcgmi (optional):
+#   DCGM_DIAG_MODE=real DCGM_DIAG_REQUIRE_REAL=0  # fall back to mock if no binary
 
 ## Workflow
 
@@ -25,6 +29,14 @@
 
 1. Activity `run_ls` — `ls -la` on a path under `TEMPORAL_WORKER_ROOT` (default `/data`)
 2. Activity `create_zip_from_ls` — write stdout into `/data/output/ls-output-*.zip`
+
+**Type:** `RemediateNvidiaGpu`
+
+1. Approval when suite L3+ or `wait_for_approval: true`
+2. `cordon_nvidia_gpu` when suite L2+
+3. `run_dcgm_diag` — mock HTTP or real `dcgmi diag --json`
+4. Fail/ISOLATE → email (leave cordoned)
+5. Pass/RESET → remediate → uncordon → resolve
 
 ## Environment
 
@@ -36,8 +48,11 @@
 | `TEMPORAL_WORKER_ROOT` | `/data` | Sandboxed filesystem root |
 | `KEEP_API_URL` | `http://host.docker.internal:8080` | Keep API for `request_keep_approval` |
 | `KEEP_API_KEY` | `keepappkey` | API key used to POST `/approvals` |
-
-`RemediateNvidiaGpu` accepts `wait_for_approval`. Default is **false** so the GPU demo still remediates immediately. When true, the worker POSTs Keep `/approvals` and waits on signal `approve`.
+| `GPU_MOCK_URL` | `http://host.docker.internal:8099` | Provider-mock GPU diag + remediate |
+| `DCGM_DIAG_MODE` | `mock` | `mock` or `real` |
+| `DCGM_DIAG_REQUIRE_REAL` | unset | Fail instead of mock fallback when set |
+| `DCGM_DIAG_TIMEOUT_SEC` | `600` | Real CLI timeout |
+| `DCGM_BIN` | PATH `dcgmi` | Optional binary path |
 
 ## Catalog registration
 

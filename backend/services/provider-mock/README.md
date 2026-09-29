@@ -41,9 +41,10 @@
 # 2. Click Register on Grafana / Mimir Alertmanager / VictoriaMetrics.
 # 3. Click Send event (firing or resolved). Grafana/Mimir/VM payloads
 #    always set reserved labels.code (HIGH_CPU, DISK_SPACE_LOW, HIGH_MEMORY).
-# 4. Grafana NVIDIA GPU pack: pick a gpu_* scenario, or use
+# 4. VictoriaMetrics NVIDIA GPU pack: pick a gpu_* scenario, or use
 #    "GPU: rule + temp/mem" / "GPU: rule + all alerts" for AI datacenter demos.
-#    NVIDIA GPU server tab: Force fail remediations / emails
+#    NVIDIA GPU server tab: Force fail → diag ISOLATE; cordon/drain lifecycle;
+#    shows DCGM diagnostics / remediations / emails
 #    Synthetic checks tab: fail NVIDIA/AMD inference + training canaries
 #    Service Topology tab: push / export / import Keep topology YAML
 #    NetBox DCIM: Seed NVIDIA DCIM, then Configure Keep with NetBox
@@ -52,6 +53,11 @@
 # 1. Ensure `make deps` (or docker-compose.temporal.yml) is up.
 # 2. Confirm address localhost:7233 / namespace default.
 # 3. Click Register Temporal. Confirm mock-temporal in Keep Providers.
+#
+# Setup tab (same as make register-* / demo-*):
+# 1. Register Temporal first (Temporal tab).
+# 2. Run catalog / alert-code / topology / synthetic / demo actions one-click.
+# 3. Workers still come from Docker (`make temporal-worker` / `make synthetic-checks`).
 #
 # Tests (containerized):
 #

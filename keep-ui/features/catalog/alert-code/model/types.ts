@@ -14,6 +14,7 @@ export type AlertCatalogEntry = {
   keep_workflow_id?: string | null;
   auto_run_on: AlertCatalogAutoRunOn;
   disabled?: boolean;
+  tags?: string[];
   created_by?: string | null;
   created_at?: string;
   updated_by?: string | null;
@@ -41,4 +42,5 @@ export type AlertCatalogEntryInput = {
   keep_workflow_id?: string;
   auto_run_on: AlertCatalogAutoRunOn;
   disabled?: boolean;
+  tags?: string[];
 };

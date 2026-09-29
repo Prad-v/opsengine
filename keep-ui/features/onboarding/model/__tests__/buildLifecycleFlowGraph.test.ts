@@ -6,7 +6,7 @@ const catalogEntry = (
   overrides: Partial<AlertCatalogEntry> = {}
 ): AlertCatalogEntry => ({
   id: 1,
-  code: "NVIDIA_GPU_THERMAL",
+  code: "DCGM_FI_DEV_GPU_TEMP",
   name: "NVIDIA GPU thermal",
   auto_run_on: "both",
   keep_workflow_id: "wf-thermal",
@@ -19,14 +19,14 @@ function wiredRow() {
     rules: [
       {
         id: "rule-thermal",
-        name: "NVIDIA_GPU_THERMAL incidents",
-        definition_cel: 'labels.code == "NVIDIA_GPU_THERMAL"',
+        name: "DCGM_FI_DEV_GPU_TEMP incidents",
+        definition_cel: 'labels.code == "DCGM_FI_DEV_GPU_TEMP"',
       },
     ],
     workflows: [
       {
         id: "wf-thermal",
-        name: "Notify on NVIDIA_GPU_THERMAL",
+        name: "Notify on DCGM_FI_DEV_GPU_TEMP",
         workflow_raw: "provider:\n  type: slack\n",
       },
     ],
@@ -59,18 +59,18 @@ describe("buildLifecycleFlowGraph", () => {
     ]);
     expect(nodes[0].data).toMatchObject({
       stage: "correlation",
-      subtitle: "NVIDIA_GPU_THERMAL incidents",
+      subtitle: "DCGM_FI_DEV_GPU_TEMP incidents",
       href: "/rules?id=rule-thermal",
       wired: true,
     });
     expect(nodes[1].data).toMatchObject({
       stage: "incident",
-      subtitle: "NVIDIA_GPU_THERMAL",
+      subtitle: "DCGM_FI_DEV_GPU_TEMP",
       wired: true,
     });
     expect(nodes[2].data).toMatchObject({
       stage: "workflow",
-      subtitle: "Notify on NVIDIA_GPU_THERMAL",
+      subtitle: "Notify on DCGM_FI_DEV_GPU_TEMP",
       href: "/workflows/wf-thermal",
       wired: true,
       badge: "auto-run both",
@@ -103,8 +103,8 @@ describe("buildLifecycleFlowGraph", () => {
       rules: [
         {
           id: "rule-thermal",
-          name: "NVIDIA_GPU_THERMAL incidents",
-          definition_cel: 'labels.code == "NVIDIA_GPU_THERMAL"',
+          name: "DCGM_FI_DEV_GPU_TEMP incidents",
+          definition_cel: 'labels.code == "DCGM_FI_DEV_GPU_TEMP"',
         },
       ],
       workflows: [{ id: "wf-thermal", name: "Notify" }],

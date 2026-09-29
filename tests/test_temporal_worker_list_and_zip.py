@@ -87,6 +87,137 @@ def test_remediate_nvidia_gpu_failure_detail(worker_data, monkeypatch):
     assert result["error"] == "forced fail"
 
 
+def test_run_dcgm_diag_pass(worker_data, monkeypatch):
+    from app import activities
+
+    def fake_http(method, url, *, body=None, headers=None, timeout=30.0):
+        assert method == "POST"
+        assert url.endswith("/gpu/server/diag")
+        assert body["suite"] == "2"
+        return 200, {
+            "ok": True,
+            "result": "Pass",
+            "recommendation": "RESET",
+            "suite": "2",
+            "tests": [{"name": "memory", "status": "Pass"}],
+        }
+
+    monkeypatch.setattr(activities, "_http_json", fake_http)
+    monkeypatch.setenv("GPU_MOCK_URL", "http://gpu-mock.test")
+    result = activities.run_dcgm_diag(
+        {"incident_id": "inc-d1", "suite": "2", "gpu_index": 0}
+    )
+    assert result["ok"] is True
+    assert result["diag_pass"] is True
+    assert result["recommendation"] == "RESET"
+
+
+def test_run_dcgm_diag_isolate(worker_data, monkeypatch):
+    from app import activities
+
+    def fake_http(method, url, *, body=None, headers=None, timeout=30.0):
+        return 200, {
+            "ok": True,
+            "result": "Fail",
+            "recommendation": "ISOLATE",
+            "error_code": "DCGM_FR_FAULTY_MEMORY",
+            "message": "memory failed",
+        }
+
+    monkeypatch.setattr(activities, "_http_json", fake_http)
+    result = activities.run_dcgm_diag({"incident_id": "inc-d2"})
+    assert result["ok"] is True
+    assert result["diag_pass"] is False
+    assert result["recommendation"] == "ISOLATE"
+    assert result["error_code"] == "DCGM_FR_FAULTY_MEMORY"
+
+
+def test_cordon_and_uncordon_nvidia_gpu(worker_data, monkeypatch):
+    from app import activities
+
+    calls: list[str] = []
+
+    def fake_http(method, url, *, body=None, headers=None, timeout=30.0):
+        calls.append(url)
+        if url.endswith("/cordon"):
+            assert body["drain"] is True
+            return 200, {"ok": True, "cordoned": True, "drained": True, "host": body["host"]}
+        if url.endswith("/uncordon"):
+            return 200, {"ok": True, "cordoned": False, "drained": False, "host": body["host"]}
+        raise AssertionError(url)
+
+    monkeypatch.setattr(activities, "_http_json", fake_http)
+    monkeypatch.setenv("GPU_MOCK_URL", "http://gpu-mock.test")
+    c = activities.cordon_nvidia_gpu({"host": "gpu-node-a03", "incident_id": "inc-c"})
+    assert c["ok"] is True
+    assert c["cordoned"] is True
+    u = activities.uncordon_nvidia_gpu({"host": "gpu-node-a03"})
+    assert u["ok"] is True
+    assert u["cordoned"] is False
+    assert any(u.endswith("/cordon") for u in calls)
+    assert any(u.endswith("/uncordon") for u in calls)
+
+
+def test_dcgm_diag_suite_policy(worker_data):
+    from app.dcgm_diag import requires_approval, requires_cordon, suite_level
+
+    assert suite_level("1") == 1
+    assert suite_level("2") == 2
+    assert suite_level("long") == 3
+    assert suite_level("xlong") == 4
+    assert requires_cordon(1) is False
+    assert requires_cordon(2) is True
+    assert requires_approval(2) is False
+    assert requires_approval(3) is True
+
+
+def test_parse_dcgmi_json_fail(worker_data):
+    from app.dcgm_diag import parse_dcgmi_json
+
+    raw = {
+        "test_categories": [
+            {"category": "memory", "status": "Fail", "error_code": "DCGM_FR_FAULTY_MEMORY"},
+            {"category": "pcie", "status": "Pass"},
+        ]
+    }
+    parsed = parse_dcgmi_json(raw, suite="2", host="gpu-node-a03", gpu_index=0)
+    assert parsed["result"] == "Fail"
+    assert parsed["recommendation"] == "ISOLATE"
+    assert parsed["error_code"] == "DCGM_FR_FAULTY_MEMORY"
+    assert parsed["mode"] == "real"
+
+
+def test_run_dcgm_diag_real_falls_back_to_mock(worker_data, monkeypatch):
+    from app import activities
+    from app import dcgm_diag
+
+    def fake_cli(**kwargs):
+        return {
+            "ok": False,
+            "error": "dcgmi binary not found on PATH",
+            "mode": "real",
+        }
+
+    def fake_http(method, url, *, body=None, headers=None, timeout=30.0):
+        assert url.endswith("/gpu/server/diag")
+        return 200, {
+            "ok": True,
+            "result": "Pass",
+            "recommendation": "RESET",
+            "suite": "2",
+        }
+
+    monkeypatch.setattr(dcgm_diag, "run_dcgmi_cli", fake_cli)
+    monkeypatch.setattr(activities, "_http_json", fake_http)
+    monkeypatch.setenv("DCGM_DIAG_MODE", "real")
+    monkeypatch.delenv("DCGM_DIAG_REQUIRE_REAL", raising=False)
+    result = activities.run_dcgm_diag({"suite": "2", "incident_id": "inc-real"})
+    assert result["ok"] is True
+    assert result["diag_pass"] is True
+    assert result["mode"] == "mock_fallback"
+    assert "real_error" in result
+
+
 def test_resolve_keep_incident(worker_data, monkeypatch):
     from app import activities
 

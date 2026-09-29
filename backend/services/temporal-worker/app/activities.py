@@ -205,6 +205,152 @@ def remediate_nvidia_gpu(payload: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def _gpu_mock_base() -> str:
+    return os.environ.get("GPU_MOCK_URL", "http://host.docker.internal:8099").rstrip("/")
+
+
+@activity.defn
+def cordon_nvidia_gpu(payload: dict[str, Any]) -> dict[str, Any]:
+    """
+    Cordon (and optionally drain) a GPU node before L2+ diagnostics.
+
+    Env:
+      GPU_MOCK_URL
+    """
+    url = f"{_gpu_mock_base()}/gpu/server/cordon"
+    body = {
+        "host": payload.get("host") or "gpu-node-a03",
+        "drain": payload.get("drain", True),
+        "incident_id": payload.get("incident_id"),
+        "reason": payload.get("reason") or "dcgm_diag",
+    }
+    status, result = _http_json("POST", url, body=body)
+    if isinstance(result, dict) and isinstance(result.get("detail"), dict):
+        result = result["detail"]
+    ok = status < 400 and isinstance(result, dict) and result.get("ok") is True
+    if isinstance(result, dict):
+        return {**result, "http_status": status, "ok": ok, "gpu_mock_url": url}
+    return {"ok": False, "http_status": status, "error": str(result), "gpu_mock_url": url}
+
+
+@activity.defn
+def uncordon_nvidia_gpu(payload: dict[str, Any]) -> dict[str, Any]:
+    """
+    Uncordon a GPU node after successful remediation.
+
+    Env:
+      GPU_MOCK_URL
+    """
+    url = f"{_gpu_mock_base()}/gpu/server/uncordon"
+    body = {
+        "host": payload.get("host") or "gpu-node-a03",
+        "incident_id": payload.get("incident_id"),
+        "reason": payload.get("reason") or "diag_complete",
+    }
+    status, result = _http_json("POST", url, body=body)
+    if isinstance(result, dict) and isinstance(result.get("detail"), dict):
+        result = result["detail"]
+    ok = status < 400 and isinstance(result, dict) and result.get("ok") is True
+    if isinstance(result, dict):
+        return {**result, "http_status": status, "ok": ok, "gpu_mock_url": url}
+    return {"ok": False, "http_status": status, "error": str(result), "gpu_mock_url": url}
+
+
+@activity.defn
+def run_dcgm_diag(payload: dict[str, Any]) -> dict[str, Any]:
+    """
+    Run DCGM diagnostics via mock HTTP or real ``dcgmi diag --json``.
+
+    Env:
+      GPU_MOCK_URL          mock endpoint (default)
+      DCGM_DIAG_MODE        ``mock`` (default) or ``real``
+      DCGM_DIAG_REQUIRE_REAL  if ``1``, do not fall back to mock when dcgmi missing
+      DCGM_DIAG_TIMEOUT_SEC   CLI timeout (default 600)
+      DCGM_BIN                optional path to dcgmi
+
+    Response uses ``result`` (Pass/Fail) and ``recommendation`` (RESET/ISOLATE).
+    Transport failures set ok=False; a diagnostic Fail still has ok=True.
+    """
+    from app.dcgm_diag import normalize_suite_key, run_dcgmi_cli
+
+    suite = normalize_suite_key(
+        payload.get("suite") or payload.get("run"),
+        payload.get("run"),
+    )
+    host = payload.get("host") or "gpu-node-a03"
+    gpu_index = int(payload.get("gpu_index") or 0)
+    mode = (
+        str(payload.get("mode") or os.environ.get("DCGM_DIAG_MODE") or "mock")
+        .strip()
+        .lower()
+    )
+    require_real = str(
+        payload.get("require_real")
+        or os.environ.get("DCGM_DIAG_REQUIRE_REAL")
+        or ""
+    ).strip() in {"1", "true", "yes"}
+
+    if mode == "real":
+        timeout_sec = int(
+            payload.get("timeout_sec")
+            or os.environ.get("DCGM_DIAG_TIMEOUT_SEC")
+            or 600
+        )
+        real = run_dcgmi_cli(
+            suite=suite,
+            gpu_index=gpu_index,
+            host=str(host),
+            timeout_sec=timeout_sec,
+            dcgmi_bin=os.environ.get("DCGM_BIN") or None,
+        )
+        if real.get("ok"):
+            return real
+        if require_real:
+            return real
+        # Fall back to mock so hybrid demos keep working without NVIDIA drivers.
+        real["fallback_to_mock"] = True
+
+    base = _gpu_mock_base()
+    url = f"{base}/gpu/server/diag"
+    body = {
+        "suite": suite,
+        "run": payload.get("run"),
+        "gpu_index": gpu_index,
+        "incident_id": payload.get("incident_id"),
+        "alertname": payload.get("alertname") or payload.get("name"),
+        "alert_code": payload.get("alert_code") or payload.get("code"),
+        "host": host,
+    }
+    status, result = _http_json("POST", url, body=body)
+    if isinstance(result, dict) and isinstance(result.get("detail"), dict):
+        result = result["detail"]
+    transport_ok = status < 400 and isinstance(result, dict) and result.get("ok") is True
+    if isinstance(result, dict):
+        recommendation = str(result.get("recommendation") or "").upper()
+        diag_pass = str(result.get("result") or "").lower() == "pass"
+        out = {
+            **result,
+            "http_status": status,
+            "ok": transport_ok,
+            "diag_pass": diag_pass,
+            "recommendation": recommendation or ("RESET" if diag_pass else "ISOLATE"),
+            "gpu_mock_url": url,
+            "mode": "mock" if mode != "real" else "mock_fallback",
+        }
+        if mode == "real":
+            out["real_error"] = real.get("error")  # type: ignore[name-defined]
+        return out
+    return {
+        "ok": False,
+        "diag_pass": False,
+        "recommendation": "ISOLATE",
+        "http_status": status,
+        "error": str(result),
+        "gpu_mock_url": url,
+        "mode": "mock",
+    }
+
+
 @activity.defn
 def resolve_keep_incident(payload: dict[str, Any]) -> dict[str, Any]:
     """

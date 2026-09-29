@@ -21,7 +21,7 @@ jest.mock("@/shared/ui", () => ({
 const catalog: AlertCatalogEntry[] = [
   {
     id: 1,
-    code: "NVIDIA_GPU_THERMAL",
+    code: "DCGM_FI_DEV_GPU_TEMP",
     name: "NVIDIA GPU thermal",
     auto_run_on: "both",
     keep_workflow_id: "wf-gpu",
@@ -31,7 +31,7 @@ const catalog: AlertCatalogEntry[] = [
 const workflows: Workflow[] = [
   {
     id: "wf-gpu",
-    name: "Notify on NVIDIA_GPU_THERMAL",
+    name: "Notify on DCGM_FI_DEV_GPU_TEMP",
     description: "Created by the lifecycle wizard",
     created_by: "test",
     creation_time: "",
@@ -43,7 +43,7 @@ const workflows: Workflow[] = [
     last_execution_status: "",
     last_updated: "",
     workflow_raw: "",
-    workflow_raw_id: "onboarding-notify-nvidia_gpu_thermal",
+    workflow_raw_id: "onboarding-notify-dcgm_fi_dev_gpu_temp",
   },
   {
     id: "wf-cpu",
@@ -73,7 +73,7 @@ describe("WorkflowStep", () => {
   it("shows workflow name as a dropdown and attaches the selected workflow", async () => {
     render(
       <WorkflowStep
-        selectedCode="NVIDIA_GPU_THERMAL"
+        selectedCode="DCGM_FI_DEV_GPU_TEMP"
         catalog={catalog}
         workflows={workflows}
         workflowId="wf-gpu"
@@ -86,10 +86,10 @@ describe("WorkflowStep", () => {
     expect(screen.getByTestId("workflow-attach-step")).toBeInTheDocument();
     expect(screen.getByText("Workflow name")).toBeInTheDocument();
     expect(
-      screen.getAllByText("Notify on NVIDIA_GPU_THERMAL").length
+      screen.getAllByText("Notify on DCGM_FI_DEV_GPU_TEMP").length
     ).toBeGreaterThan(0);
     expect(
-      screen.getByRole("link", { name: "Notify on NVIDIA_GPU_THERMAL" })
+      screen.getByRole("link", { name: "Notify on DCGM_FI_DEV_GPU_TEMP" })
     ).toHaveAttribute("href", "/workflows/wf-gpu");
 
     fireEvent.click(screen.getByRole("button", { name: "Attach workflow" }));
@@ -104,7 +104,7 @@ describe("WorkflowStep", () => {
   it("creates a notify workflow when the create option is selected", async () => {
     render(
       <WorkflowStep
-        selectedCode="NVIDIA_GPU_THERMAL"
+        selectedCode="DCGM_FI_DEV_GPU_TEMP"
         catalog={[{ ...catalog[0], keep_workflow_id: undefined }]}
         workflows={workflows}
         workflowId=""
@@ -122,7 +122,7 @@ describe("WorkflowStep", () => {
     await waitFor(() => {
       expect(mockCreateWorkflow).toHaveBeenCalled();
       expect(mockOnAttach).toHaveBeenCalledWith(
-        expect.objectContaining({ code: "NVIDIA_GPU_THERMAL" }),
+        expect.objectContaining({ code: "DCGM_FI_DEV_GPU_TEMP" }),
         "wf-new",
         "both"
       );

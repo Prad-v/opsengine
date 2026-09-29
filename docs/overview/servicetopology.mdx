@@ -294,9 +294,9 @@ services:
 
 ## NVIDIA GPU datacenter map
 
-The AI datacenter demo seeds a region / datacenter / row / rack / GPU graph that matches mock Grafana alert labels. After `make start`, open **Service Topology** and filter application **NVIDIA GPU Inference**. Click a node for incidents and to put that resource in maintenance. **Edit** on the Applications tab updates that application; it does not add another copy. See [NVIDIA GPU Service Topology](/overview/nvidia-gpu-topology).
+The AI datacenter demo seeds a region / datacenter / row / rack / GPU graph that matches mock VictoriaMetrics alert labels. After `make start`, open **Service Topology** and filter application **NVIDIA GPU Inference**. Click a node for incidents and to put that resource in maintenance. **Edit** on the Applications tab updates that application; it does not add another copy. See [NVIDIA GPU Service Topology](/overview/nvidia-gpu-topology).
 
-Install the [NetBox provider](/providers/documentation/netbox-provider) with a URL and API token to pull the same hierarchy from DCIM. Local `make start` includes NetBox at [http://localhost:8000](http://localhost:8000); the mock UI **Configure Keep with NetBox** seeds that inventory and pulls it. Keep `service` ids must match Grafana alert labels (`host`, `rack`, `row`, `datacenter`, `region`, `gpu_id`).
+Install the [NetBox provider](/providers/documentation/netbox-provider) with a URL and API token to pull the same hierarchy from DCIM. Local `make start` includes NetBox at [http://localhost:8000](http://localhost:8000); the mock UI **Configure Keep with NetBox** seeds that inventory and pulls it. Keep `service` ids must match VictoriaMetrics alert labels (`host`, `rack`, `row`, `datacenter`, `region`, `gpu_id`).
 
 To import by hand (this **replaces** existing topology):
 

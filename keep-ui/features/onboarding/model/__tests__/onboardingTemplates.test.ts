@@ -9,6 +9,7 @@ import {
 describe("onboardingTemplates", () => {
   it("slugifies reserved codes to UPPER_SNAKE", () => {
     expect(slugifyAlertCode("nvidia gpu thermal")).toBe("NVIDIA_GPU_THERMAL");
+    expect(slugifyAlertCode("DCGM_FI_DEV_GPU_TEMP")).toBe("DCGM_FI_DEV_GPU_TEMP");
     expect(slugifyAlertCode("HIGH_CPU")).toBe("HIGH_CPU");
   });
 
@@ -34,14 +35,14 @@ describe("onboardingTemplates", () => {
 
   it("builds a notify workflow that matches the code on alert and incident", () => {
     const yaml = buildNotifyWorkflowYaml({
-      code: "NVIDIA_GPU_THERMAL",
+      code: "DCGM_FI_DEV_GPU_TEMP",
       providerType: "console",
     });
-    expect(yaml).toContain("id: onboarding-notify-nvidia_gpu_thermal");
+    expect(yaml).toContain("id: onboarding-notify-dcgm_fi_dev_gpu_temp");
     expect(yaml).toContain(
-      'cel: has(labels.code) && labels.code == "NVIDIA_GPU_THERMAL"'
+      'cel: has(labels.code) && labels.code == "DCGM_FI_DEV_GPU_TEMP"'
     );
-    expect(yaml).toContain('cel: code == "NVIDIA_GPU_THERMAL"');
+    expect(yaml).toContain('cel: code == "DCGM_FI_DEV_GPU_TEMP"');
     expect(yaml).toContain("type: console");
     expect(yaml).not.toContain("config:");
   });

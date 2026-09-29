@@ -120,13 +120,19 @@ def test_payload_builders_use_reserved_codes():
 
 
 def test_correlation_rules_filter_on_labels_code():
-    from app.payloads import GRAFANA_CORRELATION_RULE, GRAFANA_GPU_CORRELATION_RULE
+    from app.payloads import (
+        GRAFANA_CORRELATION_RULE,
+        VICTORIAMETRICS_GPU_CORRELATION_RULE,
+    )
 
     assert "labels.code" in GRAFANA_CORRELATION_RULE["celQuery"]
     assert "HIGH_CPU" in GRAFANA_CORRELATION_RULE["celQuery"]
     assert "HIGH_MEMORY" in GRAFANA_CORRELATION_RULE["celQuery"]
-    assert "labels.code" in GRAFANA_GPU_CORRELATION_RULE["celQuery"]
-    assert "NVIDIA_GPU" in GRAFANA_GPU_CORRELATION_RULE["celQuery"]
+    assert "labels.code" in VICTORIAMETRICS_GPU_CORRELATION_RULE["celQuery"]
+    assert "DCGM_" in VICTORIAMETRICS_GPU_CORRELATION_RULE["celQuery"]
+    assert 'source == "victoriametrics"' in VICTORIAMETRICS_GPU_CORRELATION_RULE[
+        "celQuery"
+    ]
 
 
 def test_build_payload_by_provider_key():
@@ -148,7 +154,29 @@ def test_grafana_scenarios(client: TestClient):
     assert resp.status_code == 200
     data = resp.json()
     ids = {s["id"] for s in data["scenarios"]}
-    assert {"cpu", "memory"}.issubset(ids)
+    assert ids == {"cpu", "memory"}
+
+    payments = [s for s in data["scenarios"] if s.get("pack") == "payments"]
+    assert len(payments) == 2
+    for s in payments:
+        assert s["shared_labels"]["service"] == "payments-api"
+        assert s["shared_labels"]["cluster"] == "mock-prod"
+        assert s["payload"]["alerts"][0]["labels"]["alertname"]
+        assert s["payload"]["alerts"][0]["labels"]["code"]
+        assert s["shared_labels"]["code"]
+
+    assert "nvidia-gpu" not in data["packs"]
+    assert data["correlation_rule"]["threshold"] == 2
+    assert "labels.service" in data["correlation_rule"]["groupingCriteria"]
+    assert "labels.code" in data["correlation_rule"]["celQuery"]
+    assert "HIGH_CPU" in data["correlation_rule"]["celQuery"]
+
+
+def test_victoriametrics_gpu_scenarios(client: TestClient):
+    resp = client.get("/api/victoriametrics/scenarios")
+    assert resp.status_code == 200
+    data = resp.json()
+    ids = {s["id"] for s in data["scenarios"]}
     assert {
         "gpu_temp",
         "gpu_mem",
@@ -159,15 +187,6 @@ def test_grafana_scenarios(client: TestClient):
         "gpu_power",
         "gpu_unavailable",
     }.issubset(ids)
-
-    payments = [s for s in data["scenarios"] if s.get("pack") == "payments"]
-    assert len(payments) == 2
-    for s in payments:
-        assert s["shared_labels"]["service"] == "payments-api"
-        assert s["shared_labels"]["cluster"] == "mock-prod"
-        assert s["payload"]["alerts"][0]["labels"]["alertname"]
-        assert s["payload"]["alerts"][0]["labels"]["code"]
-        assert s["shared_labels"]["code"]
 
     gpu = [s for s in data["scenarios"] if s.get("pack") == "nvidia-gpu"]
     assert len(gpu) == 8
@@ -184,22 +203,21 @@ def test_grafana_scenarios(client: TestClient):
         assert labels["vendor"] == "nvidia"
         assert labels["gpu_model"].startswith("NVIDIA-")
         assert labels["dcgm_field"]
-        assert labels["code"].startswith("NVIDIA_GPU_")
+        assert labels["code"].startswith("DCGM_")
+        assert labels["code"] == labels["dcgm_field"]
         assert labels["row"]
         assert labels["rack"]
         assert labels["gpu_id"].startswith(labels["host"])
     assert "gpu-node-a03" in hosts
     assert len(hosts) >= 2
 
-    assert data["correlation_rule"]["threshold"] == 2
-    assert "labels.service" in data["correlation_rule"]["groupingCriteria"]
-    assert "labels.code" in data["correlation_rule"]["celQuery"]
-    assert "HIGH_CPU" in data["correlation_rule"]["celQuery"]
     assert data["gpu_correlation_rule"]["incidentPrefix"] == "GPU"
     assert "labels.host" in data["gpu_correlation_rule"]["groupingCriteria"]
     assert "labels.code" in data["gpu_correlation_rule"]["celQuery"]
-    assert "NVIDIA_GPU" in data["gpu_correlation_rule"]["celQuery"]
+    assert "DCGM_" in data["gpu_correlation_rule"]["celQuery"]
+    assert 'source == "victoriametrics"' in data["gpu_correlation_rule"]["celQuery"]
     assert data["packs"]["nvidia-gpu"]["demo_scenario_ids"] == ["gpu_temp", "gpu_mem"]
+    assert data["ui_hint"]["source_filter_value"] == "victoriametrics"
 
 
 def test_preview_grafana_scenario(client: TestClient):
@@ -221,11 +239,25 @@ def test_preview_grafana_scenario(client: TestClient):
     assert labels["code"] == "HIGH_MEMORY"
 
 
-def test_preview_grafana_gpu_scenario(client: TestClient):
+def test_preview_grafana_gpu_scenario_rejected(client: TestClient):
+    with pytest.raises(ValueError, match="Unknown Grafana scenario"):
+        client.post(
+            "/api/preview-payload",
+            json={
+                "provider": "grafana",
+                "scenario": "gpu_temp",
+                "status": "firing",
+                "keep_api_url": "http://localhost:8080",
+                "keep_api_key": "keepappkey",
+            },
+        )
+
+
+def test_preview_victoriametrics_gpu_scenario(client: TestClient):
     resp = client.post(
         "/api/preview-payload",
         json={
-            "provider": "grafana",
+            "provider": "victoriametrics",
             "scenario": "gpu_temp",
             "status": "firing",
             "keep_api_url": "http://localhost:8080",
@@ -240,7 +272,7 @@ def test_preview_grafana_gpu_scenario(client: TestClient):
     assert labels["cluster"] == "ai-dc-prod"
     assert labels["vendor"] == "nvidia"
     assert labels["dcgm_field"] == "DCGM_FI_DEV_GPU_TEMP"
-    assert labels["code"] == "NVIDIA_GPU_THERMAL"
+    assert labels["code"] == "DCGM_FI_DEV_GPU_TEMP"
     assert labels["region"] == "us-west-2"
     assert labels["datacenter"] == "ai-dc-1"
     assert labels["row"] == "row-a"
@@ -249,13 +281,17 @@ def test_preview_grafana_gpu_scenario(client: TestClient):
     assert labels["gpu_id"] == "gpu-node-a03-gpu0"
     assert body["alerts"][0]["values"]["B"] == 91.0
     assert body["commonLabels"]["vendor"] == "nvidia"
+    assert body["externalURL"] == "http://mock-vmalert.local"
 
 
 def test_build_all_gpu_scenarios():
-    from app.payloads import GRAFANA_GPU_SCENARIOS, build_grafana_scenario_payload
+    from app.payloads import (
+        VICTORIAMETRICS_GPU_SCENARIOS,
+        build_victoriametrics_scenario_payload,
+    )
 
-    for scenario_id in GRAFANA_GPU_SCENARIOS:
-        payload = build_grafana_scenario_payload(scenario_id, status="firing")
+    for scenario_id in VICTORIAMETRICS_GPU_SCENARIOS:
+        payload = build_victoriametrics_scenario_payload(scenario_id, status="firing")
         alert = payload["alerts"][0]
         assert alert["labels"]["alertname"].startswith("Nvidia")
         assert alert["labels"]["datacenter"] == "ai-dc-1"
@@ -263,7 +299,8 @@ def test_build_all_gpu_scenarios():
         assert alert["labels"]["row"]
         assert alert["labels"]["rack"]
         assert alert["labels"]["gpu_id"]
-        assert alert["labels"]["code"].startswith("NVIDIA_GPU_")
+        assert alert["labels"]["code"].startswith("DCGM_")
+        assert alert["labels"]["code"] == alert["labels"]["dcgm_field"]
         assert alert["fingerprint"]
 
 
@@ -274,8 +311,10 @@ def test_ui_served(client: TestClient):
     assert "Temporal" in resp.text
     assert 'data-tab="temporal"' in resp.text
     assert "gpu_temp" in resp.text
-    assert "sendGpuGrafana" in resp.text
+    assert "sendGpuVm" in resp.text
+    assert "vmScenarioPanel" in resp.text
     assert "NVIDIA GPU" in resp.text
+    assert "VictoriaMetrics correlation demos" in resp.text
     assert 'data-tab="gpu"' in resp.text
     assert 'data-tab="topology"' in resp.text
     assert "topoPush" in resp.text
@@ -283,6 +322,9 @@ def test_ui_served(client: TestClient):
     assert "topoImportKeep" in resp.text
     assert "netboxConfigureKeep" in resp.text
     assert "Configure Keep with NetBox" in resp.text
+    assert "sendGpuGrafana" not in resp.text
+    assert "/api/grafana/create-gpu-incident-demo" not in resp.text
+    assert "/api/victoriametrics/create-gpu-incident-demo" in resp.text
 
 
 def test_gpu_server_remediate_and_email(client: TestClient):
@@ -354,6 +396,85 @@ def test_gpu_server_remediate_and_email(client: TestClient):
     assert other_ok.status_code == 200
     assert other_ok.json()["host"] == "gpu-node-a01"
     assert other_ok.json()["rack"] == "rack-11"
+
+
+def test_gpu_server_dcgm_diag(client: TestClient):
+    reset = client.post("/api/gpu/server/reset")
+    assert reset.status_code == 200
+
+    ok = client.post(
+        "/api/gpu/server/diag",
+        json={
+            "suite": "2",
+            "gpu_index": 0,
+            "incident_id": "inc-diag-1",
+            "alert_code": "DCGM_FI_DEV_ECC_DBE_VOL_TOTAL",
+        },
+    )
+    assert ok.status_code == 200
+    body = ok.json()
+    assert body["ok"] is True
+    assert body["result"] == "Pass"
+    assert body["recommendation"] == "RESET"
+    assert body["suite"] == "2"
+    names = [t["name"] for t in body["tests"]]
+    assert names == ["software", "memory", "pcie"]
+
+    mode = client.post("/api/gpu/server/mode", json={"force_fail": True})
+    assert mode.status_code == 200
+
+    fail = client.post(
+        "/api/gpu/server/diag",
+        json={"suite": "2", "gpu_index": 0, "incident_id": "inc-diag-2"},
+    )
+    assert fail.status_code == 200
+    fail_body = fail.json()
+    assert fail_body["ok"] is True
+    assert fail_body["result"] == "Fail"
+    assert fail_body["recommendation"] == "ISOLATE"
+    assert fail_body["error_code"] == "DCGM_FR_FAULTY_MEMORY"
+    assert any(t["status"] == "Fail" for t in fail_body["tests"])
+
+    snap = client.get("/api/gpu/server")
+    assert snap.status_code == 200
+    diags = snap.json()["diagnostics"]
+    assert len(diags) >= 2
+    assert diags[0]["recommendation"] == "ISOLATE"
+
+
+def test_gpu_server_cordon_uncordon(client: TestClient):
+    reset = client.post("/api/gpu/server/reset")
+    assert reset.status_code == 200
+
+    cordon = client.post(
+        "/api/gpu/server/cordon",
+        json={
+            "host": "gpu-node-a03",
+            "drain": True,
+            "incident_id": "inc-c1",
+            "reason": "dcgm_diag",
+        },
+    )
+    assert cordon.status_code == 200
+    body = cordon.json()
+    assert body["ok"] is True
+    assert body["cordoned"] is True
+    assert body["drained"] is True
+
+    snap = client.get("/api/gpu/server")
+    assert snap.json()["server"]["cordoned"] is True
+    assert snap.json()["server"]["drained"] is True
+    assert len(snap.json()["lifecycle"]) >= 1
+
+    uncordon = client.post(
+        "/api/gpu/server/uncordon",
+        json={"host": "gpu-node-a03", "incident_id": "inc-c1"},
+    )
+    assert uncordon.status_code == 200
+    assert uncordon.json()["cordoned"] is False
+    snap2 = client.get("/api/gpu/server")
+    assert snap2.json()["server"]["cordoned"] is False
+    assert snap2.json()["server"]["drained"] is False
 
 
 def test_gpu_topology_inventory(client: TestClient):
@@ -826,4 +947,80 @@ def test_ai_dc_synth_index_has_tab():
     assert "AI datacenter synthetic probes" in text
 
 
+def test_setup_actions_catalog(client: TestClient):
+    resp = client.get("/api/setup")
+    assert resp.status_code == 200
+    actions = resp.json()["actions"]
+    ids = {a["id"] for a in actions}
+    assert {
+        "list-and-zip-catalog",
+        "nvidia-gpu-catalog",
+        "probe-targets-catalog",
+        "payments-alert-codes",
+        "nvidia-gpu-alert-codes",
+        "nvidia-gpu-topology",
+        "ai-dc-synthetic-checks",
+        "demo-list-and-zip",
+        "demo-nvidia-gpu",
+    } <= ids
+    assert all(a.get("makefile") for a in actions)
+
+
+def test_setup_unknown_action(client: TestClient):
+    resp = client.post(
+        "/api/setup/not-a-real-action",
+        json={
+            "keep_api_url": "http://localhost:8080",
+            "keep_api_key": "keepappkey",
+        },
+    )
+    assert resp.status_code == 404
+
+
+def test_setup_index_has_tab():
+    html = None
+    for candidate in (
+        Path(__file__).resolve().parents[1]
+        / "backend"
+        / "services"
+        / "provider-mock"
+        / "app"
+        / "static"
+        / "index.html",
+        Path("/app/app/static/index.html"),
+    ):
+        if candidate.exists():
+            html = candidate
+            break
+    assert html is not None
+    text = html.read_text()
+    assert 'data-tab="setup"' in text
+    assert "view-setup" in text
+    assert "/api/setup/" in text
+
+
+def test_setup_actions_module_payloads():
+    from app.alert_codes_nvidia import CODES, DEMO_AUTO_RUN_CODES
+    from app.alert_codes_payments import PAYMENTS_ALERT_CODES
+    from app.setup_actions import (
+        DEMO_WORKFLOWS_DIR,
+        LIST_AND_ZIP_CATALOG,
+        NVIDIA_GPU_CATALOG,
+        PROBE_TARGETS_CATALOG,
+        list_setup_actions,
+    )
+
+    assert len(CODES) >= 90
+    assert "DCGM_FI_DEV_GPU_TEMP" in DEMO_AUTO_RUN_CODES
+    assert {c["code"] for c in PAYMENTS_ALERT_CODES} == {
+        "HIGH_CPU",
+        "HIGH_MEMORY",
+        "DISK_SPACE_LOW",
+    }
+    assert LIST_AND_ZIP_CATALOG["catalog_key"] == "list-and-zip-directory"
+    assert NVIDIA_GPU_CATALOG["catalog_key"] == "remediate-nvidia-gpu"
+    assert PROBE_TARGETS_CATALOG["catalog_key"] == "probe-targets"
+    assert (DEMO_WORKFLOWS_DIR / "mock-grafana-list-and-zip.yml").is_file()
+    assert (DEMO_WORKFLOWS_DIR / "mock-nvidia-gpu-remediate.yml").is_file()
+    assert len(list_setup_actions()) == 9
 

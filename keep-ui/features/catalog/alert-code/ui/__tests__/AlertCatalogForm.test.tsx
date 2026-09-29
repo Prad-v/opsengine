@@ -40,7 +40,7 @@ describe("AlertCatalogForm AI enhance", () => {
   it("enhances the draft description with Settings → AI", async () => {
     mockEnhanceDescription.mockResolvedValue({
       description:
-        "NVIDIA_GPU_THERMAL fires when GPU temperature exceeds the DCGM threshold. Reset the GPU and page on-call.",
+        "DCGM_FI_DEV_GPU_TEMP fires when GPU temperature exceeds the DCGM threshold. Reset the GPU and page on-call.",
       model: "gpt-4o-mini",
     });
 
@@ -48,10 +48,11 @@ describe("AlertCatalogForm AI enhance", () => {
       <AlertCatalogForm
         initial={{
           id: 1,
-          code: "NVIDIA_GPU_THERMAL",
+          code: "DCGM_FI_DEV_GPU_TEMP",
           name: "NVIDIA GPU thermal going high",
           description: "gpu going high",
           auto_run_on: "alert",
+          tags: ["nvidia", "thermal"],
         }}
         onSubmit={mockOnSubmit}
         onCancel={mockOnCancel}
@@ -62,7 +63,7 @@ describe("AlertCatalogForm AI enhance", () => {
 
     await waitFor(() => {
       expect(mockEnhanceDescription).toHaveBeenCalledWith({
-        code: "NVIDIA_GPU_THERMAL",
+        code: "DCGM_FI_DEV_GPU_TEMP",
         name: "NVIDIA GPU thermal going high",
         description: "gpu going high",
         runbook_url: undefined,
@@ -71,7 +72,7 @@ describe("AlertCatalogForm AI enhance", () => {
     });
 
     expect(
-      screen.getByDisplayValue(/NVIDIA_GPU_THERMAL fires when GPU temperature/)
+      screen.getByDisplayValue(/DCGM_FI_DEV_GPU_TEMP fires when GPU temperature/)
     ).toBeInTheDocument();
     expect(showSuccessToast).toHaveBeenCalledWith("Description enhanced");
   });
@@ -86,7 +87,7 @@ describe("AlertCatalogForm AI enhance", () => {
       <AlertCatalogForm
         initial={{
           id: 1,
-          code: "NVIDIA_GPU_THERMAL",
+          code: "DCGM_FI_DEV_GPU_TEMP",
           name: "NVIDIA GPU thermal",
           description: "gpu going high",
           auto_run_on: "alert",

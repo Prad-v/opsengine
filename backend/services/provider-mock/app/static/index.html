@@ -382,7 +382,8 @@
         <h1>Provider Mock</h1>
         <p>
           Register alert-source mocks or the Temporal orchestration provider into Keep
-          for local end-to-end validation.
+          for local end-to-end validation. Use the <strong>Setup</strong> tab for
+          catalog, alert-code, topology, and demo registration (same as Makefile targets).
         </p>
       </div>
       <div class="badge"><span class="dot"></span><span id="healthLabel">checking…</span></div>
@@ -394,6 +395,7 @@
       <button type="button" class="tab" data-tab="gpu">NVIDIA GPU server</button>
       <button type="button" class="tab" data-tab="synth">Synthetic checks</button>
       <button type="button" class="tab" data-tab="temporal">Temporal</button>
+      <button type="button" class="tab" data-tab="setup">Setup</button>
     </nav>
 
     <section class="panel">
@@ -426,15 +428,7 @@
           <code>labels.service=payments-api</code>
           (threshold=2, group by <code>labels.service</code>;
           correlation CEL matches those codes).
-          <br/>
-          <strong>NVIDIA GPU (AI DC):</strong> DCGM-style alerts set
-          <code>labels.code</code> <code>NVIDIA_GPU_*</code> plus
-          <code>region</code> / <code>datacenter</code> / <code>row</code> /
-          <code>rack</code> / <code>host</code> / <code>gpu_id</code>
-          (threshold=2, group by <code>labels.host</code>).
           Filter Correlations with <code>source = grafana</code>.
-          Push the matching map from the <strong>Service Topology</strong> tab
-          (or Import <code>examples/topologies/nvidia-gpu-datacenter.yml</code>).
         </p>
         <div class="row" style="grid-template-columns: 1fr 1fr; margin-bottom:12px">
           <div>
@@ -444,6 +438,32 @@
                 <option value="cpu">A — HIGH_CPU (MockHighCPU, warning)</option>
                 <option value="memory">B — HIGH_MEMORY (MockHighMemory, critical)</option>
               </optgroup>
+            </select>
+          </div>
+          <div style="display:flex;align-items:end;gap:8px;flex-wrap:wrap">
+            <button type="button" id="loadGrafanaScenario">Load payload</button>
+            <button type="button" class="primary" id="sendBothGrafana">Payments: rule + send both</button>
+          </div>
+        </div>
+        <div class="meta" id="grafanaScenarioMeta"></div>
+      </section>
+
+      <section class="panel" id="vmScenarioPanel" style="display:none">
+        <h2>VictoriaMetrics correlation demos</h2>
+        <p class="hint">
+          <strong>NVIDIA GPU (AI DC):</strong> VMAlert / DCGM-style alerts set
+          <code>labels.code</code> <code>DCGM_*</code> plus
+          <code>region</code> / <code>datacenter</code> / <code>row</code> /
+          <code>rack</code> / <code>host</code> / <code>gpu_id</code>
+          (threshold=2, group by <code>labels.host</code>).
+          Filter Correlations with <code>source = victoriametrics</code>.
+          Push the matching map from the <strong>Service Topology</strong> tab
+          (or Import <code>examples/topologies/nvidia-gpu-datacenter.yml</code>).
+        </p>
+        <div class="row" style="grid-template-columns: 1fr 1fr; margin-bottom:12px">
+          <div>
+            <label for="vmScenario">Payload</label>
+            <select id="vmScenario">
               <optgroup label="NVIDIA GPU / AI datacenter">
                 <option value="gpu_temp">GPU — High temperature (critical)</option>
                 <option value="gpu_mem">GPU — High memory utilization (warning)</option>
@@ -457,13 +477,12 @@
             </select>
           </div>
           <div style="display:flex;align-items:end;gap:8px;flex-wrap:wrap">
-            <button type="button" id="loadGrafanaScenario">Load payload</button>
-            <button type="button" class="primary" id="sendBothGrafana">Payments: rule + send both</button>
-            <button type="button" class="primary" id="sendGpuGrafana">GPU: rule + temp/mem</button>
-            <button type="button" id="sendAllGpuGrafana">GPU: rule + all alerts</button>
+            <button type="button" id="loadVmScenario">Load payload</button>
+            <button type="button" class="primary" id="sendGpuVm">GPU: rule + temp/mem</button>
+            <button type="button" id="sendAllGpuVm">GPU: rule + all alerts</button>
           </div>
         </div>
-        <div class="meta" id="grafanaScenarioMeta"></div>
+        <div class="meta" id="vmScenarioMeta"></div>
       </section>
 
       <section class="split">
@@ -623,19 +642,18 @@
       <section class="panel">
         <h2>Mock NVIDIA GPU server</h2>
         <p class="hint">
-          Temporal <code>RemediateNvidiaGpu</code> calls
-          <code>POST /gpu/server/remediate</code> on inventory nodes
-          (default <code>gpu-node-a03</code> / row-a / rack-12).
-          Alerts carry the same region / datacenter / row / rack / GPU labels
-          as Keep Service Topology. On success the worker resolves the Keep
-          incident; on failure it posts a mock email here.
-          Toggle <strong>Force fail</strong> to exercise the email path.
+          Temporal <code>RemediateNvidiaGpu</code> cordons the node (L2+),
+          runs mock <code>dcgmi diag</code>, then either remediates
+          (Pass → RESET → uncordon) or emails ops (Fail → ISOLATE, stays cordoned).
+          Suite L3+ requires Keep approval. Default host
+          <code>gpu-node-a03</code> / row-a / rack-12.
+          Toggle <strong>Force fail</strong> to force diag Fail/ISOLATE.
         </p>
         <div class="row" style="grid-template-columns: 1fr auto auto; margin-bottom:12px">
           <div class="meta" id="gpuServerMeta">Loading…</div>
           <label class="check" style="align-self:center">
             <input id="gpuForceFail" type="checkbox" />
-            Force fail remediations
+            Force fail remediations / diag
           </label>
           <div style="display:flex;gap:8px;align-items:end;flex-wrap:wrap">
             <button type="button" id="gpuRefresh">Refresh</button>
@@ -646,6 +664,16 @@
         </div>
         <div class="meta" id="gpuGpus"></div>
         <div class="meta" id="gpuTopologyMeta"></div>
+      </section>
+      <section class="split">
+        <div class="panel">
+          <h2>Lifecycle (cordon / drain)</h2>
+          <div class="log" id="gpuLifecycle"><div class="meta">None yet.</div></div>
+        </div>
+        <div class="panel">
+          <h2>DCGM diagnostics</h2>
+          <div class="log" id="gpuDiagnostics"><div class="meta">None yet.</div></div>
+        </div>
       </section>
       <section class="split">
         <div class="panel">
@@ -664,8 +692,9 @@
         <h2>AI datacenter synthetic probes</h2>
         <p class="hint">
           Keep Catalog → <strong>Synthetic checks</strong> probes these HTTP/TCP
-          endpoints from the <code>keep-synth</code> worker
-          (<code>make register-ai-dc-synthetic-checks</code>).
+          endpoints from the <code>keep-synth</code> worker.
+          Seed checks from the <strong>Setup</strong> tab
+          (or <code>make register-ai-dc-synthetic-checks</code>).
           NVIDIA and AMD inference/training canaries run against this mock — no GPUs required.
           Toggle <strong>Fail</strong> on a probe; the next Temporal schedule posts a
           <code>SYNTH_*</code> alert to Keep.
@@ -682,6 +711,33 @@
         <div class="log" id="synthHits"><div class="meta">None yet.</div></div>
       </section>
     </div>
+
+    <div id="view-setup" class="view">
+      <section class="panel">
+        <h2>Keep catalog &amp; demo setup</h2>
+        <p class="hint">
+          Same actions as the Makefile <code>register-*</code> / <code>demo-*</code> targets,
+          run against the Keep API URL and key above. Register the Temporal provider first
+          (Temporal tab) before catalog or synthetic-check actions.
+          Workers (<code>make temporal-worker</code> / <code>make synthetic-checks</code>)
+          must already be running via Docker Compose — this UI does not start containers.
+        </p>
+        <div class="grid-config two" style="margin-bottom:14px">
+          <div>
+            <label for="setupSynthBase">Synthetic probe base URL (worker → mock)</label>
+            <input id="setupSynthBase" placeholder="http://host.docker.internal:8099" />
+          </div>
+          <div style="display:flex;align-items:end;padding-bottom:4px">
+            <button type="button" id="setupRefresh">Refresh action list</button>
+          </div>
+        </div>
+        <div id="setupActions" class="cards" style="grid-template-columns: repeat(2, minmax(0, 1fr))"></div>
+      </section>
+      <section class="panel">
+        <h2>Setup activity</h2>
+        <div class="log" id="logSetup"><div class="meta">No setup runs yet.</div></div>
+      </section>
+    </div>
   </div>
 
   <div class="toast" id="toast"></div>
@@ -693,6 +749,7 @@
       defaults: {},
       tab: "alerts",
       grafanaScenario: "cpu",
+      vmScenario: "gpu_temp",
     };
 
     const $ = (id) => document.getElementById(id);
@@ -737,10 +794,12 @@
       $("view-gpu").classList.toggle("active", tab === "gpu");
       $("view-synth").classList.toggle("active", tab === "synth");
       $("view-topology").classList.toggle("active", tab === "topology");
+      $("view-setup").classList.toggle("active", tab === "setup");
       $("publicBaseField").style.display = tab === "alerts" ? "block" : "none";
       renderLog();
       if (tab === "gpu") loadGpuServer().catch((e) => toast(String(e.message || e), false));
       if (tab === "synth") loadSynth().catch((e) => toast(String(e.message || e), false));
+      if (tab === "setup") loadSetup().catch((e) => toast(String(e.message || e), false));
       if (tab === "topology") {
         loadTopology().catch((e) => toast(String(e.message || e), false));
         refreshNetboxStatus().catch(() => {});
@@ -846,7 +905,7 @@
       const s = data.server || {};
       $("gpuForceFail").checked = !!data.force_fail;
       $("gpuServerMeta").textContent =
-        `${s.host} · ${s.gpu_model} · ${s.region || ""}/${s.datacenter || ""}/${s.row || ""}/${s.rack || ""} · cluster=${s.cluster} · force_fail=${data.force_fail}`;
+        `${s.host} · ${s.gpu_model} · ${s.region || ""}/${s.datacenter || ""}/${s.row || ""}/${s.rack || ""} · cluster=${s.cluster} · cordoned=${!!s.cordoned} drained=${!!s.drained} · force_fail=${data.force_fail}`;
       const gpus = (s.gpus || []).map((g) =>
         `gpu${g.index} health=${g.health} temp=${g.temperature_c}C mem=${g.memory_util_pct}%` +
         (g.xid != null ? ` xid=${g.xid}` : "")
@@ -854,8 +913,28 @@
       $("gpuGpus").textContent = gpus || "No GPUs";
       const nodes = data.nodes || [];
       $("gpuTopologyMeta").textContent = nodes.length
-        ? `Inventory: ${nodes.map((n) => `${n.host} (${n.row}/${n.rack}, ${ (n.gpus || []).length } GPU)`).join(" · ")}`
+        ? `Inventory: ${nodes.map((n) => `${n.host} (${n.row}/${n.rack}, cordon=${!!n.cordoned}, ${(n.gpus || []).length} GPU)`).join(" · ")}`
         : "";
+
+      const life = data.lifecycle || [];
+      $("gpuLifecycle").innerHTML = life.length
+        ? life.map((e) => {
+            const cls = e.ok ? "ok" : "fail";
+            const when = e.ts ? new Date(e.ts * 1000).toLocaleTimeString() : "";
+            return `<div class="log-item"><div><span class="${cls}">${e.action}</span> ${when} — ${e.host} drained=${e.drained} ${e.incident_id || ""} ${e.message || ""}</div></div>`;
+          }).join("")
+        : `<div class="meta">None yet.</div>`;
+
+      const diags = data.diagnostics || [];
+      $("gpuDiagnostics").innerHTML = diags.length
+        ? diags.map((d) => {
+            const pass = (d.result || "").toLowerCase() === "pass";
+            const cls = pass ? "ok" : "fail";
+            const when = d.ts ? new Date(d.ts * 1000).toLocaleTimeString() : "";
+            const tests = (d.tests || []).map((t) => `${t.name}=${t.status}`).join(",");
+            return `<div class="log-item"><div><span class="${cls}">${d.result || "?"}</span> ${when} — suite=${d.suite || ""} → ${d.recommendation || ""} ${d.error_code || ""} gpu=${d.gpu_index} ${d.incident_id || ""}<br/><span class="meta">${tests}</span><br/>${d.message || ""}</div></div>`;
+          }).join("")
+        : `<div class="meta">None yet.</div>`;
 
       const rem = data.remediations || [];
       $("gpuRemediations").innerHTML = rem.length
@@ -957,7 +1036,7 @@
         btn.addEventListener("click", async () => {
           state.selected = btn.dataset.select;
           renderCards();
-          updateGrafanaPanel();
+          updateScenarioPanels();
           await refreshPayload();
         });
       });
@@ -985,10 +1064,30 @@
 
     function renderLog() {
       const events = state.events || [];
+      if (state.tab === "setup") {
+        const filtered = events.filter((e) => e.action === "setup");
+        const root = $("logSetup");
+        if (!filtered.length) {
+          root.innerHTML = `<div class="meta">No setup runs yet.</div>`;
+          return;
+        }
+        root.innerHTML = filtered.map((e) => {
+          const cls = e.ok ? "ok" : "fail";
+          const when = e.ts ? new Date(e.ts * 1000).toLocaleTimeString() : "";
+          const bits = [
+            `<span class="${cls}">${e.setup_action || e.action}</span>`,
+            e.ok ? "ok" : "failed",
+            e.error || "",
+          ].filter(Boolean).join(" · ");
+          return `<div class="log-item"><div>${when} — ${bits}</div></div>`;
+        }).join("");
+        return;
+      }
       const filtered = state.tab === "temporal"
         ? events.filter((e) => e.provider === "temporal")
-        : events.filter((e) => e.provider !== "temporal");
+        : events.filter((e) => e.provider !== "temporal" && e.action !== "setup");
       const root = state.tab === "temporal" ? $("logTemporal") : $("logAlerts");
+      if (!root) return;
       if (!filtered.length) {
         root.innerHTML = `<div class="meta">No events yet.</div>`;
         return;
@@ -1010,6 +1109,99 @@
       }).join("");
     }
 
+    const SETUP_GROUP_LABELS = {
+      demos: "End-to-end demos",
+      "temporal-catalog": "Temporal catalog",
+      "alert-codes": "Alert codes",
+      topology: "Service Topology",
+      synthetics: "Synthetic checks",
+    };
+
+    function renderSetup() {
+      const root = $("setupActions");
+      const actions = state.setupActions || [];
+      if (!actions.length) {
+        root.innerHTML = `<div class="meta">No setup actions loaded.</div>`;
+        return;
+      }
+      const groups = {};
+      for (const action of actions) {
+        const g = action.group || "other";
+        if (!groups[g]) groups[g] = [];
+        groups[g].push(action);
+      }
+      const order = ["demos", "temporal-catalog", "alert-codes", "topology", "synthetics"];
+      const keys = [...order.filter((k) => groups[k]), ...Object.keys(groups).filter((k) => !order.includes(k))];
+      root.innerHTML = keys.map((g) => {
+        const cards = groups[g].map((a) => `
+          <article class="card">
+            <h3>${a.title}</h3>
+            <p class="hint" style="margin:8px 0 12px">${a.description}</p>
+            <div class="meta" style="margin-bottom:10px">make ${a.makefile}</div>
+            <div class="actions">
+              <button type="button" class="primary" data-setup="${a.id}">Run</button>
+            </div>
+          </article>
+        `).join("");
+        return `
+          <div style="grid-column:1 / -1;margin:4px 0 2px">
+            <div class="meta" style="font-weight:600;color:var(--text)">${SETUP_GROUP_LABELS[g] || g}</div>
+          </div>
+          ${cards}
+        `;
+      }).join("");
+      root.querySelectorAll("[data-setup]").forEach((btn) => {
+        btn.addEventListener("click", () => runSetup(btn.dataset.setup, btn));
+      });
+    }
+
+    async function loadSetup() {
+      const data = await api("/api/setup");
+      state.setupActions = data.actions || [];
+      if (!$("setupSynthBase").value) {
+        $("setupSynthBase").value =
+          (state.defaults && state.defaults.synth_target_base_url) ||
+          "http://host.docker.internal:8099";
+      }
+      renderSetup();
+      renderLog();
+    }
+
+    async function runSetup(actionId, btn) {
+      const label = btn ? btn.textContent : "Run";
+      if (btn) {
+        btn.disabled = true;
+        btn.textContent = "Running…";
+      }
+      try {
+        const payload = {
+          ...connection(),
+          synth_target_base_url: $("setupSynthBase").value.trim() || null,
+        };
+        const data = await api(`/api/setup/${actionId}`, {
+          method: "POST",
+          body: JSON.stringify(payload),
+        });
+        const summary = data.result
+          ? (data.result.action || data.result.created != null
+            ? JSON.stringify(data.result).slice(0, 180)
+            : "ok")
+          : "ok";
+        toast(`Setup ${actionId}: ${summary}`);
+        await loadEvents();
+        renderLog();
+      } catch (err) {
+        toast(String(err.message || err), false);
+        await loadEvents();
+        renderLog();
+      } finally {
+        if (btn) {
+          btn.disabled = false;
+          btn.textContent = label;
+        }
+      }
+    }
+
     async function loadProviders() {
       const data = await api("/api/providers");
       state.providers = data.providers;
@@ -1028,7 +1220,7 @@
       if (!$("keepNetboxUrl").value) $("keepNetboxUrl").value = state.defaults.keep_netbox_url || "http://localhost:8000";
       renderCards();
       renderTemporal();
-      updateGrafanaPanel();
+      updateScenarioPanels();
     }
 
     async function loadEvents() {
@@ -1037,10 +1229,39 @@
       renderLog();
     }
 
-    function updateGrafanaPanel() {
-      const panel = $("grafanaScenarioPanel");
-      if (!panel) return;
-      panel.style.display = state.selected === "grafana" ? "block" : "none";
+    function updateScenarioPanels() {
+      const grafanaPanel = $("grafanaScenarioPanel");
+      const vmPanel = $("vmScenarioPanel");
+      if (grafanaPanel) grafanaPanel.style.display = state.selected === "grafana" ? "block" : "none";
+      if (vmPanel) vmPanel.style.display = state.selected === "victoriametrics" ? "block" : "none";
+    }
+
+    function selectedScenario() {
+      if (state.selected === "grafana") {
+        return state.grafanaScenario || $("grafanaScenario").value;
+      }
+      if (state.selected === "victoriametrics") {
+        return state.vmScenario || $("vmScenario").value;
+      }
+      return null;
+    }
+
+    function formatScenarioMeta(labels, metaEl) {
+      if (!labels || !metaEl) return;
+      const bits = [
+        `alertname=${labels.alertname}`,
+        `service=${labels.service}`,
+        `host=${labels.host}`,
+        `cluster=${labels.cluster}`,
+        `severity=${labels.severity}`,
+      ];
+      if (labels.code) bits.push(`code=${labels.code}`);
+      if (labels.gpu_model) bits.push(`gpu_model=${labels.gpu_model}`);
+      if (labels.dcgm_field) bits.push(`dcgm=${labels.dcgm_field}`);
+      if (labels.vendor) bits.push(`vendor=${labels.vendor}`);
+      if (labels.region) bits.push(`region=${labels.region}`);
+      if (labels.gpu_id) bits.push(`gpu_id=${labels.gpu_id}`);
+      metaEl.textContent = bits.join(" · ");
     }
 
     async function refreshPayload() {
@@ -1051,26 +1272,18 @@
         status: $("status").value,
         alertname: $("alertname").value || null,
         severity: $("severity").value || null,
-        scenario: state.selected === "grafana" ? (state.grafanaScenario || $("grafanaScenario").value) : null,
+        scenario: selectedScenario(),
       };
       const data = await api("/api/preview-payload", {
         method: "POST",
         body: JSON.stringify(body),
       });
       $("payload").value = JSON.stringify(data.payload, null, 2);
-      if (state.selected === "grafana" && data.payload?.alerts?.[0]?.labels) {
-        const labels = data.payload.alerts[0].labels;
-        const bits = [
-          `alertname=${labels.alertname}`,
-          `service=${labels.service}`,
-          `host=${labels.host}`,
-          `cluster=${labels.cluster}`,
-          `severity=${labels.severity}`,
-        ];
-        if (labels.gpu_model) bits.push(`gpu_model=${labels.gpu_model}`);
-        if (labels.dcgm_field) bits.push(`dcgm=${labels.dcgm_field}`);
-        if (labels.vendor) bits.push(`vendor=${labels.vendor}`);
-        $("grafanaScenarioMeta").textContent = bits.join(" · ");
+      const labels = data.payload?.alerts?.[0]?.labels;
+      if (state.selected === "grafana") {
+        formatScenarioMeta(labels, $("grafanaScenarioMeta"));
+      } else if (state.selected === "victoriametrics") {
+        formatScenarioMeta(labels, $("vmScenarioMeta"));
       }
     }
 
@@ -1094,9 +1307,9 @@
       }
     }
 
-    async function sendGpuGrafana({ sendAll = false } = {}) {
+    async function sendGpuVm({ sendAll = false } = {}) {
       try {
-        const data = await api("/api/grafana/create-gpu-incident-demo", {
+        const data = await api("/api/victoriametrics/create-gpu-incident-demo", {
           method: "POST",
           body: JSON.stringify({
             ...connection(),
@@ -1174,7 +1387,7 @@
             status: $("status").value,
             payload,
             use_linked: useLinked,
-            scenario: state.selected === "grafana" ? $("grafanaScenario").value : null,
+            scenario: selectedScenario(),
           }),
         });
         toast(`Sent ${state.selected} event (${data.status_code})`);
@@ -1204,8 +1417,18 @@
       await refreshPayload();
     });
     $("sendBothGrafana").addEventListener("click", () => sendBothGrafana());
-    $("sendGpuGrafana").addEventListener("click", () => sendGpuGrafana());
-    $("sendAllGpuGrafana").addEventListener("click", () => sendGpuGrafana({ sendAll: true }));
+    $("loadVmScenario").addEventListener("click", async () => {
+      state.vmScenario = $("vmScenario").value;
+      $("alertname").value = "";
+      $("severity").value = "";
+      await refreshPayload();
+    });
+    $("vmScenario").addEventListener("change", async () => {
+      state.vmScenario = $("vmScenario").value;
+      await refreshPayload();
+    });
+    $("sendGpuVm").addEventListener("click", () => sendGpuVm());
+    $("sendAllGpuVm").addEventListener("click", () => sendGpuVm({ sendAll: true }));
     ["status", "alertname", "severity"].forEach((id) => {
       $(id).addEventListener("change", () => refreshPayload().catch(() => {}));
     });
@@ -1369,6 +1592,11 @@
       } catch (err) {
         toast(String(err.message || err), false);
       }
+    });
+    $("setupRefresh").addEventListener("click", () => {
+      loadSetup()
+        .then(() => toast("Setup actions refreshed"))
+        .catch((e) => toast(String(e.message || e), false));
     });
 
     (async () => {
