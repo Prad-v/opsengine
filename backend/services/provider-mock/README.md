@@ -56,7 +56,8 @@
 #
 # Setup tab (same as make register-* / demo-*):
 # 1. Register Temporal first (Temporal tab).
-# 2. Run catalog / alert-code / topology / synthetic / demo actions one-click.
+# 2. Expand a pack → pick individual alert codes / checks / workflows
+#    (Select all / Clear / Demo codes / Run selected / Run all).
 # 3. Workers still come from Docker (`make temporal-worker` / `make synthetic-checks`).
 #
 # Tests (containerized):

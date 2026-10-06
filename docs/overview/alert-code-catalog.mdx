@@ -45,15 +45,22 @@ Mapping rules that set a top-level `code` column are copied into `labels.code` a
 
 ### NVIDIA / DCGM seed
 
-`scripts/register_alert_codes_nvidia_gpu.py` registers:
+`scripts/register_alert_codes_nvidia_gpu.py` registers codes grounded in
+[dcgm-exporter](https://github.com/NVIDIA/dcgm-exporter) `etc/default-counters.csv`
+help text, exporter-owned collectors, and DCGM diagnostics:
 
 - Every shipped default, optional, and exporter-owned [DCGM Exporter metric](https://docs.nvidia.com/datacenter/dcgm/latest/reference/dcgm-exporter-metrics.html) (bucket tags `exporter-default` / `exporter-optional` / `exporter-owned`)
+- Power-limit and fabric fields (`DCGM_FI_DEV_POWER_MGMT_LIMIT`, `DCGM_FI_DEV_ENFORCED_POWER_LIMIT`, `DCGM_FI_DEV_FABRIC_HEALTH_*`) plus modern NVLink counters (`*_ERROR_TOTAL`, Hopper/Blackwell recovery fields). Legacy `*_COUNT_TOTAL` NVLink names remain for rule compatibility (tag `legacy-name`)
 - Active [diagnostic plugins](https://docs.nvidia.com/datacenter/dcgm/latest/reference/diagnostics/plugins/index.html) as `DCGM_DIAG_*` (bucket `diag-plugin`, tag `diag`)
-- Key [diagnostic finding codes](https://docs.nvidia.com/datacenter/dcgm/latest/reference/diagnostics/errors.html) as `DCGM_FR_*` (bucket `diag-error`, tags `isolate` / `reset` / `monitor` / `triage` / `config`)
+- Key [diagnostic / health finding codes](https://docs.nvidia.com/datacenter/dcgm/latest/reference/diagnostics/errors.html) as `DCGM_FR_*` (bucket `diag-error`, tags `isolate` / `reset` / `monitor` / `triage` / `config`) — including health-watch codes such as `DCGM_FR_FALLEN_OFF_BUS`, `DCGM_FR_UNCONTAINED_ERROR`, and `DCGM_FR_CLOCK_THROTTLE_*`
 
-The **code is the DCGM metric or finding name** (no `NVIDIA_` prefix). Every row includes tag **`nvidia`** plus domain tags (`thermal`, `ecc`, `nvlink`, `diag`, …).
+The **code is the DCGM metric or finding name** (no `NVIDIA_` prefix). Every row includes tag **`nvidia`** plus domain tags (`thermal`, `ecc`, `nvlink`, `diag`, `requires-enable`, …).
+
+Descriptions include **units**, **Prometheus type**, **recommended detection** (e.g. `increase()>0`, temp thresholds, health `==20`), and **action hints**. Optional / exporter-owned metrics that are commented out in the default collectors CSV are tagged `requires-enable`.
 
 Filter Catalog → Alert codes by tag `nvidia` or `diag` to browse the set. Demo GPU scenarios use exporter metric names as `labels.code`.
+
+**Detection reminder:** dcgm-exporter only scrapes metrics. Alerting rules live in VictoriaMetrics / Grafana / Keep; the catalog description documents suggested PromQL policy, not an enforced rule.
 
 When an alert arrives with that code:
 

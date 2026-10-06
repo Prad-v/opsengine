@@ -15,7 +15,7 @@ from typing import Any, Callable
 from app.alert_codes_nvidia import CODES as NVIDIA_GPU_CODES, DEMO_AUTO_RUN_CODES
 from app.alert_codes_payments import PAYMENTS_ALERT_CODES
 from app.gpu_topology import apply_keep_topology
-from app.synth_probes import SYNTH_ALERT_CODES, build_keep_synthetic_checks
+from app.synth_probes import PROBE_SPECS, SYNTH_ALERT_CODES, build_keep_synthetic_checks
 
 RequestFn = Callable[[str, str, dict[str, Any] | None], tuple[int, Any]]
 UploadFn = Callable[[str, str, bytes, str], tuple[int, Any]]
@@ -81,8 +81,58 @@ PROBE_TARGETS_CATALOG = {
 }
 
 
-def list_setup_actions() -> list[dict[str, str]]:
-    """UI catalog of one-click Keep setup actions (mirrors Makefile targets)."""
+def list_setup_actions() -> list[dict[str, Any]]:
+    """UI catalog of Keep setup actions (mirrors Makefile) with selectable items."""
+    temporal_items = [
+        {
+            "id": item["catalog_key"],
+            "label": item["name"],
+            "description": item["description"],
+            "meta": item["workflow_type"],
+        }
+        for item in (LIST_AND_ZIP_CATALOG, NVIDIA_GPU_CATALOG, PROBE_TARGETS_CATALOG)
+    ]
+    payments_items = [
+        {
+            "id": item["code"],
+            "label": item["name"],
+            "description": item["description"],
+            "meta": item["code"],
+        }
+        for item in PAYMENTS_ALERT_CODES
+    ]
+    nvidia_items = [
+        {
+            "id": item["code"],
+            "label": item["name"],
+            "description": item["description"],
+            "meta": item["code"],
+            "tags": list(item.get("tags") or []),
+            "recommended": item["code"] in DEMO_AUTO_RUN_CODES,
+        }
+        for item in NVIDIA_GPU_CODES
+    ]
+    synth_items = [
+        {
+            "id": spec["id"],
+            "label": spec["name"],
+            "description": spec["description"],
+            "meta": spec.get("code") or spec["id"],
+            "tags": [spec.get("group") or "synth"],
+            "alert_code": spec.get("code"),
+        }
+        for spec in PROBE_SPECS
+    ]
+    workflow_items = [
+        {
+            "id": path.name,
+            "label": path.stem,
+            "description": f"Upload Keep workflow {path.name}",
+            "meta": path.name,
+        }
+        for path in sorted(DEMO_WORKFLOWS_DIR.glob("*.yml"))
+    ]
+
     return [
         {
             "id": "list-and-zip-catalog",
@@ -90,6 +140,9 @@ def list_setup_actions() -> list[dict[str, str]]:
             "title": "ListAndZipDirectory catalog",
             "description": "Register Temporal keep-ops ListAndZipDirectory (make register-list-and-zip-catalog).",
             "makefile": "register-list-and-zip-catalog",
+            "selectable": True,
+            "item_key": "items",
+            "items": [temporal_items[0]],
         },
         {
             "id": "nvidia-gpu-catalog",
@@ -97,6 +150,9 @@ def list_setup_actions() -> list[dict[str, str]]:
             "title": "RemediateNvidiaGpu catalog",
             "description": "Register Temporal keep-ops RemediateNvidiaGpu (make register-nvidia-gpu-catalog).",
             "makefile": "register-nvidia-gpu-catalog",
+            "selectable": True,
+            "item_key": "items",
+            "items": [temporal_items[1]],
         },
         {
             "id": "probe-targets-catalog",
@@ -104,6 +160,9 @@ def list_setup_actions() -> list[dict[str, str]]:
             "title": "ProbeTargets catalog",
             "description": "Register Temporal keep-synth ProbeTargets (make register-probe-targets-catalog).",
             "makefile": "register-probe-targets-catalog",
+            "selectable": True,
+            "item_key": "items",
+            "items": [temporal_items[2]],
         },
         {
             "id": "payments-alert-codes",
@@ -111,13 +170,19 @@ def list_setup_actions() -> list[dict[str, str]]:
             "title": "Payments alert codes",
             "description": "Register HIGH_CPU / HIGH_MEMORY / DISK_SPACE_LOW (make register-payments-alert-codes).",
             "makefile": "register-payments-alert-codes",
+            "selectable": True,
+            "item_key": "items",
+            "items": payments_items,
         },
         {
             "id": "nvidia-gpu-alert-codes",
             "group": "alert-codes",
             "title": "NVIDIA GPU alert codes",
-            "description": "Register DCGM_* / NVIDIA_GPU_* reserved codes (make register-nvidia-gpu-alert-codes).",
+            "description": "Register DCGM_* reserved codes (make register-nvidia-gpu-alert-codes). Select individual codes or all.",
             "makefile": "register-nvidia-gpu-alert-codes",
+            "selectable": True,
+            "item_key": "items",
+            "items": nvidia_items,
         },
         {
             "id": "nvidia-gpu-topology",
@@ -125,6 +190,9 @@ def list_setup_actions() -> list[dict[str, str]]:
             "title": "NVIDIA GPU topology",
             "description": "Seed region/datacenter/row/rack/GPU Service Topology (make register-nvidia-gpu-topology).",
             "makefile": "register-nvidia-gpu-topology",
+            "selectable": False,
+            "item_key": "items",
+            "items": [],
         },
         {
             "id": "ai-dc-synthetic-checks",
@@ -132,6 +200,19 @@ def list_setup_actions() -> list[dict[str, str]]:
             "title": "AI DC synthetic checks",
             "description": "Seed NVIDIA/AMD inference+training synthetics (make register-ai-dc-synthetic-checks).",
             "makefile": "register-ai-dc-synthetic-checks",
+            "selectable": True,
+            "item_key": "items",
+            "items": synth_items,
+        },
+        {
+            "id": "demo-workflows",
+            "group": "workflows",
+            "title": "Demo Keep workflows",
+            "description": "Upload individual mock workflow YAML files into Keep.",
+            "makefile": "demo-list-and-zip / demo-nvidia-gpu",
+            "selectable": True,
+            "item_key": "items",
+            "items": workflow_items,
         },
         {
             "id": "demo-list-and-zip",
@@ -139,6 +220,9 @@ def list_setup_actions() -> list[dict[str, str]]:
             "title": "Demo: Grafana → ListAndZip",
             "description": "Catalog + payments codes + mock workflows (make demo-list-and-zip).",
             "makefile": "demo-list-and-zip",
+            "selectable": False,
+            "item_key": "items",
+            "items": [],
         },
         {
             "id": "demo-nvidia-gpu",
@@ -146,8 +230,32 @@ def list_setup_actions() -> list[dict[str, str]]:
             "title": "Demo: NVIDIA GPU remediate",
             "description": "Full GPU remediate setup (make demo-nvidia-gpu / make start).",
             "makefile": "demo-nvidia-gpu",
+            "selectable": False,
+            "item_key": "items",
+            "items": [],
         },
     ]
+
+
+def _filter_by_ids(
+    rows: list[dict[str, Any]] | tuple[dict[str, Any], ...],
+    *,
+    id_field: str,
+    selected: list[str] | None,
+) -> list[dict[str, Any]]:
+    if not selected:
+        return list(rows)
+    wanted = {str(x) for x in selected}
+    filtered = [row for row in rows if str(row.get(id_field)) in wanted]
+    if not filtered:
+        raise RuntimeError(
+            f"No matching items for {sorted(wanted)}. "
+            f"Known sample: {[r.get(id_field) for r in list(rows)[:5]]}"
+        )
+    unknown = wanted - {str(r.get(id_field)) for r in rows}
+    if unknown:
+        raise RuntimeError(f"Unknown item id(s): {sorted(unknown)}")
+    return filtered
 
 
 def _installed_providers(request_fn: RequestFn) -> list[dict[str, Any]]:
@@ -258,14 +366,16 @@ def register_payments_alert_codes(
     request_fn: RequestFn,
     *,
     workflow_id: str = "mock-grafana-list-and-zip",
+    codes: list[str] | None = None,
 ) -> dict[str, Any]:
     existing = _list_alert_catalog(request_fn)
     wf_status, _ = request_fn("GET", f"/workflows/{workflow_id}", None)
     keep_workflow_id = workflow_id if wf_status == 200 else None
+    selected = _filter_by_ids(PAYMENTS_ALERT_CODES, id_field="code", selected=codes)
 
     created = 0
     skipped = 0
-    for item in PAYMENTS_ALERT_CODES:
+    for item in selected:
         code = item["code"]
         if code in existing:
             skipped += 1
@@ -294,7 +404,8 @@ def register_payments_alert_codes(
         "ok": True,
         "created": created,
         "skipped": skipped,
-        "total": len(PAYMENTS_ALERT_CODES),
+        "total": len(selected),
+        "codes": [item["code"] for item in selected],
     }
 
 
@@ -303,15 +414,17 @@ def register_nvidia_gpu_alert_codes(
     *,
     workflow_id: str = "mock-nvidia-gpu-remediate",
     auto_run_on: str = "both",
+    codes: list[str] | None = None,
 ) -> dict[str, Any]:
     existing = _list_alert_catalog(request_fn)
     wf_status, _ = request_fn("GET", f"/workflows/{workflow_id}", None)
     keep_workflow_id = workflow_id if wf_status == 200 else None
+    selected = _filter_by_ids(NVIDIA_GPU_CODES, id_field="code", selected=codes)
 
     created = 0
     updated = 0
     skipped = 0
-    for item in NVIDIA_GPU_CODES:
+    for item in selected:
         code = item["code"]
         want_auto = (
             keep_workflow_id is not None
@@ -360,7 +473,8 @@ def register_nvidia_gpu_alert_codes(
         "created": created,
         "updated": updated,
         "skipped": skipped,
-        "total": len(NVIDIA_GPU_CODES),
+        "total": len(selected),
+        "codes": [item["code"] for item in selected],
     }
 
 
@@ -376,11 +490,16 @@ def register_nvidia_gpu_topology(request_fn: RequestFn) -> dict[str, Any]:
     }
 
 
-def _register_synth_alert_codes(request_fn: RequestFn) -> dict[str, int]:
+def _register_synth_alert_codes(
+    request_fn: RequestFn,
+    *,
+    codes: list[str] | None = None,
+) -> dict[str, int]:
     existing = set(_list_alert_catalog(request_fn).keys())
+    selected = _filter_by_ids(SYNTH_ALERT_CODES, id_field="code", selected=codes)
     created = 0
     skipped = 0
-    for item in SYNTH_ALERT_CODES:
+    for item in selected:
         if item["code"] in existing:
             skipped += 1
             continue
@@ -393,7 +512,7 @@ def _register_synth_alert_codes(request_fn: RequestFn) -> dict[str, int]:
             skipped += 1
         else:
             raise RuntimeError(f"Failed {item['code']} ({code}): {body}")
-    return {"created": created, "skipped": skipped}
+    return {"created": created, "skipped": skipped, "total": len(selected)}
 
 
 def register_ai_dc_synthetic_checks(
@@ -401,6 +520,7 @@ def register_ai_dc_synthetic_checks(
     *,
     provider_id: str | None = None,
     target_base_url: str | None = None,
+    check_keys: list[str] | None = None,
 ) -> dict[str, Any]:
     resolved_provider = pick_temporal_provider_id(request_fn, provider_id)
     base_url = (
@@ -408,7 +528,12 @@ def register_ai_dc_synthetic_checks(
         or os.environ.get("SYNTH_TARGET_BASE_URL")
         or "http://host.docker.internal:8099"
     ).rstrip("/")
-    alert_stats = _register_synth_alert_codes(request_fn)
+
+    selected_specs = _filter_by_ids(PROBE_SPECS, id_field="id", selected=check_keys)
+    alert_codes = [
+        str(spec["code"]) for spec in selected_specs if spec.get("code")
+    ]
+    alert_stats = _register_synth_alert_codes(request_fn, codes=alert_codes or None)
 
     status, existing = request_fn("GET", "/synthetic-checks", None)
     if status != 200:
@@ -421,12 +546,16 @@ def register_ai_dc_synthetic_checks(
             if isinstance(item, dict) and item.get("check_key")
         }
 
+    wanted_keys = {spec["id"] for spec in selected_specs}
     created = 0
     updated = 0
     failed = 0
     errors: list[str] = []
+    registered_keys: list[str] = []
     for payload in build_keep_synthetic_checks(base_url, resolved_provider):
         key = payload["check_key"]
+        if key not in wanted_keys:
+            continue
         match = by_key.get(key)
         if match:
             code, body = request_fn("PUT", f"/synthetic-checks/{match['id']}", payload)
@@ -438,6 +567,7 @@ def register_ai_dc_synthetic_checks(
             failed += 1
             errors.append(f"{key} ({code}): {body}")
             continue
+        registered_keys.append(key)
         if action == "created":
             created += 1
         else:
@@ -455,6 +585,8 @@ def register_ai_dc_synthetic_checks(
         "base_url": base_url,
         "provider_id": resolved_provider,
         "alert_codes": alert_stats,
+        "check_keys": registered_keys,
+        "total": len(selected_specs),
     }
 
 
@@ -477,6 +609,31 @@ def upload_workflow(
         "status": status,
         "filename": filename,
         "keep": body,
+    }
+
+
+def upload_workflows(
+    upload_fn: UploadFn,
+    *,
+    filenames: list[str] | None = None,
+) -> dict[str, Any]:
+    available = {path.name: path for path in DEMO_WORKFLOWS_DIR.glob("*.yml")}
+    if filenames:
+        unknown = [name for name in filenames if name not in available]
+        if unknown:
+            raise RuntimeError(f"Unknown workflow file(s): {sorted(unknown)}")
+        chosen = [available[name] for name in filenames]
+    else:
+        chosen = [available[name] for name in sorted(available)]
+    results = [
+        upload_workflow(upload_fn, filename=path.name) for path in chosen
+    ]
+    ok = all(item.get("ok") for item in results)
+    return {
+        "ok": ok,
+        "uploaded": len(results),
+        "workflows": results,
+        "filenames": [path.name for path in chosen],
     }
 
 
@@ -532,6 +689,7 @@ ACTION_HANDLERS: dict[str, str] = {
     "nvidia-gpu-alert-codes": "register_nvidia_gpu_alert_codes",
     "nvidia-gpu-topology": "register_nvidia_gpu_topology",
     "ai-dc-synthetic-checks": "register_ai_dc_synthetic_checks",
+    "demo-workflows": "upload_workflows",
     "demo-list-and-zip": "demo_list_and_zip",
     "demo-nvidia-gpu": "demo_nvidia_gpu",
 }
@@ -544,20 +702,30 @@ def run_setup_action(
     *,
     provider_id: str | None = None,
     target_base_url: str | None = None,
+    items: list[str] | None = None,
 ) -> dict[str, Any]:
     if action_id not in ACTION_HANDLERS:
         raise KeyError(action_id)
 
+    # Empty list means "nothing selected" — treat as error for selectable packs.
+    selected = items if items else None
+
     if action_id == "list-and-zip-catalog":
+        if selected and "list-and-zip-directory" not in selected:
+            raise RuntimeError("Selected items do not include list-and-zip-directory")
         return register_list_and_zip_catalog(request_fn, provider_id=provider_id)
     if action_id == "nvidia-gpu-catalog":
+        if selected and "remediate-nvidia-gpu" not in selected:
+            raise RuntimeError("Selected items do not include remediate-nvidia-gpu")
         return register_nvidia_gpu_catalog(request_fn, provider_id=provider_id)
     if action_id == "probe-targets-catalog":
+        if selected and "probe-targets" not in selected:
+            raise RuntimeError("Selected items do not include probe-targets")
         return register_probe_targets_catalog(request_fn, provider_id=provider_id)
     if action_id == "payments-alert-codes":
-        return register_payments_alert_codes(request_fn)
+        return register_payments_alert_codes(request_fn, codes=selected)
     if action_id == "nvidia-gpu-alert-codes":
-        return register_nvidia_gpu_alert_codes(request_fn)
+        return register_nvidia_gpu_alert_codes(request_fn, codes=selected)
     if action_id == "nvidia-gpu-topology":
         return register_nvidia_gpu_topology(request_fn)
     if action_id == "ai-dc-synthetic-checks":
@@ -565,9 +733,12 @@ def run_setup_action(
             request_fn,
             provider_id=provider_id,
             target_base_url=target_base_url,
+            check_keys=selected,
         )
     if upload_fn is None:
         raise RuntimeError(f"Action {action_id} requires workflow upload support")
+    if action_id == "demo-workflows":
+        return upload_workflows(upload_fn, filenames=selected)
     if action_id == "demo-list-and-zip":
         return demo_list_and_zip(request_fn, upload_fn, provider_id=provider_id)
     if action_id == "demo-nvidia-gpu":

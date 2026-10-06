@@ -66,7 +66,7 @@ Disable auto-setup: `AUTO_SETUP_NVIDIA_GPU_DEMO=0 make start`
 - Triggers: alert CEL `labels.code.startsWith("DCGM_")` **or** incident `created` / `updated` with the same code filter  
 - Guard: enrichment `gpu_remediation` not set  
 - Action: Temporal `start_workflow` → `RemediateNvidiaGpu` / `keep-ops` with `suite: "2"` (medium: software + memory + pcie)  
-- Mock payloads set reserved `labels.code` to the DCGM metric name (`DCGM_FI_DEV_GPU_TEMP`, `DCGM_FI_DEV_FB_USED`, …). `make start` / `scripts/register_alert_codes_nvidia_gpu.py` seeds exporter metrics, diag plugins (`DCGM_DIAG_*`), and finding codes (`DCGM_FR_*`) under [Catalog → Alert codes](/overview/alert-code-catalog).  
+- Mock payloads set reserved `labels.code` to the DCGM metric name (`DCGM_FI_DEV_GPU_TEMP`, `DCGM_FI_DEV_FB_USED`, …). `make start` / `scripts/register_alert_codes_nvidia_gpu.py` seeds exporter metrics (aligned to dcgm-exporter help text + detection notes), diag plugins (`DCGM_DIAG_*`), and finding codes (`DCGM_FR_*`, including health-watch codes like `DCGM_FR_FALLEN_OFF_BUS`) under [Catalog → Alert codes](/overview/alert-code-catalog).  
 - Temporal: cordon (L2+) → `run_dcgm_diag` → Pass: remediate + uncordon + resolve; Fail: email only  
 - Suite L3+ (`3` / `long` / `4` / `xlong`) auto-creates a Keep **Approvals** request unless `skip_approval: true`
 

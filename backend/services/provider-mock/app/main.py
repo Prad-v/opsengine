@@ -223,6 +223,9 @@ class SetupActionRequest(KeepConnection):
 
     temporal_provider_id: str | None = None
     synth_target_base_url: str | None = None
+    # Optional subset of action items (alert codes, check keys, workflow files, …).
+    # Omit or null = configure all items for that action.
+    items: list[str] | None = None
 
 
 def _log(entry: dict[str, Any]) -> None:
@@ -1696,6 +1699,7 @@ async def run_setup(action_id: str, body: SetupActionRequest) -> dict[str, Any]:
             upload_fn,
             provider_id=body.temporal_provider_id,
             target_base_url=body.synth_target_base_url,
+            items=body.items,
         )
     except RuntimeError as exc:
         _log(
@@ -1710,8 +1714,16 @@ async def run_setup(action_id: str, body: SetupActionRequest) -> dict[str, Any]:
     except KeyError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
 
-    _log({"action": "setup", "setup_action": action_id, "ok": True})
-    return {"ok": True, "action": action_id, "result": result}
+    _log(
+        {
+            "action": "setup",
+            "setup_action": action_id,
+            "ok": True,
+            "items": body.items,
+            "item_count": len(body.items) if body.items is not None else None,
+        }
+    )
+    return {"ok": True, "action": action_id, "items": body.items, "result": result}
 
 
 # ---------------------------------------------------------------------------

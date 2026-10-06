@@ -143,7 +143,7 @@ Shared labels on every GPU mock alert (values vary by host; demo pair uses `gpu-
 | `gpu_xid` | `NvidiaGpuXidError` | `DCGM_FI_DEV_XID_ERRORS` | critical | `DCGM_FI_DEV_XID_ERRORS` |
 | `gpu_ecc` | `NvidiaGpuUncorrectableEcc` | `DCGM_FI_DEV_ECC_DBE_VOL_TOTAL` | critical | `DCGM_FI_DEV_ECC_DBE_VOL_TOTAL` |
 | `gpu_throttle` | `NvidiaGpuThermalThrottle` | `DCGM_FI_DEV_THERMAL_VIOLATION` | warning | `DCGM_FI_DEV_THERMAL_VIOLATION` |
-| `gpu_nvlink` | `NvidiaNvlinkError` | `DCGM_FI_DEV_NVLINK_CRC_FLIT_ERROR_COUNT_TOTAL` | critical | `DCGM_FI_DEV_NVLINK_CRC_FLIT_ERROR_COUNT_TOTAL` |
+| `gpu_nvlink` | `NvidiaNvlinkError` | `DCGM_FI_DEV_NVLINK_CRC_FLIT_ERROR_TOTAL` | critical | `DCGM_FI_DEV_NVLINK_CRC_FLIT_ERROR_TOTAL` |
 | `gpu_power` | `NvidiaGpuPowerLimitExceeded` | `DCGM_FI_DEV_POWER_USAGE` | warning | `DCGM_FI_DEV_POWER_USAGE` |
 | `gpu_unavailable` | `NvidiaGpuUnavailable` | `DCGM_EXP_GPU_HEALTH_STATUS` | critical | `DCGM_EXP_GPU_HEALTH_STATUS` |
 
@@ -163,17 +163,25 @@ group by `labels.host`, threshold `2`, incident prefix `GPU`.
 
 The **Setup** tab runs the same Keep registration steps as the Makefile targets below — without leaving the browser. Use the Keep API URL / key at the top of the page. Register Temporal first.
 
-| UI action | Makefile equivalent |
-| --- | --- |
-| ListAndZipDirectory catalog | `make register-list-and-zip-catalog` |
-| RemediateNvidiaGpu catalog | `make register-nvidia-gpu-catalog` |
-| ProbeTargets catalog | `make register-probe-targets-catalog` |
-| Payments alert codes | `make register-payments-alert-codes` |
-| NVIDIA GPU alert codes | `make register-nvidia-gpu-alert-codes` |
-| NVIDIA GPU topology | `make register-nvidia-gpu-topology` |
-| AI DC synthetic checks | `make register-ai-dc-synthetic-checks` |
-| Demo: Grafana → ListAndZip | `make demo-list-and-zip` |
-| Demo: NVIDIA GPU remediate | `make demo-nvidia-gpu` |
+Each selectable pack lists **individual items** (alert codes, synthetic probes, workflow YAML files). Use checkboxes plus:
+
+- **Select all** / **Clear**
+- **Demo codes** (NVIDIA pack only — the 8 VictoriaMetrics remediations codes)
+- **Run selected** or **Run all**
+- Filter box to search by code / name / tag
+
+| UI action | Makefile equivalent | Selectable items |
+| --- | --- | --- |
+| ListAndZipDirectory catalog | `make register-list-and-zip-catalog` | catalog entry |
+| RemediateNvidiaGpu catalog | `make register-nvidia-gpu-catalog` | catalog entry |
+| ProbeTargets catalog | `make register-probe-targets-catalog` | catalog entry |
+| Payments alert codes | `make register-payments-alert-codes` | `HIGH_CPU`, `HIGH_MEMORY`, `DISK_SPACE_LOW` |
+| NVIDIA GPU alert codes | `make register-nvidia-gpu-alert-codes` | every `DCGM_*` catalog row |
+| Demo Keep workflows | (part of demos) | individual YAML files |
+| NVIDIA GPU topology | `make register-nvidia-gpu-topology` | full pack |
+| AI DC synthetic checks | `make register-ai-dc-synthetic-checks` | individual probes |
+| Demo: Grafana → ListAndZip | `make demo-list-and-zip` | full pack |
+| Demo: NVIDIA GPU remediate | `make demo-nvidia-gpu` | full pack |
 
 Workers (`temporal-worker` / `synthetic-checks`) still start via Docker Compose — the Setup tab does not build or restart containers.
 
@@ -182,6 +190,16 @@ API:
 ```bash
 curl http://localhost:8099/api/setup
 
+# Register only two NVIDIA alert codes
+curl -X POST http://localhost:8099/api/setup/nvidia-gpu-alert-codes \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "keep_api_url": "http://host.docker.internal:8080",
+    "keep_api_key": "keepappkey",
+    "items": ["DCGM_FI_DEV_GPU_TEMP", "DCGM_FI_DEV_FB_USED"]
+  }'
+
+# Register all codes in the pack (omit items)
 curl -X POST http://localhost:8099/api/setup/demo-nvidia-gpu \
   -H 'Content-Type: application/json' \
   -d '{

@@ -218,6 +218,15 @@ def test_victoriametrics_gpu_scenarios(client: TestClient):
     assert 'source == "victoriametrics"' in data["gpu_correlation_rule"]["celQuery"]
     assert data["packs"]["nvidia-gpu"]["demo_scenario_ids"] == ["gpu_temp", "gpu_mem"]
     assert data["ui_hint"]["source_filter_value"] == "victoriametrics"
+    by_id = {s["id"]: s for s in gpu}
+    assert (
+        by_id["gpu_nvlink"]["payload"]["alerts"][0]["labels"]["code"]
+        == "DCGM_FI_DEV_NVLINK_CRC_FLIT_ERROR_TOTAL"
+    )
+    assert "MiB" in by_id["gpu_mem"]["description"] or "utilization percent" in by_id[
+        "gpu_mem"
+    ]["description"]
+    assert by_id["gpu_unavailable"]["payload"]["alerts"][0]["labels"]["health_watch"] == "ALL"
 
 
 def test_preview_grafana_scenario(client: TestClient):
@@ -960,10 +969,21 @@ def test_setup_actions_catalog(client: TestClient):
         "nvidia-gpu-alert-codes",
         "nvidia-gpu-topology",
         "ai-dc-synthetic-checks",
+        "demo-workflows",
         "demo-list-and-zip",
         "demo-nvidia-gpu",
     } <= ids
     assert all(a.get("makefile") for a in actions)
+    nvidia = next(a for a in actions if a["id"] == "nvidia-gpu-alert-codes")
+    assert nvidia["selectable"] is True
+    assert len(nvidia["items"]) >= 90
+    assert any(i.get("recommended") for i in nvidia["items"])
+    payments = next(a for a in actions if a["id"] == "payments-alert-codes")
+    assert {i["id"] for i in payments["items"]} == {
+        "HIGH_CPU",
+        "HIGH_MEMORY",
+        "DISK_SPACE_LOW",
+    }
 
 
 def test_setup_unknown_action(client: TestClient):
@@ -997,6 +1017,9 @@ def test_setup_index_has_tab():
     assert 'data-tab="setup"' in text
     assert "view-setup" in text
     assert "/api/setup/" in text
+    assert "Run selected" in text
+    assert "Select all" in text
+    assert "data-setup-item" in text
 
 
 def test_setup_actions_module_payloads():
@@ -1007,11 +1030,25 @@ def test_setup_actions_module_payloads():
         LIST_AND_ZIP_CATALOG,
         NVIDIA_GPU_CATALOG,
         PROBE_TARGETS_CATALOG,
+        _filter_by_ids,
         list_setup_actions,
     )
 
     assert len(CODES) >= 90
     assert "DCGM_FI_DEV_GPU_TEMP" in DEMO_AUTO_RUN_CODES
+    by_code = {c["code"]: c for c in CODES}
+    assert "DCGM_FI_DEV_NVLINK_CRC_FLIT_ERROR_TOTAL" in by_code
+    assert "DCGM_FI_DEV_POWER_MGMT_LIMIT" in by_code
+    assert "DCGM_FR_FALLEN_OFF_BUS" in by_code
+    assert "DCGM_FI_DEV_FABRIC_HEALTH_SUMMARY" in by_code
+    temp_desc = by_code["DCGM_FI_DEV_GPU_TEMP"]["description"]
+    assert "Celsius" in temp_desc
+    assert "85" in temp_desc or "Detect" in temp_desc
+    xid_desc = by_code["DCGM_FI_DEV_XID_ERRORS"]["description"]
+    assert "last" in xid_desc.lower()
+    health_desc = by_code["DCGM_EXP_GPU_HEALTH_STATUS"]["description"]
+    assert "health_watch" in health_desc
+    assert "requires-enable" in by_code["DCGM_FI_DEV_THERMAL_VIOLATION"]["tags"]
     assert {c["code"] for c in PAYMENTS_ALERT_CODES} == {
         "HIGH_CPU",
         "HIGH_MEMORY",
@@ -1022,5 +1059,9 @@ def test_setup_actions_module_payloads():
     assert PROBE_TARGETS_CATALOG["catalog_key"] == "probe-targets"
     assert (DEMO_WORKFLOWS_DIR / "mock-grafana-list-and-zip.yml").is_file()
     assert (DEMO_WORKFLOWS_DIR / "mock-nvidia-gpu-remediate.yml").is_file()
-    assert len(list_setup_actions()) == 9
+    assert len(list_setup_actions()) == 10
+    filtered = _filter_by_ids(
+        PAYMENTS_ALERT_CODES, id_field="code", selected=["HIGH_CPU"]
+    )
+    assert [row["code"] for row in filtered] == ["HIGH_CPU"]
 

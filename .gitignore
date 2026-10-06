@@ -229,3 +229,6 @@ grafana/*
 keep/providers/grafana_provider/grafana/png/*
 topology.sh
 posthog.py
+
+# Local reference checkouts (symlinks to sibling repos)
+reference/

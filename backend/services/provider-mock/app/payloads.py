@@ -320,7 +320,9 @@ VICTORIAMETRICS_GPU_SCENARIOS: dict[str, dict[str, Any]] = {
         summary="GPU framebuffer utilization above 95% on H100 (gpu-node-a03)",
         description=(
             "DCGM mock via VMAlert: DCGM_FI_DEV_FB_USED near capacity for "
-            "inference workload on gpu-node-a03 / row-a / rack-12."
+            "inference workload on gpu-node-a03 / row-a / rack-12. "
+            "(Mock value is utilization percent; real exporter metric is MiB — "
+            "alert on used/(used+free).)"
         ),
         dcgm_field="DCGM_FI_DEV_FB_USED",
         value=97.2,
@@ -374,11 +376,12 @@ VICTORIAMETRICS_GPU_SCENARIOS: dict[str, dict[str, Any]] = {
         severity="critical",
         summary="NVLink CRC / flit errors on gpu-node-b01 (row-b / rack-21)",
         description=(
-            "DCGM mock via VMAlert: "
-            "DCGM_FI_DEV_NVLINK_CRC_FLIT_ERROR_COUNT_TOTAL rising on "
-            "gpu-node-b01 / row-b / rack-21; inspect NVLink fabric and cables."
+            "DCGM mock via VMAlert: DCGM_FI_DEV_NVLINK_CRC_FLIT_ERROR_TOTAL "
+            "increase on gpu-node-b01 / row-b / rack-21; inspect NVLink fabric "
+            "and cables. (Legacy alias: "
+            "DCGM_FI_DEV_NVLINK_CRC_FLIT_ERROR_COUNT_TOTAL.)"
         ),
-        dcgm_field="DCGM_FI_DEV_NVLINK_CRC_FLIT_ERROR_COUNT_TOTAL",
+        dcgm_field="DCGM_FI_DEV_NVLINK_CRC_FLIT_ERROR_TOTAL",
         value=12.0,
     ),
     "gpu_power": _gpu_scenario(
@@ -402,13 +405,14 @@ VICTORIAMETRICS_GPU_SCENARIOS: dict[str, dict[str, Any]] = {
         severity="critical",
         summary="GPU not ready — driver lost on gpu-node-a03 / rack-12",
         description=(
-            "VMAlert mock node-level alert: nvidia device disappeared or DCGM "
-            "health check failed on gpu-node-a03 / row-a / rack-12 / "
-            "gpu-node-a03-gpu0."
+            "VMAlert mock: DCGM_EXP_GPU_HEALTH_STATUS=20 (FAIL) on "
+            "gpu-node-a03 / row-a / rack-12 / gpu-node-a03-gpu0 "
+            "(health_watch=ALL; often XID 79 fallen-off-bus). Values: "
+            "0=PASS, 10=WARN, 20=FAIL."
         ),
         dcgm_field="DCGM_EXP_GPU_HEALTH_STATUS",
         value=20.0,
-        extra={"health": "fail"},
+        extra={"health": "fail", "health_watch": "ALL"},
     ),
 }
 

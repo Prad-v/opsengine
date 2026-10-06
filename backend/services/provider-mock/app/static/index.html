@@ -373,6 +373,85 @@
       color: var(--muted);
     }
     .check input { width: auto; }
+
+    .setup-card {
+      grid-column: 1 / -1;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: var(--bg-elev);
+      padding: 14px 16px 16px;
+    }
+    .setup-card__head {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px 16px;
+      align-items: flex-start;
+      justify-content: space-between;
+    }
+    .setup-card__head h3 {
+      margin: 0;
+      font-size: 1.05rem;
+    }
+    .setup-card__tools {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      align-items: center;
+    }
+    .setup-card__tools input[type="search"] {
+      min-width: 180px;
+      max-width: 280px;
+      margin: 0;
+    }
+    .setup-item-list {
+      margin-top: 12px;
+      max-height: 320px;
+      overflow: auto;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--bg-soft);
+    }
+    .setup-item {
+      display: grid;
+      grid-template-columns: auto 1fr;
+      gap: 8px 10px;
+      padding: 8px 12px;
+      border-bottom: 1px solid var(--line);
+      align-items: start;
+    }
+    .setup-item:last-child { border-bottom: none; }
+    .setup-item input { margin-top: 3px; width: auto; }
+    .setup-item__label {
+      font-size: 0.9rem;
+      font-weight: 500;
+    }
+    .setup-item__meta {
+      font-family: var(--mono);
+      font-size: 0.75rem;
+      color: var(--muted);
+      margin-top: 2px;
+    }
+    .setup-item__desc {
+      font-size: 0.8rem;
+      color: var(--muted);
+      margin-top: 2px;
+      line-height: 1.35;
+    }
+    .setup-pill {
+      display: inline-block;
+      margin-left: 6px;
+      padding: 1px 7px;
+      border-radius: 999px;
+      border: 1px solid var(--accent-dim);
+      color: var(--accent);
+      font-size: 0.7rem;
+      font-family: var(--mono);
+    }
+    .setup-count {
+      font-family: var(--mono);
+      font-size: 0.78rem;
+      color: var(--muted);
+    }
   </style>
 </head>
 <body>
@@ -716,22 +795,22 @@
       <section class="panel">
         <h2>Keep catalog &amp; demo setup</h2>
         <p class="hint">
-          Same actions as the Makefile <code>register-*</code> / <code>demo-*</code> targets,
-          run against the Keep API URL and key above. Register the Temporal provider first
-          (Temporal tab) before catalog or synthetic-check actions.
-          Workers (<code>make temporal-worker</code> / <code>make synthetic-checks</code>)
-          must already be running via Docker Compose — this UI does not start containers.
+          Same actions as the Makefile <code>register-*</code> / <code>demo-*</code> targets.
+          Expand a pack to pick individual alert codes / checks / workflows, or use
+          <strong>Select all</strong> then <strong>Run selected</strong>.
+          Register Temporal first. Workers must already be running via Docker Compose.
         </p>
         <div class="grid-config two" style="margin-bottom:14px">
           <div>
             <label for="setupSynthBase">Synthetic probe base URL (worker → mock)</label>
             <input id="setupSynthBase" placeholder="http://host.docker.internal:8099" />
           </div>
-          <div style="display:flex;align-items:end;padding-bottom:4px">
+          <div style="display:flex;align-items:end;padding-bottom:4px;gap:8px;flex-wrap:wrap">
             <button type="button" id="setupRefresh">Refresh action list</button>
+            <button type="button" class="primary" id="setupRunAllPacks">Run all packs</button>
           </div>
         </div>
-        <div id="setupActions" class="cards" style="grid-template-columns: repeat(2, minmax(0, 1fr))"></div>
+        <div id="setupActions" class="cards" style="grid-template-columns: 1fr"></div>
       </section>
       <section class="panel">
         <h2>Setup activity</h2>
@@ -1115,7 +1194,74 @@
       "alert-codes": "Alert codes",
       topology: "Service Topology",
       synthetics: "Synthetic checks",
+      workflows: "Demo workflows",
     };
+
+    function setupSelectedIds(actionId) {
+      const root = $("setupActions");
+      if (!root) return [];
+      return Array.from(
+        root.querySelectorAll(`input[data-setup-item="${actionId}"]:checked`)
+      ).map((el) => el.value);
+    }
+
+    function setSetupSelection(actionId, mode) {
+      const action = (state.setupActions || []).find((a) => a.id === actionId);
+      const boxes = Array.from(
+        document.querySelectorAll(`input[data-setup-item="${actionId}"]`)
+      );
+      const filter = ($("setupFilter-" + actionId)?.value || "").trim().toLowerCase();
+      boxes.forEach((box) => {
+        const item = (action?.items || []).find((i) => i.id === box.value);
+        const hay = [
+          item?.id,
+          item?.label,
+          item?.description,
+          item?.meta,
+          ...(item?.tags || []),
+        ].join(" ").toLowerCase();
+        const visible = !filter || hay.includes(filter);
+        if (!visible) return;
+        if (mode === "all") box.checked = true;
+        else if (mode === "none") box.checked = false;
+        else if (mode === "recommended") box.checked = !!item?.recommended;
+      });
+      updateSetupCount(actionId);
+    }
+
+    function updateSetupCount(actionId) {
+      const el = document.getElementById("setupCount-" + actionId);
+      if (!el) return;
+      const action = (state.setupActions || []).find((a) => a.id === actionId);
+      const total = (action?.items || []).length;
+      const selected = setupSelectedIds(actionId).length;
+      el.textContent = total ? `${selected} / ${total} selected` : "bulk action";
+    }
+
+    function filterSetupItems(actionId) {
+      const action = (state.setupActions || []).find((a) => a.id === actionId);
+      const filter = ($("setupFilter-" + actionId)?.value || "").trim().toLowerCase();
+      document.querySelectorAll(`[data-setup-row="${actionId}"]`).forEach((row) => {
+        const id = row.dataset.itemId;
+        const item = (action?.items || []).find((i) => i.id === id);
+        const hay = [
+          item?.id,
+          item?.label,
+          item?.description,
+          item?.meta,
+          ...(item?.tags || []),
+        ].join(" ").toLowerCase();
+        row.style.display = !filter || hay.includes(filter) ? "" : "none";
+      });
+    }
+
+    function escapeHtml(value) {
+      return String(value ?? "")
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;");
+    }
 
     function renderSetup() {
       const root = $("setupActions");
@@ -1130,29 +1276,89 @@
         if (!groups[g]) groups[g] = [];
         groups[g].push(action);
       }
-      const order = ["demos", "temporal-catalog", "alert-codes", "topology", "synthetics"];
-      const keys = [...order.filter((k) => groups[k]), ...Object.keys(groups).filter((k) => !order.includes(k))];
+      const order = [
+        "demos",
+        "temporal-catalog",
+        "alert-codes",
+        "workflows",
+        "topology",
+        "synthetics",
+      ];
+      const keys = [
+        ...order.filter((k) => groups[k]),
+        ...Object.keys(groups).filter((k) => !order.includes(k)),
+      ];
       root.innerHTML = keys.map((g) => {
-        const cards = groups[g].map((a) => `
-          <article class="card">
-            <h3>${a.title}</h3>
-            <p class="hint" style="margin:8px 0 12px">${a.description}</p>
-            <div class="meta" style="margin-bottom:10px">make ${a.makefile}</div>
-            <div class="actions">
-              <button type="button" class="primary" data-setup="${a.id}">Run</button>
-            </div>
-          </article>
-        `).join("");
+        const cards = groups[g].map((a) => {
+          const selectable = !!a.selectable && Array.isArray(a.items) && a.items.length;
+          const itemsHtml = selectable
+            ? a.items.map((item) => `
+                <label class="setup-item" data-setup-row="${escapeHtml(a.id)}" data-item-id="${escapeHtml(item.id)}">
+                  <input type="checkbox" data-setup-item="${escapeHtml(a.id)}" value="${escapeHtml(item.id)}" checked />
+                  <span>
+                    <div class="setup-item__label">
+                      ${escapeHtml(item.label || item.id)}
+                      ${item.recommended ? '<span class="setup-pill">demo</span>' : ""}
+                    </div>
+                    <div class="setup-item__meta">${escapeHtml(item.meta || item.id)}</div>
+                    <div class="setup-item__desc">${escapeHtml(item.description || "")}</div>
+                  </span>
+                </label>
+              `).join("")
+            : `<div class="meta" style="padding:10px 12px">No per-item list — Run configures the full pack.</div>`;
+          const tools = selectable
+            ? `
+              <input type="search" id="setupFilter-${escapeHtml(a.id)}" placeholder="Filter items…" />
+              <button type="button" data-setup-select="${escapeHtml(a.id)}" data-mode="all">Select all</button>
+              <button type="button" data-setup-select="${escapeHtml(a.id)}" data-mode="none">Clear</button>
+              ${a.id === "nvidia-gpu-alert-codes"
+                ? `<button type="button" data-setup-select="${escapeHtml(a.id)}" data-mode="recommended">Demo codes</button>`
+                : ""}
+              <button type="button" class="primary" data-setup-run="${escapeHtml(a.id)}" data-mode="selected">Run selected</button>
+              <button type="button" data-setup-run="${escapeHtml(a.id)}" data-mode="all">Run all</button>
+            `
+            : `<button type="button" class="primary" data-setup-run="${escapeHtml(a.id)}" data-mode="all">Run</button>`;
+          return `
+            <article class="setup-card">
+              <div class="setup-card__head">
+                <div>
+                  <h3>${escapeHtml(a.title)}</h3>
+                  <p class="hint" style="margin:6px 0 0">${escapeHtml(a.description)}</p>
+                  <div class="meta" style="margin-top:6px">make ${escapeHtml(a.makefile)}</div>
+                  <div class="setup-count" id="setupCount-${escapeHtml(a.id)}" style="margin-top:4px"></div>
+                </div>
+                <div class="setup-card__tools">${tools}</div>
+              </div>
+              <div class="setup-item-list">${itemsHtml}</div>
+            </article>
+          `;
+        }).join("");
         return `
-          <div style="grid-column:1 / -1;margin:4px 0 2px">
+          <div style="margin:8px 0 4px">
             <div class="meta" style="font-weight:600;color:var(--text)">${SETUP_GROUP_LABELS[g] || g}</div>
           </div>
           ${cards}
         `;
       }).join("");
-      root.querySelectorAll("[data-setup]").forEach((btn) => {
-        btn.addEventListener("click", () => runSetup(btn.dataset.setup, btn));
+
+      root.querySelectorAll("[data-setup-select]").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          setSetupSelection(btn.dataset.setupSelect, btn.dataset.mode);
+        });
       });
+      root.querySelectorAll("[data-setup-run]").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          runSetup(btn.dataset.setupRun, btn, btn.dataset.mode || "all");
+        });
+      });
+      root.querySelectorAll('input[type="search"][id^="setupFilter-"]').forEach((input) => {
+        const actionId = input.id.replace("setupFilter-", "");
+        input.addEventListener("input", () => filterSetupItems(actionId));
+      });
+      root.querySelectorAll("input[data-setup-item]").forEach((box) => {
+        box.addEventListener("change", () => updateSetupCount(box.dataset.setupItem));
+      });
+      (state.setupActions || []).forEach((a) => updateSetupCount(a.id));
     }
 
     async function loadSetup() {
@@ -1167,7 +1373,21 @@
       renderLog();
     }
 
-    async function runSetup(actionId, btn) {
+    async function runSetup(actionId, btn, mode = "all") {
+      const action = (state.setupActions || []).find((a) => a.id === actionId);
+      const selectable = !!action?.selectable && (action.items || []).length;
+      let items = null;
+      if (selectable) {
+        if (mode === "selected") {
+          items = setupSelectedIds(actionId);
+          if (!items.length) {
+            toast("Select at least one item (or use Run all)", false);
+            return;
+          }
+        } else {
+          items = null;
+        }
+      }
       const label = btn ? btn.textContent : "Run";
       if (btn) {
         btn.disabled = true;
@@ -1177,17 +1397,19 @@
         const payload = {
           ...connection(),
           synth_target_base_url: $("setupSynthBase").value.trim() || null,
+          items,
         };
         const data = await api(`/api/setup/${actionId}`, {
           method: "POST",
           body: JSON.stringify(payload),
         });
+        const count = items ? items.length : (action?.items?.length || "all");
         const summary = data.result
-          ? (data.result.action || data.result.created != null
-            ? JSON.stringify(data.result).slice(0, 180)
-            : "ok")
+          ? (data.result.created != null || data.result.updated != null
+            ? `created=${data.result.created ?? 0} updated=${data.result.updated ?? 0} total=${data.result.total ?? count}`
+            : JSON.stringify(data.result).slice(0, 160))
           : "ok";
-        toast(`Setup ${actionId}: ${summary}`);
+        toast(`${actionId} (${count}): ${summary}`);
         await loadEvents();
         renderLog();
       } catch (err) {
@@ -1199,6 +1421,43 @@
           btn.disabled = false;
           btn.textContent = label;
         }
+      }
+    }
+
+    async function runAllSetupPacks() {
+      const actions = state.setupActions || [];
+      if (!actions.length) {
+        toast("No setup actions loaded", false);
+        return;
+      }
+      const btn = $("setupRunAllPacks");
+      const label = btn.textContent;
+      btn.disabled = true;
+      btn.textContent = "Running…";
+      let ok = 0;
+      let failed = 0;
+      try {
+        for (const action of actions) {
+          try {
+            await api(`/api/setup/${action.id}`, {
+              method: "POST",
+              body: JSON.stringify({
+                ...connection(),
+                synth_target_base_url: $("setupSynthBase").value.trim() || null,
+                items: null,
+              }),
+            });
+            ok += 1;
+          } catch (_) {
+            failed += 1;
+          }
+        }
+        toast(`Ran ${ok} packs${failed ? `, ${failed} failed` : ""}`, failed === 0);
+        await loadEvents();
+        renderLog();
+      } finally {
+        btn.disabled = false;
+        btn.textContent = label;
       }
     }
 
@@ -1597,6 +1856,9 @@
       loadSetup()
         .then(() => toast("Setup actions refreshed"))
         .catch((e) => toast(String(e.message || e), false));
+    });
+    $("setupRunAllPacks").addEventListener("click", () => {
+      runAllSetupPacks().catch((e) => toast(String(e.message || e), false));
     });
 
     (async () => {
