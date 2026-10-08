@@ -2,7 +2,7 @@
 # Demo service — ClusterIP only; do not expose publicly.
 image:
   repository: keep-provider-mock
-  tag: "sha-3e3977e"
+  tag: "sha-52275de"
   pullPolicy: IfNotPresent
 
 replicaCount: 1
