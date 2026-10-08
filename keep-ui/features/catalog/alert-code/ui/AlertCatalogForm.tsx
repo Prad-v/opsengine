@@ -18,8 +18,14 @@ import { showErrorToast, showSuccessToast } from "@/shared/ui";
 import { useAlertCatalog } from "../model/useAlertCatalog";
 import type {
   AlertCatalogAutoRunOn,
+  AlertCatalogDomain,
   AlertCatalogEntry,
   AlertCatalogEntryInput,
+  AlertCatalogRole,
+} from "../model/types";
+import {
+  ALERT_CATALOG_DOMAIN_OPTIONS,
+  ALERT_CATALOG_ROLE_OPTIONS,
 } from "../model/types";
 
 interface AlertCatalogFormProps {
@@ -68,6 +74,8 @@ export function AlertCatalogForm({
   const [autoRunOn, setAutoRunOn] = useState<AlertCatalogAutoRunOn>("none");
   const [disabled, setDisabled] = useState(false);
   const [tags, setTags] = useState<string[]>([]);
+  const [domain, setDomain] = useState<AlertCatalogDomain | "">("");
+  const [role, setRole] = useState<AlertCatalogRole | "">("");
   const [isSaving, setIsSaving] = useState(false);
   const [isEnhancing, setIsEnhancing] = useState(false);
 
@@ -89,6 +97,8 @@ export function AlertCatalogForm({
       setAutoRunOn(initial.auto_run_on || "none");
       setDisabled(!!initial.disabled);
       setTags((initial.tags ?? []).map(normalizeTag).filter(Boolean));
+      setDomain(initial.domain || "");
+      setRole(initial.role || "");
       return;
     }
     setCode("");
@@ -99,6 +109,8 @@ export function AlertCatalogForm({
     setAutoRunOn("none");
     setDisabled(false);
     setTags([]);
+    setDomain("");
+    setRole("");
   }, [initial]);
 
   const handleSubmit = async (event: FormEvent) => {
@@ -114,6 +126,8 @@ export function AlertCatalogForm({
         auto_run_on: autoRunOn,
         disabled,
         tags,
+        domain: domain || null,
+        role: role || null,
       });
     } finally {
       setIsSaving(false);
@@ -234,6 +248,46 @@ export function AlertCatalogForm({
         />
       </div>
       <div>
+        <Text>Domain</Text>
+        <Select
+          value={domain || "__none__"}
+          onValueChange={(value) =>
+            setDomain(value === "__none__" ? "" : (value as AlertCatalogDomain))
+          }
+          placeholder="Subsystem this code belongs to"
+        >
+          <SelectItem value="__none__">None</SelectItem>
+          {ALERT_CATALOG_DOMAIN_OPTIONS.map((option) => (
+            <SelectItem key={option.id} value={option.id}>
+              {option.label}
+            </SelectItem>
+          ))}
+        </Select>
+        <Text className="text-xs mt-1">
+          Subsystem taxonomy (thermal, fabric, security, …). Orthogonal to role.
+        </Text>
+      </div>
+      <div>
+        <Text>Role</Text>
+        <Select
+          value={role || "__none__"}
+          onValueChange={(value) =>
+            setRole(value === "__none__" ? "" : (value as AlertCatalogRole))
+          }
+          placeholder="How this code is used in triage"
+        >
+          <SelectItem value="__none__">None</SelectItem>
+          {ALERT_CATALOG_ROLE_OPTIONS.map((option) => (
+            <SelectItem key={option.id} value={option.id}>
+              {option.label}
+            </SelectItem>
+          ))}
+        </Select>
+        <Text className="text-xs mt-1">
+          Diagnostic role: symptom, root cause, capacity signal, etc.
+        </Text>
+      </div>
+      <div>
         <Text>Tags</Text>
         <div className="mt-1">
           <CreatableMultiSelect
@@ -245,8 +299,8 @@ export function AlertCatalogForm({
           />
         </div>
         <Text className="text-xs mt-1">
-          Group codes in the catalog (multi-tag). Example:{" "}
-          <code>nvidia</code>, <code>dcgm</code>, <code>thermal</code>.
+          Free-form multi-tag labels (vendor, product). Example:{" "}
+          <code>nvidia</code>, <code>dcgm</code>, <code>isolate</code>.
         </Text>
       </div>
       <div>

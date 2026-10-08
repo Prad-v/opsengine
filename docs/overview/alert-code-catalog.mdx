@@ -38,10 +38,14 @@ Mapping rules that set a top-level `code` column are copied into `labels.code` a
 | --- | --- |
 | **Code** | Join key (`DCGM_FI_DEV_GPU_TEMP`) |
 | **Name / description** | Human catalog text. Use **AI** next to Description to expand your draft with Settings → AI |
-| **Tags** | Multi-value labels for grouping/filtering (e.g. `nvidia`, `dcgm`, `thermal`, `ecc`). Filter chips on the catalog table |
+| **Domain** | Subsystem taxonomy (single value): `thermal`, `power`, `memory`, `reliability`, `compute`, `fabric`, `pcie`, `diagnostics`, `software`, `workload`, `capacity`, `security`, `infrastructure`. Filterable on the catalog table; copied onto matching alerts as `alert_catalog_domain` |
+| **Role** | Diagnostic / triage role (single value, orthogonal to domain): `symptom`, `root_cause`, `capacity_signal`, `informational`, `performance`. Copied as `alert_catalog_role` |
+| **Tags** | Free-form multi-value labels (e.g. `nvidia`, `dcgm`, `isolate`). Filter chips on the catalog table |
 | **Runbook URL** | Copied onto matching alerts as `playbook_url` |
 | **Keep workflow** | Optional YAML workflow to auto-run |
 | **Auto-run on** | `none` / `alert` / `incident` / `both` / `approval` |
+
+**Domain vs role:** domain answers *which subsystem*; role answers *how you use the signal in triage*. Example: `DCGM_FI_DEV_GPU_TEMP` → domain `thermal`, role `symptom`; `DCGM_FI_DEV_XID_ERRORS` → domain `reliability`, role `root_cause`; `DCGM_FI_DEV_FB_USED` → domain `memory`, role `capacity_signal`.
 
 ### NVIDIA / DCGM seed
 
@@ -54,17 +58,17 @@ help text, exporter-owned collectors, and DCGM diagnostics:
 - Active [diagnostic plugins](https://docs.nvidia.com/datacenter/dcgm/latest/reference/diagnostics/plugins/index.html) as `DCGM_DIAG_*` (bucket `diag-plugin`, tag `diag`)
 - Key [diagnostic / health finding codes](https://docs.nvidia.com/datacenter/dcgm/latest/reference/diagnostics/errors.html) as `DCGM_FR_*` (bucket `diag-error`, tags `isolate` / `reset` / `monitor` / `triage` / `config`) — including health-watch codes such as `DCGM_FR_FALLEN_OFF_BUS`, `DCGM_FR_UNCONTAINED_ERROR`, and `DCGM_FR_CLOCK_THROTTLE_*`
 
-The **code is the DCGM metric or finding name** (no `NVIDIA_` prefix). Every row includes tag **`nvidia`** plus domain tags (`thermal`, `ecc`, `nvlink`, `diag`, `requires-enable`, …).
+The **code is the DCGM metric or finding name** (no `NVIDIA_` prefix). Every row includes tag **`nvidia`** plus free-form tags (`thermal`, `ecc`, `nvlink`, `diag`, `requires-enable`, …). The seed also sets **domain** and **role** from those tags (for example diag/FR → `diagnostics` / `root_cause`, temp → `thermal` / `symptom`, FB used → `memory` / `capacity_signal`).
 
 Descriptions include **units**, **Prometheus type**, **recommended detection** (e.g. `increase()>0`, temp thresholds, health `==20`), and **action hints**. Optional / exporter-owned metrics that are commented out in the default collectors CSV are tagged `requires-enable`.
 
-Filter Catalog → Alert codes by tag `nvidia` or `diag` to browse the set. Demo GPU scenarios use exporter metric names as `labels.code`.
+Filter Catalog → Alert codes by **domain**, **role**, or tag (`nvidia`, `diag`) to browse the set. Demo GPU scenarios use exporter metric names as `labels.code`.
 
 **Detection reminder:** dcgm-exporter only scrapes metrics. Alerting rules live in VictoriaMetrics / Grafana / Keep; the catalog description documents suggested PromQL policy, not an enforced rule.
 
 When an alert arrives with that code:
 
-- Catalog metadata and `playbook_url` are enriched
+- Catalog metadata, `playbook_url`, `alert_catalog_domain`, and `alert_catalog_role` are enriched
 - If auto-run includes **alert**, Keep enqueues the linked workflow
 - When alerts correlate into an incident, Keep copies `code` / `codes` onto the incident
 - If auto-run includes **incident**, Keep enqueues the same workflow for the incident (once per code)

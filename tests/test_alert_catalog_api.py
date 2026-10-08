@@ -37,6 +37,8 @@ def _payload(**overrides):
         "auto_run_on": "both",
         "disabled": False,
         "tags": ["nvidia", "dcgm", "thermal"],
+        "domain": "thermal",
+        "role": "symptom",
     }
     body.update(overrides)
     return body
@@ -57,6 +59,8 @@ def test_alert_catalog_crud(db_session, client, test_app):
     assert created["keep_workflow_id"] == "mock-nvidia-gpu-remediate"
     assert created["auto_run_on"] == "both"
     assert created["tags"] == ["nvidia", "dcgm", "thermal"]
+    assert created["domain"] == "thermal"
+    assert created["role"] == "symptom"
     entry_id = created["id"]
 
     list_resp = client.get("/alert-catalog", headers={"x-api-key": "some-key"})
@@ -70,6 +74,30 @@ def test_alert_catalog_crud(db_session, client, test_app):
     )
     assert tagged.status_code == 200
     assert len(tagged.json()) == 1
+
+    by_domain = client.get(
+        "/alert-catalog",
+        headers={"x-api-key": "some-key"},
+        params={"domain": "thermal"},
+    )
+    assert by_domain.status_code == 200
+    assert len(by_domain.json()) == 1
+
+    by_role = client.get(
+        "/alert-catalog",
+        headers={"x-api-key": "some-key"},
+        params={"role": "symptom"},
+    )
+    assert by_role.status_code == 200
+    assert len(by_role.json()) == 1
+
+    wrong_domain = client.get(
+        "/alert-catalog",
+        headers={"x-api-key": "some-key"},
+        params={"domain": "security"},
+    )
+    assert wrong_domain.status_code == 200
+    assert wrong_domain.json() == []
 
     untagged = client.get(
         "/alert-catalog",
@@ -92,12 +120,15 @@ def test_alert_catalog_crud(db_session, client, test_app):
             auto_run_on="alert",
             name="GPU thermal v2",
             tags=["nvidia", "thermal", "THERMAL", "  "],
+            domain="thermal",
+            role="root_cause",
         ),
     )
     assert update_resp.status_code == 200
     assert update_resp.json()["auto_run_on"] == "alert"
     assert update_resp.json()["name"] == "GPU thermal v2"
     assert update_resp.json()["tags"] == ["nvidia", "thermal"]
+    assert update_resp.json()["role"] == "root_cause"
 
     dup = client.post(
         "/alert-catalog",
@@ -129,6 +160,23 @@ def test_alert_catalog_rejects_invalid_auto_run(db_session, client, test_app):
         json=_payload(keep_workflow_id=None, auto_run_on="whenever"),
     )
     assert resp.status_code == 422
+
+
+@pytest.mark.parametrize("test_app", ["NO_AUTH"], indirect=True)
+def test_alert_catalog_rejects_invalid_domain_and_role(db_session, client, test_app):
+    bad_domain = client.post(
+        "/alert-catalog",
+        headers={"x-api-key": "some-key"},
+        json=_payload(keep_workflow_id=None, domain="not-a-domain"),
+    )
+    assert bad_domain.status_code == 422
+
+    bad_role = client.post(
+        "/alert-catalog",
+        headers={"x-api-key": "some-key"},
+        json=_payload(keep_workflow_id=None, role="not-a-role"),
+    )
+    assert bad_role.status_code == 422
 
 
 @pytest.mark.parametrize("test_app", ["NO_AUTH"], indirect=True)

@@ -9,6 +9,58 @@ from keep.api.utils.alert_code import slugify_alert_code
 
 AlertCatalogAutoRunOn = Literal["none", "alert", "incident", "both", "approval"]
 
+AlertCatalogDomain = Literal[
+    "thermal",
+    "power",
+    "memory",
+    "reliability",
+    "compute",
+    "fabric",
+    "pcie",
+    "diagnostics",
+    "software",
+    "workload",
+    "capacity",
+    "security",
+    "infrastructure",
+]
+
+AlertCatalogRole = Literal[
+    "symptom",
+    "root_cause",
+    "capacity_signal",
+    "informational",
+    "performance",
+]
+
+ALERT_CATALOG_DOMAINS: frozenset[str] = frozenset(
+    {
+        "thermal",
+        "power",
+        "memory",
+        "reliability",
+        "compute",
+        "fabric",
+        "pcie",
+        "diagnostics",
+        "software",
+        "workload",
+        "capacity",
+        "security",
+        "infrastructure",
+    }
+)
+
+ALERT_CATALOG_ROLES: frozenset[str] = frozenset(
+    {
+        "symptom",
+        "root_cause",
+        "capacity_signal",
+        "informational",
+        "performance",
+    }
+)
+
 
 def normalize_alert_catalog_tags(value) -> list[str]:
     """Trim, lowercase, and dedupe catalog tags."""
@@ -35,6 +87,36 @@ def normalize_alert_catalog_tags(value) -> list[str]:
     return tags
 
 
+def normalize_alert_catalog_domain(value) -> Optional[str]:
+    """Normalize optional catalog domain to a controlled value."""
+    if value is None:
+        return None
+    if not isinstance(value, str):
+        raise ValueError("domain must be a string")
+    domain = value.strip().lower()
+    if not domain:
+        return None
+    if domain not in ALERT_CATALOG_DOMAINS:
+        raise ValueError(
+            f"domain must be one of {sorted(ALERT_CATALOG_DOMAINS)}"
+        )
+    return domain
+
+
+def normalize_alert_catalog_role(value) -> Optional[str]:
+    """Normalize optional catalog role to a controlled value."""
+    if value is None:
+        return None
+    if not isinstance(value, str):
+        raise ValueError("role must be a string")
+    role = value.strip().lower()
+    if not role:
+        return None
+    if role not in ALERT_CATALOG_ROLES:
+        raise ValueError(f"role must be one of {sorted(ALERT_CATALOG_ROLES)}")
+    return role
+
+
 class AlertCatalog(SQLModel, table=True):
     """Keep-managed registry of alert codes and the workflows they auto-run."""
 
@@ -57,6 +139,10 @@ class AlertCatalog(SQLModel, table=True):
     auto_run_on: str = Field(max_length=32, default="none")
     disabled: bool = Field(default=False)
     tags: Optional[List[str]] = Field(default=None, sa_column=Column(JSON))
+    # Subsystem taxonomy (orthogonal to role). See ALERT_CATALOG_DOMAINS.
+    domain: Optional[str] = Field(max_length=64, default=None)
+    # Diagnostic / triage role (orthogonal to domain). See ALERT_CATALOG_ROLES.
+    role: Optional[str] = Field(max_length=64, default=None)
     created_by: Optional[str] = Field(max_length=255, default=None)
     created_at: datetime = Field(
         default_factory=lambda: datetime.now(tz=timezone.utc)
@@ -76,6 +162,8 @@ class AlertCatalogDtoBase(BaseModel):
     auto_run_on: AlertCatalogAutoRunOn = "none"
     disabled: bool = False
     tags: List[str] = PydanticField(default_factory=list)
+    domain: Optional[AlertCatalogDomain] = None
+    role: Optional[AlertCatalogRole] = None
 
     @validator("code", pre=True)
     def normalize_code(cls, value):
@@ -112,6 +200,14 @@ class AlertCatalogDtoBase(BaseModel):
     @validator("tags", pre=True, always=True)
     def normalize_tags(cls, value):
         return normalize_alert_catalog_tags(value)
+
+    @validator("domain", pre=True, always=True)
+    def normalize_domain(cls, value):
+        return normalize_alert_catalog_domain(value)
+
+    @validator("role", pre=True, always=True)
+    def normalize_role(cls, value):
+        return normalize_alert_catalog_role(value)
 
 
 class AlertCatalogDtoOut(AlertCatalogDtoBase, extra="ignore"):

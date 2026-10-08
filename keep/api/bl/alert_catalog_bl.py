@@ -55,6 +55,10 @@ class AlertCatalogBl:
         }
         if entry.runbook_url:
             enrichments["playbook_url"] = entry.runbook_url
+        if entry.domain:
+            enrichments["alert_catalog_domain"] = entry.domain
+        if entry.role:
+            enrichments["alert_catalog_role"] = entry.role
 
         for key, value in enrichments.items():
             setattr(alert, key, value)

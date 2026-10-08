@@ -2,20 +2,31 @@
 
 from __future__ import annotations
 
-PAYMENTS_ALERT_CODES: tuple[dict[str, str], ...] = (
+from typing import Any
+
+PAYMENTS_ALERT_CODES: tuple[dict[str, Any], ...] = (
     {
         "code": "HIGH_CPU",
         "name": "High CPU",
         "description": "Host CPU above threshold on payments-api.",
+        "domain": "infrastructure",
+        "role": "capacity_signal",
+        "tags": ["payments", "cpu"],
     },
     {
         "code": "HIGH_MEMORY",
         "name": "High memory",
         "description": "Host memory above threshold on payments-api (Grafana or VictoriaMetrics).",
+        "domain": "infrastructure",
+        "role": "capacity_signal",
+        "tags": ["payments", "memory"],
     },
     {
         "code": "DISK_SPACE_LOW",
         "name": "Disk space low",
         "description": "Disk space below threshold (Mimir Alertmanager mock).",
+        "domain": "infrastructure",
+        "role": "capacity_signal",
+        "tags": ["payments", "disk"],
     },
 )

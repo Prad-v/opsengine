@@ -189,11 +189,29 @@ PROBE_SPECS: list[dict[str, Any]] = [
     },
 ]
 
-SYNTH_ALERT_CODES: tuple[dict[str, str], ...] = tuple(
+def _synth_domain_role(group: str) -> tuple[str, str]:
+    """Map synthetic probe groups onto catalog domain + role."""
+    mapping = {
+        "fabric": ("fabric", "symptom"),
+        "nvidia": ("diagnostics", "symptom"),
+        "nvidia-inference": ("workload", "symptom"),
+        "amd": ("diagnostics", "symptom"),
+        "amd-inference": ("workload", "symptom"),
+        "training": ("workload", "symptom"),
+        "storage": ("infrastructure", "symptom"),
+        "network": ("fabric", "symptom"),
+    }
+    return mapping.get(group, ("infrastructure", "symptom"))
+
+
+SYNTH_ALERT_CODES: tuple[dict[str, Any], ...] = tuple(
     {
         "code": spec["code"],
         "name": spec["name"],
         "description": spec["description"],
+        "domain": _synth_domain_role(spec.get("group", ""))[0],
+        "role": _synth_domain_role(spec.get("group", ""))[1],
+        "tags": ["synthetic", spec.get("group") or "probe"],
     }
     for spec in PROBE_SPECS
 )

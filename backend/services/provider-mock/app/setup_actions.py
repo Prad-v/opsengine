@@ -457,6 +457,8 @@ def register_nvidia_gpu_alert_codes(
             "description": item["description"],
             "runbook_url": item["runbook_url"],
             "tags": item["tags"],
+            "domain": item.get("domain"),
+            "role": item.get("role"),
             "disabled": bool(prior.get("disabled", False)),
             "keep_workflow_id": prior.get("keep_workflow_id")
             or (keep_workflow_id if want_auto else None),

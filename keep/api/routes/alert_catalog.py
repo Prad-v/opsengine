@@ -63,6 +63,8 @@ def _validate_workflow(tenant_id: str, workflow_id: str | None) -> None:
 @router.get("", description="List reserved alert codes")
 def list_alert_catalog(
     tag: str | None = None,
+    domain: str | None = None,
+    role: str | None = None,
     authenticated_entity: AuthenticatedEntity = Depends(
         IdentityManagerFactory.get_auth_verifier(["read:providers"])
     ),
@@ -75,6 +77,20 @@ def list_alert_catalog(
     ).all()
     if tag and tag.strip():
         entries = [entry for entry in entries if _entry_has_tag(entry, tag)]
+    if domain and domain.strip():
+        needle = domain.strip().lower()
+        entries = [
+            entry
+            for entry in entries
+            if (entry.domain or "").strip().lower() == needle
+        ]
+    if role and role.strip():
+        needle = role.strip().lower()
+        entries = [
+            entry
+            for entry in entries
+            if (entry.role or "").strip().lower() == needle
+        ]
     return [_to_dto(entry) for entry in entries]
 
 

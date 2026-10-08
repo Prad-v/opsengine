@@ -44,6 +44,80 @@ DEMO_AUTO_RUN_CODES = frozenset(
 )
 
 
+# Domain inference priority (first matching tag wins). Orthogonal to role.
+_DOMAIN_TAG_PRIORITY: tuple[tuple[str, str], ...] = (
+    ("diag-error", "diagnostics"),
+    ("diag-plugin", "diagnostics"),
+    ("diag", "diagnostics"),
+    ("ecc", "reliability"),
+    ("xid", "reliability"),
+    ("health", "reliability"),
+    ("nvlink", "fabric"),
+    ("fabric", "fabric"),
+    ("pcie", "pcie"),
+    ("thermal", "thermal"),
+    ("power", "power"),
+    ("memory", "memory"),
+    ("util", "compute"),
+    ("clock", "compute"),
+    ("compute", "compute"),
+    ("cuda", "software"),
+    ("label", "software"),
+)
+
+# Codes that are capacity / headroom signals rather than device faults.
+_CAPACITY_SIGNAL_CODES: frozenset[str] = frozenset(
+    {
+        "DCGM_FI_DEV_FB_FREE",
+        "DCGM_FI_DEV_FB_USED",
+        "DCGM_FI_DEV_FB_RESERVED",
+        "DCGM_FI_DEV_GPU_UTIL",
+        "DCGM_FI_DEV_MEM_COPY_UTIL",
+        "DCGM_FI_DEV_ENC_UTIL",
+        "DCGM_FI_DEV_DEC_UTIL",
+        "DCGM_FI_PROF_GR_ENGINE_ACTIVE",
+        "DCGM_FI_PROF_PIPE_TENSOR_ACTIVE",
+        "DCGM_FI_PROF_DRAM_ACTIVE",
+        "DCGM_FI_DEV_POWER_MGMT_LIMIT",
+        "DCGM_FI_DEV_ENFORCED_POWER_LIMIT",
+    }
+)
+
+
+def _infer_domain(tags: list[str]) -> str:
+    tagset = set(tags)
+    for tag, domain in _DOMAIN_TAG_PRIORITY:
+        if tag in tagset:
+            return domain
+    return "software"
+
+
+def _infer_role(code: str, tags: list[str]) -> str:
+    tagset = set(tags)
+    if "label" in tagset:
+        return "informational"
+    if code in _CAPACITY_SIGNAL_CODES:
+        return "capacity_signal"
+    if any(
+        tag in tagset
+        for tag in (
+            "diag-error",
+            "diag-plugin",
+            "ecc",
+            "xid",
+            "isolate",
+            "reset",
+            "error",
+        )
+    ):
+        return "root_cause"
+    if "util" in tagset and "memory" not in tagset:
+        return "capacity_signal"
+    if any(tag in tagset for tag in ("violation", "throttle")):
+        return "symptom"
+    return "symptom"
+
+
 def _entry(
     code: str,
     name: str,
@@ -51,6 +125,8 @@ def _entry(
     *extra_tags: str,
     bucket: str = "exporter-default",
     runbook_url: str | None = None,
+    domain: str | None = None,
+    role: str | None = None,
 ) -> dict:
     tags = ["nvidia", "dcgm", bucket, *extra_tags]
     # Preserve order, drop dupes.
@@ -67,6 +143,8 @@ def _entry(
         "description": description,
         "runbook_url": runbook_url or DCGM_DOCS_URL,
         "tags": ordered,
+        "domain": domain or _infer_domain(ordered),
+        "role": role or _infer_role(code, ordered),
         "disabled": False,
     }
 
